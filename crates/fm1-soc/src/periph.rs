@@ -578,6 +578,7 @@ impl Periph {
     /// and the runner's settings, the audio played so far, the keys, encoders and pots, the key
     /// matrix's shift registers (74HC595s: the columns they hold), the SMK-37's panel, the LEDs'
     /// light so far, the script, the UART's bytes on their way in and a USB cable (its frames).
+    /// A field added to `Periph` is reset unless it is named here.
     pub(crate) fn chip_reset(&mut self) {
         let mut uart = Uart { next: self.uart.next, ot_next: u64::MAX, ..Default::default() };
         (uart.q, uart.dropped) = (std::mem::take(&mut self.uart.q), self.uart.dropped);

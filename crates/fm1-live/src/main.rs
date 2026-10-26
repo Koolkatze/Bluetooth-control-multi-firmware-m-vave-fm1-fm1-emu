@@ -238,9 +238,14 @@ impl Machine {
 
     /// The reference loop: one instruction per iteration.
     fn run_steps(&mut self, n: u32) -> Result<(), String> {
+        self.soc.take_boot(&self.cpu);
         for _ in 0..n {
             if self.soc.periph.tick() {
                 self.soc.advance(0);
+            }
+            if self.soc.reset_due() {
+                self.soc.chip_reset(&mut self.cpu); // (as run_blocks: cpu0 from its start)
+                self.cpu1 = None;
             }
             self.soc.periph.in_isr = !self.cpu.irq_levels.is_empty();
             if self.soc.periph.any_pending() {

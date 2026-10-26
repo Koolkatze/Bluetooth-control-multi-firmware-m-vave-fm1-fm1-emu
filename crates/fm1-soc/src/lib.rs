@@ -398,12 +398,14 @@ impl Soc {
         }
     }
 
-    /// cpu0 starts (`machine::run_blocks`, the first time): the chip as it is now is what a
-    /// reset goes back to.
+    /// cpu0 starts (the runners call this before its first instruction): the chip as it is now
+    /// is what a reset goes back to. A cpu0 that has already run is not at its start: nothing is
+    /// taken, and a reset is then not carried out (`chip_reset`).
     pub fn take_boot(&mut self, cpu: &fm1_core::Cpu) {
-        if self.boot.is_some() {
+        if self.boot.is_some() || cpu.insn_count != 0 {
             return;
         }
+        // (a cpu that has not run has nothing in flight)
         let Some(state) = cpu.plain_state() else { return };
         const INFO: u32 = 24 + 32; // (write_boot_info's block)
         let r0 = cpu.regs[0];
@@ -426,6 +428,11 @@ impl Soc {
     /// flash, the screen, and what `Periph::chip_reset` keeps.
     pub fn chip_reset(&mut self, cpu: &mut fm1_core::Cpu) {
         let Some(cause) = self.reset_req.take() else { return };
+        let Some(boot) = self.boot.take() else {
+            // (half a reset, the peripherals' without cpu0's, would be worse than none)
+            eprintln!("chip reset not carried out: the emulator did not see cpu0 start");
+            return;
+        };
         if std::env::var_os("FM1_DUAL_TRACE").is_some() || std::env::var_os("FM1_RESET_TRACE").is_some() {
             eprintln!("chip reset at {} ms ({})", self.periph.ms(), if cause == p33::P33::RST_WDT { "watchdog" } else { "PR_PWR" });
         }
@@ -438,7 +445,7 @@ impl Soc {
             self.usb.plug(self.periph.hz);
         }
         (self.paused, self.lock_owner, self.cpu1_release, self.cpu1_released_once, self.crc) = ([false; 2], None, false, false, 0);
-        let Some(boot) = self.boot.as_ref() else { return };
+        self.flash.chip_reset();
         cpu.set_plain_state(&boot.cpu);
         self.sfr = boot.sfr.clone();
         (self.sfc_con, self.sfc_unenc, self.bt_window) = (boot.sfc.0, boot.sfc.1, boot.bt_window);
@@ -449,6 +456,7 @@ impl Soc {
         }
         self.sfc_reread();
         self.loop_skip.next_try = 0;
+        self.boot = Some(boot);
     }
 
     /// A P33 access done: what it asks of the chip (p33.rs). The watchdog starts its count

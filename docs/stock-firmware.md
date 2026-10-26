@@ -117,15 +117,31 @@ Felucca's `fm1_sys.h` arms it (`fm1_wdt_arm`), feeds it (`fm1_wdt_feed`) and reb
     are written again.
   - `RST_SRC` (P33 0x12) holds the cause (bit 2 the watchdog, bit 6 `PR_PWR`), and the watchdog
     is stopped.
+  - SPI0 is off, and a flash command under way (chip select low) is abandoned: a page program's
+    bytes are not programmed.
   - What isn't the chip's stays: RAM (the mailboxes firmwares leave themselves, harbor's
     hand-over word), the flash, the screen, the audio played so far, the keys, the script and a
     USB cable (the host enumerates the device again).
+- **Both cores:** the reset comes while core 1 holds core 0 (`C0_CON` bit 2) too, within one
+  of cpu0's slices of the deadline. Core 1 stops at its `PR_PWR` write: it stores nothing after
+  it. Every runner resets: the block loop, fm1-live's reference loop (`FM1_NO_BLOCKS`) at the
+  same cycles, and fm1-emu.
 - **Polling loops:** a loop that feeds the watchdog each round is still skipped, to the same
   cycle.
+- **The boot state** is cpu0's before its first instruction (`Soc::take_boot`, which the runners
+  call). A runner that let cpu0 run before calling it gets no reset at all, and a warning.
 - **Not modelled:**
   - the watchdog's exception mode (`VLD_KEEP` bit 6), which resets here too;
   - `RST_SRC`'s power-on bit, which reads 0 at power-on as before, so firmwares boot as they did;
-  - the core reset through `PWR_CON` (0x10000 bit 4), which the update path uses.
+  - the core reset through `PWR_CON` (0x10000 bit 4), which the update path uses;
+  - a reboot into a new image: the boot parameters and cpu0's entry are the first boot's, not
+    read again from the flash as the loader would (a firmware that rewrites its app area and
+    reboots starts the old entry with the old header);
+  - USB at the reset: device-to-host messages the host has not taken yet are dropped (as the
+    device's own buffers are), and the host sees no detach before the new enumeration.
+- **Keeping it up to date:** `Periph::chip_reset` names the fields that survive a reset (the
+  board's and the host's: keys, script, audio, clock); a field added to `Periph` is reset unless
+  it is added there.
 - `FM1_RESET_TRACE` prints each reset.
 
 ## Verifying
