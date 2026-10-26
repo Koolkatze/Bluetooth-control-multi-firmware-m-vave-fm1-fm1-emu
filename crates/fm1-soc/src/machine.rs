@@ -170,7 +170,7 @@ pub struct LoopSkip {
     /// FM1_NO_LOOPSKIP: off (for A/B runs; the result is the same)
     pub enabled: bool,
     /// no probe before this cycle (after one that failed or skipped little)
-    next_try: u64,
+    pub(crate) next_try: u64,
     backoff: u64,
     /// probe steps that may still be spent, and the cycle the time's share was last added at
     credit: i64,
@@ -353,6 +353,7 @@ fn probe_loop(cpu: &mut Cpu, soc: &mut Soc, budget: u32) -> u32 {
     let Some(start) = cpu.plain_state() else { return 0 };
     let pc0 = start.pc();
     let (cycles0, due0, adc0, insns0) = (soc.periph.cycles, soc.periph.next_due, soc.periph.adc_state(), cpu.insn_count);
+    let wdt0 = soc.periph.wdt_at;
     let syntax0 = cpu.cur_syntax;
     let mut ls = std::mem::replace(&mut soc.loop_skip, LoopSkip::new(true));
     ls.probes += 1;
@@ -397,7 +398,8 @@ fn probe_loop(cpu: &mut Cpu, soc: &mut Soc, budget: u32) -> u32 {
         }
         let mut bus = ProbeBus { soc: &mut *soc, bad: false, log: &mut ls.log, p33: &mut p33_was };
         let ok = cpu.step(&mut bus).is_ok();
-        if !ok || bus.bad || soc.periph.any_pending() {
+        // (a reset asked for: it comes after this round, not after the skipped ones)
+        if !ok || bus.bad || soc.periph.any_pending() || soc.reset_due() {
             break Err(false);
         }
         i += 1;
@@ -405,7 +407,10 @@ fn probe_loop(cpu: &mut Cpu, soc: &mut Soc, budget: u32) -> u32 {
     let ran = match found {
         Ok(l) => {
             // whole rounds whose ticks all fall before the next due one (cycles + k * l stays
-            // below it), and within the budget
+            // below it), and within the budget. (A round that feeds the watchdog leaves its
+            // deadline as the probe's feed set it, not the last skipped round's: the skip ends
+            // before the deadline the feed before the probe set, and the round after it feeds
+            // again, so it is reached only where it would be without the skip.)
             let l = l as u64;
             let c = soc.periph.cycles;
             let due = soc.periph.next_due;
@@ -439,6 +444,8 @@ fn probe_loop(cpu: &mut Cpu, soc: &mut Soc, budget: u32) -> u32 {
             }
             soc.periph.set_adc_state(adc0);
             soc.periph.next_due = due0;
+            soc.periph.wdt_at = wdt0;
+            soc.reset_req = None;
             soc.periph.cycles = cycles0;
             cpu.set_plain_state(&start);
             cpu.insn_count = insns0;
@@ -458,15 +465,21 @@ fn probe_loop(cpu: &mut Cpu, soc: &mut Soc, budget: u32) -> u32 {
 
 /// cpu0's block loop: interrupts taken between blocks, the SoC serviced when a tick is due.
 /// `pending_tick` carries a tick already spent on the next instruction across calls. Returns
-/// the instructions run: n, or fewer when cpu0 released cpu1 (it stops right there).
+/// the instructions run: n, or fewer when cpu0 released cpu1 or the chip reset (it stops right
+/// there; after a reset `soc.resets` has counted up, and cpu0 is back at its start).
 pub fn run_blocks(cpu: &mut Cpu, soc: &mut Soc, n: u32, pending_tick: &mut bool) -> Result<u32, String> {
     let mut done = 0u32;
     let mut ticked = std::mem::take(pending_tick);
+    soc.take_boot(cpu);
     while done < n {
         if ticked || soc.periph.tick() {
             soc.advance(0);
         }
         ticked = false;
+        if soc.reset_due() {
+            soc.chip_reset(cpu);
+            break;
+        }
         soc.periph.in_isr = !cpu.irq_levels.is_empty();
         if soc.periph.any_pending() {
             if let Some((irq, prio)) = soc.pending_irq() {
@@ -610,6 +623,29 @@ pub fn run_dual(
     mut run0: impl FnMut(&mut Soc, u32) -> Result<u32, String>,
 ) -> Result<(), String> {
     let mut done = 0;
+    // (a chip reset holds core 1 again: then cpu0 alone, until it releases it once more)
+    while done < n {
+        let resets = soc.resets;
+        done = run_dual_from(cpu1, soc, done, n, ram_size, jit_on, &mut run0)?;
+        if soc.resets == resets {
+            break;
+        }
+        *cpu1 = None;
+    }
+    Ok(())
+}
+
+/// `run_dual` from `done` instructions on, until n or a chip reset; returns the new `done`.
+fn run_dual_from(
+    cpu1: &mut Option<Cpu>,
+    soc: &mut Soc,
+    mut done: u32,
+    n: u32,
+    ram_size: usize,
+    jit_on: bool,
+    run0: &mut impl FnMut(&mut Soc, u32) -> Result<u32, String>,
+) -> Result<u32, String> {
+    let resets = soc.resets;
     while cpu1.is_none() {
         *cpu1 = released_cpu1(soc, ram_size).map(|mut c| {
             c.jit_on = jit_on;
@@ -621,9 +657,12 @@ pub fn run_dual(
         let k = n - done;
         soc.periph.room_cap = k as u64;
         let ran = run0(soc, k)?;
+        if soc.resets != resets {
+            return Ok(done + ran);
+        }
         done = if ran < k { (done + ran).div_ceil(SOLO_CHUNK).saturating_mul(SOLO_CHUNK).min(n) } else { n };
     }
-    let Some(c1) = cpu1.as_mut() else { return Ok(()) };
+    let Some(c1) = cpu1.as_mut() else { return Ok(done) };
     soc.periph.room_cap = SLICE as u64;
     while done < n {
         let k = (n - done).min(SLICE);
@@ -634,10 +673,13 @@ pub fn run_dual(
             run0(soc, k)?;
         }
         done += k;
+        if soc.resets != resets {
+            break;
+        }
         let dt = soc.periph.cycles - c0;
         run_cpu1(c1, soc, dt)?;
     }
-    Ok(())
+    Ok(done)
 }
 
 #[cfg(test)]
@@ -645,7 +687,7 @@ mod tests {
     use super::*;
     use crate::flaky::{FlakyCore1, MISREAD_BIT};
     use crate::periph::Action;
-    use crate::XIP_BASE;
+    use crate::{CPU_HZ, XIP_BASE};
 
     // Polling loops in XIP code; r1 points 544 bytes past the word the loop polls.
     /// `d5 ec 10 2e` r2 = [r1+-544]
@@ -752,6 +794,133 @@ mod tests {
         let regs = [(1, PA_IN + 544), (5, crate::p33::P33::CON + 128), (3, 0x11)];
         let (_, soc) = run_both(&code, &regs, &[], 100_000);
         assert!(soc.loop_skip.skipped > 90_000, "{} skipped", soc.loop_skip.skipped);
+    }
+
+    /// One P33 access as Felucca's fm1_sys.h makes it (`cmd`: 0x00 write, 0x20 or, 0x80 read).
+    fn p33(soc: &mut Soc, cmd: u8, addr: u8, data: u8) -> u8 {
+        soc.write32(p33::P33::CON, 1);
+        for b in [cmd, addr, data] {
+            soc.write32(p33::P33::DAT, b as u32);
+            soc.write32(p33::P33::CON, 0x11);
+        }
+        soc.write32(p33::P33::CON, 0);
+        soc.read32(p33::P33::DAT) as u8
+    }
+
+    /// `while (PA5 high) { WDT_CON |= 0x40; }  for (;;);` (JieLi's clang -O2): feeds the watchdog
+    /// through P33 while key 5 is up, then hangs.
+    const FEED: [u8; 54] = [
+        0xc0, 0xff, 0x04, 0x00, 0x05, 0x00, 0x01, 0x60, 0x51, 0xe8, 0x14, 0x28, 0xc1, 0xff, 0x08, 0x3e, 0x01, 0x00,
+        0x42, 0x31, 0x40, 0xea, 0x01, 0x10, 0x41, 0xea, 0x20, 0x10, 0x92, 0x60, 0x41, 0xea, 0x80, 0x10, 0x92, 0x60,
+        0x41, 0xea, 0x40, 0x10, 0x92, 0x60, 0x40, 0xea, 0x00, 0x10, 0x03, 0x60, 0x53, 0xe8, 0xf0, 0x2b, 0xf7, 0x9f,
+    ];
+
+    /// `while (PA5 high);  PR_PWR |= 0x10;  for (;;);` (JieLi's clang -O2): a chip reset once key 5
+    /// is down.
+    const REBOOT: [u8; 48] = [
+        0xc0, 0xff, 0x04, 0x00, 0x05, 0x00, 0x01, 0x60, 0x51, 0xe8, 0xfd, 0x2b, 0xc0, 0xff, 0x08, 0x3e, 0x01, 0x00,
+        0x40, 0xea, 0x01, 0x00, 0x41, 0xea, 0x20, 0x00, 0x41, 0x31, 0x81, 0x60, 0x41, 0xea, 0xa0, 0x00, 0x81, 0x60,
+        0x41, 0xea, 0x10, 0x00, 0x81, 0x60, 0x40, 0xea, 0x00, 0x00, 0xf7, 0x9f,
+    ];
+
+    /// `code` with key 5 going down and up at the given cycles, `setup` first, run in odd chunks
+    /// with the JIT and interpreted, with the loop skip and without: the same after every chunk
+    /// (core, clock, resets). Returns the cycles of the resets, and what the skip skipped.
+    fn run_resetting(code: &[u8], setup: fn(&mut Soc), keys: &[(u64, bool)], total: u64) -> (Vec<u64>, u64) {
+        let mut runs = vec![];
+        for (jit, skip) in [(false, false), (false, true), (true, false), (true, true)] {
+            let (mut cpu, mut soc) = machine(code, &[], skip);
+            cpu.jit_on = jit;
+            setup(&mut soc);
+            for &(at, down) in keys {
+                soc.periph.script.push_back((at, Action::Key { id: KEY, down }));
+            }
+            let (mut ticked, mut chunks, mut resets) = (false, vec![], vec![]);
+            while soc.periph.cycles < total {
+                run_blocks(&mut cpu, &mut soc, 7919, &mut ticked).unwrap();
+                if soc.resets as usize > resets.len() {
+                    resets.push(soc.periph.cycles);
+                    assert_eq!(cpu.pc, XIP_BASE, "cpu0 from its start");
+                }
+                chunks.push((cpu.pc, cpu.regs, cpu.insn_count, soc.periph.cycles, soc.resets));
+            }
+            runs.push((chunks, resets, soc.loop_skip.skipped));
+        }
+        for r in &runs[1..] {
+            assert_eq!(r.0, runs[0].0, "JIT / interpreter, skip / no skip: the same");
+        }
+        (runs[0].1.clone(), runs[1].2)
+    }
+
+    #[test]
+    fn watchdog_resets_one_period_after_the_last_feed() {
+        const KEY_AT: u64 = 2_000_003;
+        let period = CPU_HZ / 1000; // WDT_CON 0: 1 ms
+        let setup = |soc: &mut Soc| {
+            p33(soc, 0x00, 0x80, 0x40); // WDT_CON = 1 ms, count cleared
+            p33(soc, 0x20, 0x80, 0x10); // on
+        };
+        let (resets, skipped) = run_resetting(&FEED, setup, &[(KEY_AT, true)], 3_000_000);
+        // once (a reset stops the watchdog), a period after the last feed, in the last round
+        // before the key went down (a round is 13 instructions; the reset comes between blocks)
+        assert_eq!(resets.len(), 1, "{resets:?}");
+        assert!((KEY_AT + period - 20..KEY_AT + period + 20).contains(&resets[0]), "reset at {}", resets[0]);
+        assert!(skipped > 2_000_000, "{skipped} skipped");
+    }
+
+    #[test]
+    fn pr_pwr_resets_at_the_same_instruction_compiled_or_not() {
+        // down for 200 cycles: it resets, starts again, finds the key still down and resets again
+        let (resets, _) = run_resetting(&REBOOT, |_| {}, &[(100_003, true), (100_203, false)], 300_000);
+        assert!(resets.len() >= 5 && resets.iter().all(|&c| (100_003..100_250).contains(&c)), "{resets:?}");
+    }
+
+    #[test]
+    fn pr_pwr_resets_the_chip_and_ram_stays() {
+        // a loop on the spot: `goto -2`
+        let (mut cpu, mut soc) = machine(&[0xf7, 0x9f], &[(4, 0x1234)], false);
+        let mut ticked = false;
+        run_blocks(&mut cpu, &mut soc, 1000, &mut ticked).unwrap();
+        (cpu.regs[4], cpu.ie) = (0x5678, true);
+        soc.write32(RAM_BASE + 0x7fd80, 0x5f627375); // a mailbox word
+        soc.write32(0x50008, 0xff); // a port's direction (a chip register)
+        p33(&mut soc, 0x20, 0xa0, 0x10); // PR_PWR |= 0x10
+        assert!(soc.reset_due());
+        let n = run_blocks(&mut cpu, &mut soc, 1000, &mut ticked).unwrap();
+        assert!(n < 1000 && soc.resets == 1);
+        assert_eq!((cpu.pc, cpu.regs[4], cpu.ie), (XIP_BASE, 0x1234, false), "cpu0 as the loader started it");
+        assert_eq!(soc.read32(RAM_BASE + 0x7fd80), 0x5f627375, "RAM stays");
+        assert_eq!(soc.read32(0x50008), 0, "the chip's registers as at boot");
+        assert_eq!(p33(&mut soc, 0x80, 0x12, 0x5e), p33::P33::RST_SOFT, "RST_SRC: PR_PWR");
+        assert_eq!(p33(&mut soc, 0x80, 0xa0, 0x5e), 0, "PR_PWR's bit 4 reads 0");
+    }
+
+    #[test]
+    fn watchdog_off_or_fed_does_not_reset() {
+        // (the loop on the spot is skipped to the next event: here the watchdog's deadline)
+        let (mut cpu, mut soc) = machine(&[0xf7, 0x9f], &[], true);
+        let mut ticked = false;
+        let mut run_to = |cpu: &mut Cpu, soc: &mut Soc, ms: u64| {
+            while soc.periph.ms() < ms && soc.resets == 0 {
+                run_blocks(cpu, soc, 1 << 20, &mut ticked).unwrap();
+            }
+        };
+        p33(&mut soc, 0x00, 0x80, 0x4a); // 1 s, cleared
+        p33(&mut soc, 0x20, 0x80, 0x10); // on
+        assert_eq!(p33(&mut soc, 0x80, 0x80, 0x5e), 0x1a, "the clear bit reads 0");
+        for t in 1..=3 {
+            run_to(&mut cpu, &mut soc, t * 900);
+            p33(&mut soc, 0x20, 0x80, 0x40); // fed
+        }
+        assert_eq!(soc.resets, 0, "fed in time");
+        p33(&mut soc, 0x00, 0x80, 0x00); // off
+        run_to(&mut cpu, &mut soc, 6000);
+        assert_eq!(soc.resets, 0, "switched off");
+        p33(&mut soc, 0x00, 0x80, 0x1a); // on again, not fed: 1 s from now
+        let on = soc.periph.cycles;
+        run_to(&mut cpu, &mut soc, 9000);
+        assert_eq!(soc.resets, 1, "run out");
+        assert!((on + CPU_HZ * 1000 / 1000..on + CPU_HZ + 2_000_000).contains(&soc.periph.cycles), "{} cycles on", soc.periph.cycles - on);
     }
 
     #[test]

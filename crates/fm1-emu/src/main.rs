@@ -479,7 +479,17 @@ fn main() -> ExitCode {
 
     let dump_every: u64 = 1 << 20;
     let mut stop = false;
+    soc.take_boot(&cpus[0]);
     for _ in 0..args.steps {
+        // a chip reset (the watchdog, PR_PWR): cpu0 from its start, core 1 held again
+        if soc.reset_due() {
+            soc.chip_reset(&mut cpus[0]);
+            cpus.truncate(1);
+            cpu1_started = false;
+            if !args.quiet {
+                println!("chip reset at step {total_steps} ({} ms)", soc.periph.ms());
+            }
+        }
         if !cpu1_started && (std::mem::take(&mut soc.cpu1_release) || soc.read32(0x10008) & 8 != 0) {
             // Where cpu1 really starts is not settled (docs/isa-notes.md):
             // the vector at 0x02000098 `rti`s into the middle of an

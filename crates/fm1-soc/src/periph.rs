@@ -218,6 +218,8 @@ pub struct Periph {
     /// USB frames (usb.rs): the next, and cycles per millisecond; MAX = no cable.
     pub(crate) usb_next: u64,
     pub(crate) usb_period: u64,
+    /// The cycle the watchdog runs out at (p33.rs; MAX: stopped).
+    pub(crate) wdt_at: u64,
     tmr: [Tmr; 4],
     uart: Uart,
     /// The UART's interrupt condition (enabled and pending), kept for `any_pending`.
@@ -359,6 +361,7 @@ impl Default for Periph {
             spi2_next: u64::MAX,
             usb_next: u64::MAX,
             usb_period: 0,
+            wdt_at: u64::MAX,
             tmr: [Tmr { next: u64::MAX, ..Default::default() }; 4],
             uart: Uart { next: u64::MAX, ot_next: u64::MAX, ..Default::default() },
             uart_irq: false,
@@ -399,6 +402,8 @@ pub struct Due {
     pub uart_rx: Option<(u32, u8)>,
     /// A USB frame is due (the SoC runs the host's millisecond: usb.rs).
     pub usb_frame: bool,
+    /// The watchdog ran out (the SoC resets the chip).
+    pub wdt: bool,
     pub actions: Vec<Action>,
 }
 
@@ -449,7 +454,7 @@ impl Periph {
     /// The next cycle at which something timed happens.
     fn next_event(&self) -> u64 {
         let mut n = self.t5_next.min(self.alnk_next).min(self.tick_next).min(self.spi2_next).min(self.adc_next).min(self.spi1_irq_at);
-        n = n.min(self.uart.next).min(self.uart.ot_next).min(self.usb_next);
+        n = n.min(self.uart.next).min(self.uart.ot_next).min(self.usb_next).min(self.wdt_at);
         for t in &self.tmr {
             n = n.min(t.next);
         }
@@ -538,6 +543,10 @@ impl Periph {
                 self.usb_next = self.cycles + self.usb_period;
             }
         }
+        if self.cycles >= self.wdt_at {
+            self.wdt_at = u64::MAX;
+            due.wdt = true;
+        }
         if self.cycles >= self.uart.ot_next {
             self.uart.ot_next = u64::MAX;
             if self.uart.con0 & 1 != 0 {
@@ -563,6 +572,45 @@ impl Periph {
         }
         self.next_due = self.next_event();
         due
+    }
+
+    /// A chip reset: the chip's own state as at power-on. What is outside it stays: the clock
+    /// and the runner's settings, the audio played so far, the keys, encoders and pots, the key
+    /// matrix's shift registers (74HC595s: the columns they hold), the SMK-37's panel, the LEDs'
+    /// light so far, the script, the UART's bytes on their way in and a USB cable (its frames).
+    pub(crate) fn chip_reset(&mut self) {
+        let mut uart = Uart { next: self.uart.next, ot_next: u64::MAX, ..Default::default() };
+        (uart.q, uart.dropped) = (std::mem::take(&mut self.uart.q), self.uart.dropped);
+        let old = std::mem::take(self);
+        *self = Periph {
+            cycles: old.cycles,
+            hz: old.hz,
+            skip_idle: old.skip_idle,
+            room_cap: old.room_cap,
+            skipped: old.skipped,
+            audio: old.audio,
+            audio_halves: old.audio_halves,
+            adc_value: old.adc_value,
+            usb_next: old.usb_next,
+            usb_period: old.usb_period,
+            uart,
+            sr_shift: old.sr_shift,
+            sr_latched: old.sr_latched,
+            led_acc: old.led_acc,
+            led_last: old.led_last,
+            led_since: old.led_since,
+            keys_down: old.keys_down,
+            key_force: old.key_force,
+            key_vel: old.key_vel,
+            enc_state: old.enc_state,
+            enc_pending: old.enc_pending,
+            enc_next: old.enc_next,
+            board: old.board,
+            smk: old.smk,
+            smk_vel: old.smk_vel,
+            script: old.script,
+            ..Default::default()
+        };
     }
 
     pub fn apply(&mut self, a: &Action) {
