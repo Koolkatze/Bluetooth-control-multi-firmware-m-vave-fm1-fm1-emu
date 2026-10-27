@@ -896,7 +896,7 @@ impl Gen<'_> {
     /// Call a helper with the guest registers in memory, where it reads and sets them.
     fn call(&mut self, f: u64) {
         self.flush();
-        self.a.mov64(9, f);
+        self.a.ldr_lit_x(9, f);
         self.a.blr(9);
         self.reload();
     }
@@ -945,7 +945,7 @@ impl Gen<'_> {
             self.a.cbnz(9, back);
         }
         self.a.ubfx(10, 12, 1, ITAB_BITS);
-        self.a.mov64(11, self.itab);
+        self.a.ldr_lit_x(11, self.itab);
         self.a.add_x_lsl(11, 11, 10, 4);
         self.a.ldr(13, 11, 0);
         self.a.cmp(13, 12);
@@ -1628,7 +1628,7 @@ fn emit_op<B: Bus>(g: &mut Gen, fast: Fast, idx: u32, next_pc: u32, profile: boo
         other => {
             let p: &'static Fast = Box::leak(Box::new(other));
             g.a.mov_x(0, CTX);
-            g.a.mov64(1, p as *const Fast as u64);
+            g.a.ldr_lit_x(1, p as *const Fast as u64);
             g.idx_w2(idx);
             g.a.mov32(3, next_pc);
             g.call(op_helper::<B>(&other, profile));
@@ -1732,7 +1732,7 @@ fn compile<B: Bus>(ops: &[crate::BOp], swaps: &[(Fast, Fast, u8)], then: &[crate
         let valid = g.a.label();
         // no code word written since the snapshot was last found current: no call
         g.a.ldr_x(9, CTX, OFF_VER);
-        g.a.mov64(1, guard);
+        g.a.ldr_lit_x(1, guard);
         g.a.ldr_x(10, 1, 0);
         g.a.cmp_x(9, 10);
         g.a.b_cond(AC::Eq, valid);
