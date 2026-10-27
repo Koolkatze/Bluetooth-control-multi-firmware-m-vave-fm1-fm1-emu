@@ -94,6 +94,9 @@ pub trait Bus {
     /// Interrupts may have just been unmasked (`sti`, `icfg = R`): with one pending, the run
     /// loop must look before the next instruction, as it does after a slow-path instruction.
     fn irq_window(&mut self) {}
+    /// The run loop must look before the next instruction, as it does after an instruction off
+    /// the micro-op paths: `rti` (the SoC keeps "in an ISR" for its idle skipping, updated there).
+    fn service(&mut self) {}
     /// Writes so far to RAM words marked as code (`code_mark`), when the bus counts them: while
     /// the count stays the same, no block built from RAM can have changed. (None: compare.)
     fn code_writes(&self) -> Option<u64> {
@@ -857,6 +860,7 @@ impl Cpu {
     fn exec_careful_op<B: Bus>(&mut self, bus: &mut B, i: u32, gated: bool, next_pc: u32, room: u32) -> u32 {
         let pack = |k: u32, still: bool, stop: bool, due: bool| k | (still as u32) << 2 | (stop as u32) << 3 | (due as u32) << 4;
         let op = self.bops[i as usize];
+        if perf_trace::on() { let name = match op.fast { Fast::Raw { route, .. } => format!("Raw{route}"), f => format!("{f:?}").split([' ', '{']).next().unwrap().to_owned() }; perf_trace::count(perf_trace::Kind::Careful, format!("{name}{}{}{}{}{}{}{}", if op.careful {" careful"} else {""}, if op.pair_head {" head"} else {""}, if op.glue {" glue"} else {""}, if gated {" gated"} else {""}, if self.pair_pending.is_some() {" pair"} else {""}, if !self.pred_skips.is_empty() {" pred"} else {""}, if self.rep_end != 0 {" rep"} else {""})); }
         if let Fast::Swap { idx } = op.fast {
             let (head, tail, hlen) = self.swaps[idx as usize];
             let head_next = self.pc.wrapping_add(hlen as u32);
@@ -1246,6 +1250,7 @@ impl Cpu {
     pub fn step<B: Bus>(&mut self, bus: &mut B) -> Result<(), CoreError> {
         let slot = self.fetch(bus)?;
         let l = self.icache[slot];
+        if perf_trace::on() { perf_trace::count(perf_trace::Kind::Step, format!("{} {:?}", if self.icache_x[slot].is_some() { canon_syntax(self.icache_x[slot].as_ref().unwrap().entry) } else { "?" }, l.fast.map(|f| format!("{f:?}").split([' ', '{']).next().unwrap().to_owned()))); }
         let next_pc = self.pc + l.len as u32;
         // hot path: a micro-op outside any dual-issue pair
         if let (Some(f), false, true) = (l.fast, l.pair_head, self.pair_pending.is_none()) {
@@ -1617,6 +1622,71 @@ impl Cpu {
                 if on {
                     bus.irq_window();
                 }
+            }
+            Fast::PushRegs { mask } => {
+                for r in (0..16).rev() {
+                    if mask >> r & 1 != 0 {
+                        self.sp = self.sp.wrapping_sub(4);
+                        bus.write32(self.sp, self.regs[r]);
+                    }
+                }
+            }
+            Fast::PopRegs { mask } => {
+                for r in 0..16 {
+                    if mask >> r & 1 != 0 {
+                        self.regs[r] = bus.read32(self.sp);
+                        self.sp = self.sp.wrapping_add(4);
+                    }
+                }
+            }
+            Fast::PushSregs { mask } => {
+                if mask & SREG_RETI != 0 {
+                    self.nest_ok = true;
+                }
+                for (i, name) in SREG_LIST.iter().enumerate() {
+                    if mask >> i & 1 != 0 {
+                        let val = sreg_get_named(self, name);
+                        self.sp = self.sp.wrapping_sub(4);
+                        bus.write32(self.sp, val);
+                    }
+                }
+                // (nesting may have opened: the run loop looks, as it did after the slow path)
+                bus.irq_window();
+            }
+            Fast::PopSregs { mask } => {
+                if mask & SREG_RETI != 0 {
+                    self.nest_ok = false;
+                }
+                for (i, name) in SREG_LIST.iter().enumerate().rev() {
+                    if mask >> i & 1 != 0 {
+                        let val = bus.read32(self.sp);
+                        self.sp = self.sp.wrapping_add(4);
+                        self.set_sreg_named(name, val);
+                    }
+                }
+                bus.irq_window();
+            }
+            Fast::Rti => {
+                // back to the mode the interrupt came from; with none in progress, user mode
+                let to_user = match self.irq_levels.pop() {
+                    Some(_) => self.user_irq >> self.irq_levels.len().min(31) & 1 != 0,
+                    None => true,
+                };
+                if to_user && !self.user {
+                    self.ssp = self.sp;
+                    self.sp = self.usp;
+                    self.user = true;
+                }
+                // back in an outer ISR: it was interrupted with reti on its stack
+                self.nest_ok = !self.irq_levels.is_empty();
+                bus.service();
+                return Some(self.sregs("reti"));
+            }
+            Fast::AddC { d, a, b, sub } => {
+                let y = self.regs[(b & 15) as usize];
+                let (v, f) = add_flags(self.regs[(a & 15) as usize], if sub { !y } else { y }, (self.flags & F_C != 0) as u32);
+                self.regs[(d & 15) as usize] = v;
+                self.flags = f;
             }
             Fast::IcfgRd { d } => self.regs[(d & 15) as usize] = self.icfg(),
             Fast::IcfgWr { s } => {
@@ -4225,6 +4295,84 @@ pub enum CoreError {
 mod tests {
     use super::*;
 
+    /// The micro-ops for the ISR wrappers' instructions and the others that went through
+    /// exec_syntax (`[--sp] = {psr, rets, reti}` and the other special-register lists, the block
+    /// pushes and pops without rets, `rti`, add / subtract with carry, `[R+#i] &= ~R`, the cache
+    /// flushes): every encoding of each, from random state, gives exec_syntax's state.
+    #[test]
+    fn syntax_micro_ops_match_exec_syntax() {
+        const PC: u32 = 0x0200_1000;
+        fn rnd(x: &mut u64) -> u64 { *x ^= *x << 13; *x ^= *x >> 7; *x ^= *x << 17; *x }
+        /// exec_syntax and the micro-op of `insn` (syntax `s`) from the same random state: the same
+        fn check(insn: &fm1_isa::Instruction, s: &'static str, x: &mut u64) {
+            let raw = insn.raw;
+            let f = fast_of(insn, s).unwrap_or_else(|| panic!("no micro-op for {s} ({raw:#x})"));
+            let next_pc = PC + insn.entry.len as u32;
+            let mut mem = vec![0u8; 0x1000];
+            mem.iter_mut().for_each(|b| *b = rnd(x) as u8);
+            let (mut a, mut b) = (FlatRam::new(mem.clone()), FlatRam::new(mem));
+            let mut ca = Cpu::new(PC);
+            ca.regs.iter_mut().for_each(|r| *r = rnd(x) as u32);
+            ca.sp = 0x800 + (rnd(x) as u32 & 0xfc);
+            ca.ssp = rnd(x) as u32;
+            ca.usp = 0x400 + (rnd(x) as u32 & 0xfc);
+            ca.user = rnd(x) & 1 != 0;
+            ca.user_irq = rnd(x) as u32;
+            ca.irq_levels = (0..(rnd(x) % 4)).map(|_| rnd(x) as u8 & 7).collect();
+            ca.nest_ok = rnd(x) & 1 != 0;
+            ca.flags = rnd(x) as u32 & 0xf;
+            ca.sreg_store.iter_mut().for_each(|r| *r = rnd(x) as u32);
+            ca.rets = rnd(x) as u32;
+            ca.ie = rnd(x) & 1 != 0;
+            ca.cur_syntax = "";
+            let mut cb = Cpu::new(PC);
+            cb.regs = ca.regs;
+            cb.sp = ca.sp; cb.ssp = ca.ssp; cb.usp = ca.usp; cb.user = ca.user; cb.user_irq = ca.user_irq;
+            cb.irq_levels = ca.irq_levels.clone(); cb.nest_ok = ca.nest_ok; cb.flags = ca.flags;
+            cb.sreg_store = ca.sreg_store; cb.rets = ca.rets; cb.ie = ca.ie;
+            let ja = ca.exec_syntax(&mut a, insn, next_pc).unwrap_or_else(|e| panic!("{s}: {e:?}")).expect("exec_syntax handles it");
+            let jb = cb.exec_fast(&mut b, f, next_pc);
+            let st = |c: &Cpu| (c.regs, c.sp, c.ssp, c.usp, c.user, c.user_irq, c.irq_levels.clone(), c.nest_ok, c.flags, c.sreg_store, c.rets, c.ie);
+            assert_eq!(ja, jb, "{s} ({raw:#x}): jump");
+            assert_eq!(st(&ca), st(&cb), "{s} ({raw:#x}): state");
+            assert_eq!(a.mem, b.mem, "{s} ({raw:#x}): memory");
+        }
+        let shapes = ["[--sp] = {R*2}", "{R*2} = [sp++]", "[--sp] = {R*1}", "{R*1} = [sp++]", "rti", "R = R + R + c", "R = R - R - !c", "flushinv [R]", "iflush [R]", "[R+#i] &= ~R"];
+        let mut seen = std::collections::BTreeMap::<&str, u32>::new();
+        let mut x = 0x9e37_79b9_7f4a_7c15u64;
+        for e in fm1_isa::ISA {
+            let s = canon_syntax(e);
+            let list = s.strip_prefix("[--sp] = ").and_then(sreg_list_mask).is_some() || s.strip_suffix(" = [sp++]").and_then(sreg_list_mask).is_some();
+            if !(shapes.contains(&s) || list) {
+                continue;
+            }
+            for _ in 0..200 {
+                let raw = (e.match_ | (rnd(&mut x) & !e.mask)) & ((1u64 << (8 * e.len as u32)) - 1);
+                let Ok(insn) = decode_any(raw, PC) else { continue };
+                if !std::ptr::eq(insn.entry, e) {
+                    continue;
+                }
+                *seen.entry(s).or_default() += 1;
+                check(&insn, s, &mut x);
+            }
+        }
+        // the carry ops decode before the table (`carry_op_raw`): `b8 e0|f0 0|2 <regs>`
+        for (op, hi) in [(0u64, 0xe0u64), (2, 0xe0), (0, 0xf0), (2, 0xf0)] {
+            for _ in 0..200 {
+                let raw = 0xb8 | hi << 8 | op << 16 | (rnd(&mut x) & 0xfff0_0000);
+                let insn = decode_any(raw, PC).unwrap();
+                let s = canon_syntax(insn.entry);
+                assert!(s.starts_with("R = R "), "{s}");
+                *seen.entry(s).or_default() += 1;
+                check(&insn, s, &mut x);
+            }
+        }
+        for s in shapes {
+            assert!(seen.contains_key(s), "{s}: no encoding decoded ({seen:?})");
+        }
+        assert!(seen.keys().any(|s| s.starts_with("[--sp] = {psr")), "a special-register push: {seen:?}");
+        assert!(seen.keys().any(|s| s.ends_with("} = [sp++]") && s.contains("reti")), "a special-register pop: {seen:?}");
+    }
     struct FlatRam {
         mem: Vec<u8>,
     }
@@ -5857,6 +6005,10 @@ impl Fast {
             }
             Fast::LdPair { p, b, .. } => (base(b), m(2 * (p & 7)) | m(2 * (p & 7) + 1)),
             Fast::StPair { p, b, .. } => (base(b) | m(2 * (p & 7)) | m(2 * (p & 7) + 1), 0),
+            Fast::PushRegs { mask } => (mask, 0),
+            Fast::PopRegs { mask } => (0, mask),
+            Fast::PushSregs { .. } | Fast::PopSregs { .. } | Fast::Rti => (0, 0),
+            Fast::AddC { d, a, b, .. } => (m(a) | m(b), m(d)),
             Fast::IfBlk { .. } | Fast::SetIe { .. } | Fast::IcfgWr { .. } | Fast::Raw { .. } | Fast::Swap { .. } => return None,
         })
     }
@@ -5881,7 +6033,7 @@ impl Fast {
         matches!(self, Fast::Mov { .. } | Fast::MovI { .. } | Fast::Alu3 { .. } | Fast::Alu3I { .. }
             | Fast::Alu2 { .. } | Fast::Alu2I { .. } | Fast::A4 { .. } | Fast::AddRI { .. } | Fast::ShlI { .. }
             | Fast::SarI { .. } | Fast::Ext { .. } | Fast::BitExt { .. } | Fast::BitIns { .. } | Fast::Mov2 { .. }
-            | Fast::Mov2I { .. } | Fast::Un { .. } | Fast::MinMax { .. })
+            | Fast::Mov2I { .. } | Fast::Un { .. } | Fast::MinMax { .. } | Fast::FOp { .. } | Fast::AddC { .. })
     }
 
     /// Does this op set the arithmetic flags? (`alu_f`'s add / subtract, `AddRI`; no other
@@ -5892,7 +6044,10 @@ impl Fast {
             Fast::Alu3 { op, .. } | Fast::Alu3I { op, .. } | Fast::Alu2 { op, .. } | Fast::Alu2I { op, .. } | Fast::A4 { op, .. } => {
                 matches!(op, Op::Add | Op::Sub | Op::RSub)
             }
-            Fast::AddRI { .. } | Fast::Raw { .. } | Fast::Swap { .. } => true,
+            Fast::AddRI { .. } | Fast::Raw { .. } | Fast::Swap { .. } | Fast::AddC { .. } => true,
+            // (psr in the list: its low bits are the flags)
+            Fast::PopSregs { mask } => mask & SREG_PSR != 0,
+            Fast::PushRegs { .. } | Fast::PopRegs { .. } | Fast::PushSregs { .. } | Fast::Rti => false,
             Fast::Mov { .. } | Fast::MovI { .. } | Fast::Ld { .. } | Fast::St { .. } | Fast::BrI { .. } | Fast::BrR { .. }
             | Fast::FOp { .. } | Fast::Goto { .. } | Fast::Call { .. } | Fast::Rts | Fast::CallR { .. } | Fast::GotoR { .. }
             | Fast::BitBr { .. } | Fast::LdIdx { .. } | Fast::StIdx { .. } | Fast::Rmw { .. } | Fast::LdPost { .. }
@@ -5913,7 +6068,9 @@ impl Fast {
     /// for `sets_flags`, so a new one has to say.
     fn reads_flags(&self) -> bool {
         match *self {
-            Fast::Raw { .. } | Fast::Swap { .. } => true,
+            Fast::Raw { .. } | Fast::Swap { .. } | Fast::AddC { .. } => true,
+            Fast::PushSregs { mask } => mask & SREG_PSR != 0,
+            Fast::PushRegs { .. } | Fast::PopRegs { .. } | Fast::PopSregs { .. } | Fast::Rti => false,
             Fast::Mov { .. } | Fast::MovI { .. } | Fast::Alu3 { .. } | Fast::Alu3I { .. } | Fast::Alu2 { .. }
             | Fast::Alu2I { .. } | Fast::Ld { .. } | Fast::St { .. } | Fast::BrI { .. } | Fast::BrR { .. } | Fast::FOp { .. }
             | Fast::Goto { .. } | Fast::Call { .. } | Fast::Rts | Fast::CallR { .. } | Fast::GotoR { .. } | Fast::A4 { .. }
@@ -5943,7 +6100,7 @@ impl Fast {
             self,
             Fast::BrI { .. } | Fast::BrR { .. } | Fast::Goto { .. } | Fast::Call { .. } | Fast::Rts
                 | Fast::CallR { .. } | Fast::GotoR { .. } | Fast::BitBr { .. } | Fast::DecBr { .. } | Fast::PopPc { .. } | Fast::PopRet | Fast::PopMask { .. }
-                | Fast::IfBlk { .. } | Fast::BrIEq { .. } | Fast::BrINe { .. } | Fast::Tb { .. }
+                | Fast::IfBlk { .. } | Fast::BrIEq { .. } | Fast::BrINe { .. } | Fast::Tb { .. } | Fast::Rti
         )
     }
 
@@ -6081,6 +6238,29 @@ fn st_w<B: Bus>(bus: &mut B, w: u8, a: u32, v: u32) {
 /// `exec_raw`'s code for route 27's 4-byte form (`d1 e8 <mask>`, a rets + register mask pop).
 const RAW_POP_RETS_MASK: u8 = 0x80 | 27;
 
+/// The special registers a `[--sp] = {..}` / `{..} = [sp++]` list may name, in the order the
+/// ISA prints them (`PushSregs` / `PopSregs` keep a list as a mask over this; a list in another
+/// order, or with a name not here, stays with exec_syntax).
+const SREG_LIST: [&str; 10] = ["ssp", "usp", "icfg", "psr", "sr4", "rets", "retx", "rete", "reti", "sp"];
+const SREG_RETI: u16 = 1 << 8;
+const SREG_PSR: u16 = 1 << 3;
+
+/// The mask over `SREG_LIST` of a printed list `{a, b, ..}`, when its names are those and in
+/// that order.
+fn sreg_list_mask(list: &str) -> Option<u16> {
+    let inner = list.strip_prefix('{')?.strip_suffix('}')?;
+    let (mut mask, mut last) = (0u16, None);
+    for t in inner.split(", ") {
+        let i = SREG_LIST.iter().position(|&n| n == t)?;
+        if last.is_some_and(|l| i <= l) {
+            return None;
+        }
+        mask |= 1 << i;
+        last = Some(i);
+    }
+    (mask != 0).then_some(mask)
+}
+
 /// The route of the generic, syntax-keyed executor (`exec_syntax`).
 const ROUTE_SYNTAX: u16 = 30;
 const ROUTE_FPU: u16 = 31;
@@ -6156,6 +6336,18 @@ enum Fast {
     /// `[--sp] = rets` / `pc = [sp++]`
     PushRet,
     PopRet,
+    /// `[--sp] = {R*n}` / `{R*n} = [sp++]`, no rets: the registers of the mask, the highest
+    /// pushed first (the 2-byte forms' [max(n, 3) .. min(n, 4)] as a mask, the 4-byte forms' own)
+    PushRegs { mask: u16 },
+    PopRegs { mask: u16 },
+    /// `[--sp] = {psr, rets, reti}` / `{psr, rets, reti} = [sp++]` and the other lists of special
+    /// registers (the ISR wrappers): a bit per name of `SREG_LIST`, pushed in its order and popped
+    /// reversed, as exec_syntax's arm (the first in it). Reti in the list opens / closes nesting.
+    PushSregs { mask: u16 },
+    PopSregs { mask: u16 },
+    Rti,
+    /// `R = R + R + c` / `R = R - R - !c`
+    AddC { d: u8, a: u8, b: u8, sub: bool },
     /// `R = smin|smax|umin|umax(R, R)`: kind 0 smin, 1 smax, 2 umin, 3 umax
     MinMax { d: u8, a: u8, b: u8, kind: u8 },
     /// predicated `if (..) {` (arm 14): block ends as offsets from the
@@ -6776,6 +6968,32 @@ fn fast_of(insn: &Instruction, s: &'static str) -> Option<Fast> {
         "sti" => return Some(Fast::SetIe { on: true }),
         "R = icfg" => return Some(Fast::IcfgRd { d: r(0)? }),
         "icfg = R" => return Some(Fast::IcfgWr { s: r(0)? }),
+        // block push / pop without rets (exec_syntax's arm): 2-byte `6n 04` / `4n 04`, the
+        // registers [max(n, 3) .. min(n, 4)]; 4-byte `d8 e8` / `d4 e8`, a mask at bits 16-31
+        "[--sp] = {R*2}" | "{R*2} = [sp++]" | "[--sp] = {R*1}" | "{R*1} = [sp++]" => {
+            let mask = if insn.entry.len == 2 {
+                let n = (insn.raw & 0xf) as u32;
+                (n.min(4)..=n.max(3)).fold(0u16, |m, r| m | 1 << r)
+            } else {
+                ((insn.raw >> 16) & 0xffff) as u16
+            };
+            return Some(if s.starts_with("[--sp]") { Fast::PushRegs { mask } } else { Fast::PopRegs { mask } });
+        }
+        "rti" => return Some(Fast::Rti),
+        "R = R + R + c" => return Some(Fast::AddC { d: r(0)?, a: r(1)?, b: r(2)?, sub: false }),
+        "R = R - R - !c" => return Some(Fast::AddC { d: r(0)?, a: r(1)?, b: r(2)?, sub: true }),
+        "ssync" | "btbclr" | "iflush [R]" | "flush [R]" | "flushinv [R]" => return Some(Fast::Nop),
+        "[R+#i] &= ~R" => return Some(Fast::MemA4 { b: r(0)?, off: v(1)? as i32, op: Op::AndNot, rk: 0, rv: r(2)? as u32 }),
+        _ if s.starts_with("[--sp] = {") => {
+            if let Some(mask) = sreg_list_mask(&s["[--sp] = ".len()..]) {
+                return Some(Fast::PushSregs { mask });
+            }
+        }
+        _ if s.ends_with("} = [sp++]") => {
+            if let Some(mask) = sreg_list_mask(&s[..s.len() - " = [sp++]".len()]) {
+                return Some(Fast::PopSregs { mask });
+            }
+        }
         // arithmetic shift by an immediate below 32 (exec_syntax fills larger counts with the sign)
         "R = R >>> #i" if insn.entry.len == 4 && v(2).map_or(false, |n| (1..32).contains(&n)) => {
             return Some(Fast::SarI { d: r(0)?, s: r(1)?, n: v(2)? as u8 });
@@ -7084,4 +7302,29 @@ pub fn describe(win: u64, pc: u32) -> Option<String> {
         Fast::Ext { d, s, part, signed } => format!("E r{} r{} {} {}", d, s, ["b0", "l", "h"][part.min(2) as usize], sgn(signed)),
         _ => return None,
     })
+
+}
+
+/// TEMP: FM1_PERF_TRACE=1 counters (slow bus accesses, careful ops, stepped instructions).
+pub mod perf_trace {
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+    pub enum Kind { Read, Write, Careful, Step, Other }
+    thread_local! { static M: RefCell<HashMap<(Kind, String), u64>> = RefCell::new(HashMap::new()); }
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    #[inline(always)]
+    pub fn on() -> bool { *ON.get_or_init(|| std::env::var_os("FM1_PERF_TRACE").is_some()) }
+    pub fn count(k: Kind, key: String) { M.with(|m| *m.borrow_mut().entry((k, key)).or_default() += 1); }
+    pub fn dump() {
+        M.with(|m| {
+            let mut v: Vec<_> = m.borrow().iter().map(|(k, n)| (k.clone(), *n)).collect();
+            v.sort_by(|a, b| b.1.cmp(&a.1));
+            for kind in [Kind::Read, Kind::Write, Kind::Careful, Kind::Step, Kind::Other] {
+                let tot: u64 = v.iter().filter(|(k, _)| k.0 == kind).map(|(_, n)| n).sum();
+                eprintln!("perf {kind:?}: {tot} total");
+                for ((_, key), n) in v.iter().filter(|(k, _)| k.0 == kind).take(25) { eprintln!("  {n:>10} {key}"); }
+            }
+        });
+    }
 }

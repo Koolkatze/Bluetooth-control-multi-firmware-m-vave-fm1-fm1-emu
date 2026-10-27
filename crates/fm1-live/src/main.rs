@@ -406,6 +406,7 @@ fn bench(o: &Opts, ms: u64) {
         }
     }
     let p = &m.soc.periph;
+    fm1_core::perf_trace::dump();
     println!(
         "{} ms emulated at {} MHz in {:.2} s wall: {:.2}x real time, {:.1} M instructions/s, {:.0}% of cycles skipped as idle",
         p.ms(),

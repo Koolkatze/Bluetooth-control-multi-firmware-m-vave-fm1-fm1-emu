@@ -694,6 +694,9 @@ impl Bus for Soc {
             self.periph.next_due = 0;
         }
     }
+    fn service(&mut self) {
+        self.periph.next_due = 0;
+    }
 
     fn idle(&mut self, core: u32) {
         if core == 0 {
@@ -819,6 +822,7 @@ impl Bus for Soc {
 impl Soc {
     #[inline(never)]
     fn read32_slow(&mut self, addr: u32) -> u32 {
+        if fm1_core::perf_trace::on() { fm1_core::perf_trace::count(fm1_core::perf_trace::Kind::Read, format!("{addr:#x}")); }
         match self.region(addr) {
             Region::Xip => {
                 let o = (addr - XIP_BASE) as usize;
@@ -939,6 +943,7 @@ impl Soc {
 
     #[inline(never)]
     fn write32_slow(&mut self, addr: u32, value: u32) {
+        if fm1_core::perf_trace::on() { fm1_core::perf_trace::count(fm1_core::perf_trace::Kind::Write, format!("{addr:#x}")); }
         match self.region(addr) {
             Region::Xip | Region::XipFlash => self.log_unknown(addr, 4, true, value), // flash writes go via the ROM
             Region::Ram => self.ram.write32(addr - RAM_BASE, value),

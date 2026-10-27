@@ -77,6 +77,9 @@ impl Bus for Core1Bus<'_> {
             self.budget = self.budget.min(1);
         }
     }
+    fn service(&mut self) {
+        self.budget = self.budget.min(1);
+    }
     fn next_tick_due(&self) -> bool {
         self.budget <= 1
     }
@@ -134,6 +137,9 @@ impl Bus for Core1Loads<'_> {
     }
     fn irq_window(&mut self) {
         self.0.irq_window()
+    }
+    fn service(&mut self) {
+        self.0.service()
     }
     fn code_writes(&self) -> Option<u64> {
         self.0.code_writes()
@@ -343,6 +349,9 @@ impl Bus for ProbeBus<'_> {
         if self.soc.periph.any_pending() {
             self.bad = true;
         }
+    }
+    fn service(&mut self) {
+        self.bad = true; // (an rti: not a polling round)
     }
 }
 
