@@ -55,6 +55,17 @@ pub(crate) type AdcState = (u32, bool, bool, u16, u32);
 pub const CPU_HZ: u64 = 240_000_000;
 /// TIMER4 counts the 24 MHz crystal; TIMER5 runs from OSC/4.
 const T4_HZ: u64 = 24_000_000;
+
+/// a * b / c, as u32: in u64 while the product fits (TIMER4's count: 2^64 / 24 M cycles, 53
+/// minutes at 240 MHz), else in u128, the same quotient (a u128 division is a library call;
+/// firmware polls these counts)
+#[inline]
+fn mul_div(a: u64, b: u64, c: u64) -> u32 {
+    match a.checked_mul(b) {
+        Some(p) => (p / c) as u32,
+        None => (a as u128 * b as u128 / c as u128) as u32,
+    }
+}
 const T5_HZ: u64 = 6_000_000;
 /// TIMER4 ticks per I2S frame (Felucca audio.c DAC_TICKS: 44.1 kHz).
 const FRAME_T4: u64 = 544;
@@ -232,6 +243,9 @@ pub struct Periph {
     /// Front-panel LEDs: cycles each key/button LED has been lit, and the
     /// cycle of the last change of the LED lines or the column latch.
     led_acc: [u64; 41],
+    /// The LED state (lines, latched column) credited last and the time pending for it.
+    led_key: (u32, u16),
+    led_pend: u64,
     led_last: u64,
     led_since: u64,
     pub keys_down: [bool; 41],
@@ -370,6 +384,8 @@ impl Default for Periph {
             pa_out: 0,
             ph_out: 0,
             led_acc: [0; 41],
+            led_key: (0, 0),
+            led_pend: 0,
             led_last: 0,
             led_since: 0,
             keys_down: [false; 41],
@@ -838,7 +854,7 @@ impl Periph {
                     }
                     self.last_cnt_read = self.cycles;
                 }
-                ((self.cycles - self.t4_base) as u128 * T4_HZ as u128 / self.hz as u128) as u32
+                mul_div(self.cycles - self.t4_base, T4_HZ, self.hz)
             }
             0x10400 | 0x10500 | 0x10600 | 0x10700 => {
                 let t = &self.tmr[((addr - 0x10400) >> 8) as usize];
@@ -892,7 +908,7 @@ impl Periph {
                     0
                 } else {
                     let into = (self.cycles - self.tick_start).min(self.tick_period());
-                    (into as u128 * self.tick_prd as u128 / self.tick_period() as u128) as u32
+                    mul_div(into, self.tick_prd as u64, self.tick_period())
                 }
             }
             0x1eef0f4 => self.tick_prd,
@@ -1129,8 +1145,28 @@ impl Periph {
         if lines == 0 {
             return;
         }
+        // the same lines and column as last time: the time adds up, and the LEDs it lights are
+        // charged when the state changes or the fractions are taken (Felucca's matrix scan writes
+        // the port half a million times a second, most without a change)
+        let key = (lines, self.sr_latched);
+        if key == self.led_key {
+            self.led_pend += dt;
+            return;
+        }
+        self.led_flush();
+        self.led_key = key;
+        self.led_pend = dt;
+    }
+
+    /// Charge the time pending for the LED state last credited to its LEDs.
+    fn led_flush(&mut self) {
+        let (lines, latched) = self.led_key;
+        let dt = std::mem::take(&mut self.led_pend);
+        if dt == 0 {
+            return;
+        }
         for col in 0..11usize {
-            if self.sr_latched & (1 << col) != 0 {
+            if latched & (1 << col) != 0 {
                 continue;
             }
             for row in 1..5usize {
@@ -1147,6 +1183,7 @@ impl Periph {
     /// The fraction of time each LED was lit since the last call.
     pub fn led_take(&mut self) -> [f32; 41] {
         self.led_credit();
+        self.led_flush();
         let span = (self.cycles - self.led_since).max(1) as f32;
         self.led_since = self.cycles;
         let mut out = [0f32; 41];

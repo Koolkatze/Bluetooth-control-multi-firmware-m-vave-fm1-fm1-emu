@@ -622,9 +622,17 @@ fn shot(o: &Opts, ms: u64) {
     save_flash(&m, o.flash.as_ref());
 }
 
-/// FM1_USB_SEND='MS:HEX…;MS:HEX…': MIDI messages to send over USB at those times (ms).
+/// FM1_USB_SEND='MS:HEX…;MS:HEX…': MIDI messages to send over USB at those times (ms); `@PATH` reads them
+/// from a file (a whole deploy is longer than an environment variable may be).
 fn usb_script() -> VecDeque<(u64, Vec<u8>)> {
-    let mut q: Vec<(u64, Vec<u8>)> = std::env::var("FM1_USB_SEND").unwrap_or_default().split(';').filter_map(|item| {
+    let mut sends = std::env::var("FM1_USB_SEND").unwrap_or_default();
+    if let Some(path) = sends.strip_prefix('@') {
+        sends = std::fs::read_to_string(path).unwrap_or_else(|e| {
+            eprintln!("FM1_USB_SEND {path}: {e}");
+            String::new()
+        });
+    }
+    let mut q: Vec<(u64, Vec<u8>)> = sends.split(';').filter_map(|item| {
         let (t, hex) = item.trim().split_once(':')?;
         let hex: String = hex.chars().filter(|c| c.is_ascii_hexdigit()).collect();
         let bytes = (0..hex.len() / 2).map(|i| u8::from_str_radix(&hex[2 * i..2 * i + 2], 16).ok()).collect::<Option<Vec<u8>>>()?;
@@ -842,7 +850,7 @@ env: FM1_BENCH_KEYS='T[-T2]:PLAY,T:n7,T:enc0:+3,T:pot:512,T:ms:mHEX'  scripted i
      FM1_NO_JIT            the interpreter (byte-identical, slower); FM1_NO_BLOCKS: a step at a time
      FM1_NO_LOOPSKIP       run polling loops round by round instead of skipping them (byte-identical, slower)
      FM1_FLASH_CUT=N       cut the power half way through the Nth flash erase / program (--flash keeps what is left)
-     FM1_USB_SEND='MS:HEX;…'  --shot --usb: MIDI messages over USB at those times; FM1_USB_TRACE: the bus
+     FM1_USB_SEND='MS:HEX;…'  --shot --usb: MIDI messages over USB at those times (@PATH: from a file); FM1_USB_TRACE: the bus
      FM1_USB_SIE_NS=N      --usb: each SIE register access takes N ns (default 1000)";
 
 fn main() {

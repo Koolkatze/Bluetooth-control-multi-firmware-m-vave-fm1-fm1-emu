@@ -91,6 +91,9 @@ impl Bus for Core1Bus<'_> {
             self.budget = self.budget.min(1);
         }
     }
+    fn service(&mut self) {
+        self.budget = self.budget.min(1);
+    }
     fn next_tick_due(&self) -> bool {
         self.budget <= 1
     }
@@ -148,6 +151,9 @@ impl Bus for Core1Loads<'_> {
     }
     fn irq_window(&mut self) {
         self.0.irq_window()
+    }
+    fn service(&mut self) {
+        self.0.service()
     }
     fn code_writes(&self) -> Option<u64> {
         self.0.code_writes()
@@ -358,6 +364,9 @@ impl Bus for ProbeBus<'_> {
             self.bad = true;
         }
     }
+    fn service(&mut self) {
+        self.bad = true; // (an rti: not a polling round)
+    }
 }
 
 /// Look for a polling loop at cpu0's pc (see `LoopSkip`), with the tick of the instruction there
@@ -505,6 +514,9 @@ pub fn run_blocks(cpu: &mut Cpu, soc: &mut Soc, n: u32, pending_tick: &mut bool)
                 if cpu.irq_ready(prio) {
                     let handler = soc.read32(VEC_BASE + 4 * irq as u32);
                     cpu.interrupt(handler, prio);
+                    // the handler's first instruction may stay in compiled code (a micro-op now):
+                    // TIMER4's idle skip must see "in an ISR" from that instruction on
+                    soc.periph.in_isr = true;
                 }
             }
         }
