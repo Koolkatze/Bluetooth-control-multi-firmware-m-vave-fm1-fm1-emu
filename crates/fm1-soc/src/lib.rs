@@ -139,6 +139,9 @@ static SFR_MAP: [Region; ((SFR_HI - SFR_LO) / 8) as usize] = {
 #[derive(Default)]
 pub struct AddrHasher(u64);
 
+/// SFR words at aligned addresses below this live in `Soc::sfr_lo`.
+const SFR_LO_END: u32 = 0x6_0000;
+
 impl std::hash::Hasher for AddrHasher {
     fn finish(&self) -> u64 {
         self.0
@@ -194,6 +197,9 @@ pub struct Soc {
     pub ticks: u64,
     /// Timers, audio DMA, ADC, interrupt controller and the front panel.
     pub periph: Periph,
+    /// Plain SFR words: the aligned ones below `SFR_LO_END` in an array (the GPIO and clock
+    /// windows, written at every port write), the rest in the map.
+    sfr_lo: Vec<u32>,
     sfr: std::collections::HashMap<u32, u32, std::hash::BuildHasherDefault<AddrHasher>>,
     /// Core 0 / 1 paused by the other (C0_CON / C1_CON bit 2 pulses, bit 3 resumes).
     paused: [bool; 2],
@@ -356,6 +362,7 @@ impl Soc {
             console: Vec::new(),
             ticks: 0,
             periph: Periph::default(),
+            sfr_lo: vec![0; (SFR_LO_END / 4) as usize],
             sfr: Default::default(),
             paused: [false; 2],
             lock_owner: None,
@@ -554,10 +561,17 @@ impl Soc {
     }
 
     fn sfr_get(&mut self, addr: u32) -> u32 {
+        if addr < SFR_LO_END && addr & 3 == 0 {
+            return self.sfr_lo[(addr >> 2) as usize];
+        }
         *self.sfr.get(&addr).unwrap_or(&0)
     }
 
     fn sfr_set(&mut self, addr: u32, v: u32) {
+        if addr < SFR_LO_END && addr & 3 == 0 {
+            self.sfr_lo[(addr >> 2) as usize] = v;
+            return;
+        }
         self.sfr.insert(addr, v);
     }
 
