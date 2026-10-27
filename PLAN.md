@@ -1148,6 +1148,15 @@ time a few percent). JIT: geomean 0.868 (every firmware faster, 0.77 to 0.94); i
 Exactness: all 18 locally available firmwares, JIT and interpreted, 4 s with keys: byte-identical
 to master before this pass after each change; fm1-core's 61 tests and fm1-soc's 42 pass on
 AArch64, fm1-core's 47 as an x86-64 binary under Rosetta; `cargo check` for wasm32 and x86-64.
+CI's catalog check (every Hub firmware, 8 s, JIT against the interpreter and against the stored
+hashes) agreed for all but 386DX, whose sound moved: its core 1 runs the carry ops (`R = R + R + c`,
+`R = R - R - !c`: its 64-bit arithmetic) 400 k times a second, and with them micro-ops its blocks
+no longer end at each one, so `run_cpu1`'s idle probe looks at other instruction boundaries and the
+cores interleave a few instructions apart. The sound is the same (the loudness per 250 ms is), the
+song after PLAY lands about 6.5 ms away; JIT and interpreter agree. tests/catalog.json carries the
+new hash (`tools/catalog_check.py --update 386dx`). The review of this pass (#98) found "in an ISR"
+set a loop iteration late once the handler's first instruction stayed in compiled code: set as the
+interrupt is taken now.
 
 What the counters say is left, by size (none done here):
 - cpu1's idle probe: X0X's core 1 runs 2 instructions per `run_fast` call, 330 k calls a second,
