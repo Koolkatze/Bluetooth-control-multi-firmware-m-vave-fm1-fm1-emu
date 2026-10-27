@@ -860,7 +860,6 @@ impl Cpu {
     fn exec_careful_op<B: Bus>(&mut self, bus: &mut B, i: u32, gated: bool, next_pc: u32, room: u32) -> u32 {
         let pack = |k: u32, still: bool, stop: bool, due: bool| k | (still as u32) << 2 | (stop as u32) << 3 | (due as u32) << 4;
         let op = self.bops[i as usize];
-        if perf_trace::on() { let name = match op.fast { Fast::Raw { route, .. } => format!("Raw{route}"), f => format!("{f:?}").split([' ', '{']).next().unwrap().to_owned() }; perf_trace::count(perf_trace::Kind::Careful, format!("{name}{}{}{}{}{}{}{}", if op.careful {" careful"} else {""}, if op.pair_head {" head"} else {""}, if op.glue {" glue"} else {""}, if gated {" gated"} else {""}, if self.pair_pending.is_some() {" pair"} else {""}, if !self.pred_skips.is_empty() {" pred"} else {""}, if self.rep_end != 0 {" rep"} else {""})); }
         if let Fast::Swap { idx } = op.fast {
             let (head, tail, hlen) = self.swaps[idx as usize];
             let head_next = self.pc.wrapping_add(hlen as u32);
@@ -1250,7 +1249,6 @@ impl Cpu {
     pub fn step<B: Bus>(&mut self, bus: &mut B) -> Result<(), CoreError> {
         let slot = self.fetch(bus)?;
         let l = self.icache[slot];
-        if perf_trace::on() { perf_trace::count(perf_trace::Kind::Step, format!("{} {:?}", if self.icache_x[slot].is_some() { canon_syntax(self.icache_x[slot].as_ref().unwrap().entry) } else { "?" }, l.fast.map(|f| format!("{f:?}").split([' ', '{']).next().unwrap().to_owned()))); }
         let next_pc = self.pc + l.len as u32;
         // hot path: a micro-op outside any dual-issue pair
         if let (Some(f), false, true) = (l.fast, l.pair_head, self.pair_pending.is_none()) {
@@ -7305,26 +7303,3 @@ pub fn describe(win: u64, pc: u32) -> Option<String> {
 
 }
 
-/// TEMP: FM1_PERF_TRACE=1 counters (slow bus accesses, careful ops, stepped instructions).
-pub mod perf_trace {
-    use std::cell::RefCell;
-    use std::collections::HashMap;
-    #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-    pub enum Kind { Read, Write, Careful, Step, Other }
-    thread_local! { static M: RefCell<HashMap<(Kind, String), u64>> = RefCell::new(HashMap::new()); }
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    #[inline(always)]
-    pub fn on() -> bool { *ON.get_or_init(|| std::env::var_os("FM1_PERF_TRACE").is_some()) }
-    pub fn count(k: Kind, key: String) { M.with(|m| *m.borrow_mut().entry((k, key)).or_default() += 1); }
-    pub fn dump() {
-        M.with(|m| {
-            let mut v: Vec<_> = m.borrow().iter().map(|(k, n)| (k.clone(), *n)).collect();
-            v.sort_by(|a, b| b.1.cmp(&a.1));
-            for kind in [Kind::Read, Kind::Write, Kind::Careful, Kind::Step, Kind::Other] {
-                let tot: u64 = v.iter().filter(|(k, _)| k.0 == kind).map(|(_, n)| n).sum();
-                eprintln!("perf {kind:?}: {tot} total");
-                for ((_, key), n) in v.iter().filter(|(k, _)| k.0 == kind).take(25) { eprintln!("  {n:>10} {key}"); }
-            }
-        });
-    }
-}
