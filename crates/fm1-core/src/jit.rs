@@ -1615,7 +1615,7 @@ fn emit_op<B: Bus>(g: &mut Gen, fast: Fast, idx: u32, next_pc: u32, profile: boo
             }
             g.st_reg(2, d);
         }
-        // (`sti` stays with the executor: it opens the bus's interrupt window)
+        // (`sti` opens the bus's interrupt window: a helper of its own, `h_sti`)
         Fast::SetIe { on: false } if off_ie() < 4096 => g.a.strb(ZR, CPU, off_ie()),
         Fast::SetIe { on: true } => {
             g.a.mov_x(0, CTX);

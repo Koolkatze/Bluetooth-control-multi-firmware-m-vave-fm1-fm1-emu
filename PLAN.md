@@ -1071,6 +1071,107 @@ Speed against 5.32 (this Mac, shared, best of 3 interleaved; JIT / interpreted):
 - Melodee's core 1 never starts in fm1-live's 8 s bench, so #48's Melodee gain (measured on a
   Pixel 7 Pro in Harbor) does not show here.
 
+## 5.34 Speed pass 3: where the time goes with the JIT on, and seven exact changes (2026-10-27)
+
+A profile (macOS `sample`, 4 s of Felucca, X0X and Melodee at 240 MHz with the JIT) split the
+time four ways: generated code 30-42%, the Rust core (run_fast's loop, the careful path, cpu1's
+probe) 22-40%, the JIT's helpers 5-12%, the SoC (peripheral reads and writes, interrupts)
+16-36%. Temporary counters (an env-gated `perf_trace`, taken out again) then said what each
+part was doing: which addresses the slow bus paths see, which ops run carefully with the JIT on
+and why, which instructions still go through `exec_syntax`. The findings, each a change measured
+alone (interleaved A/B, the CPU time of a 4 s bench at 240 MHz, median of 3; this Mac was shared
+with a VM and other work at a load of 7-8 on 8 cores, so wall-clock factors were meaningless):
+
+- SoC, three hot spots (Felucca -4%, AMB -2%, Melodee -1%): TIMER4's count was computed with a
+  u128 division (a library call) on every read, and Melodee reads it 3 M times a second; now u64
+  while the product fits, u128 past 53 minutes at 240 MHz (the same quotient). Every port write
+  ran the LED accounting's 44-cell loop; Felucca writes the port 500 k times a second, nearly
+  always in the same state: the time is now summed per state and charged when it changes. The
+  plain SFR words lived in a HashMap written on every GPIO write; the aligned ones below 0x60000
+  are an array.
+- JIT: a chain exit was a slot loaded with mov64 (four instructions), a cbz and a `br`, on the
+  way out of every block (3.5 guest instructions on average), for 11 host instructions of block
+  overhead. On AArch64 the exit is now a `b` to its own exit code, patched by `jit::link` into
+  `b body` once the target is compiled (the cache is one 64 MB mapping, within a branch's reach;
+  macOS's write-protect toggle and an icache invalidate per link). Felucca -4.5%, Melodee -4%,
+  X0X and GhoulBox -2%. x86-64 keeps its slot.
+- JIT: 64-bit addresses (helpers, the itab, RAM guards, the op pointers for `h_op`) from a
+  literal pool after the code, one `ldr` instead of four moves. Neutral on Apple silicon (within
+  noise, GhoulBox -3%); kept for the smaller code.
+- Pairs with a float-op head ran carefully: FOp was not in `reg_only`, so a head whose result the
+  second instruction stores (`rD = fop #; [sp+k] = rD`, Melodee 225 k pairs a second, X0X 42 k)
+  could not become a `Swap`, and both instructions went through `exec_fast_paired` with its three
+  register-file copies. It is a register-only op; now swappable and compiled. Melodee -2.5%.
+- The ISR wrappers' instructions still went through `exec_syntax`, parsing their syntax strings
+  each time: `[--sp] = {psr, rets, reti}`, `{psr, rets, reti} = [sp++]`, `[--sp] = {R*2}`,
+  `{R*2} = [sp++]` and `rti`, five per interrupt, 10 k interrupts a second on each of the three,
+  plus `R = R + R + c` (Melodee 35 k / s), `[R+#i] &= ~R` (X0X 70 k / s) and `flushinv [R]`.
+  They are micro-ops now: `PushSregs` / `PopSregs` (a list as a mask over `SREG_LIST`, the ISA's
+  order), `PushRegs` / `PopRegs` (the 2-byte forms' [max(n,3) .. min(n,4)] and the 4-byte masks),
+  `Rti`, `AddC`, `MemA4` with `AndNot`, `Nop`. The slow path returned to the run loop after every
+  such instruction, where interrupts are taken and the SoC's "in an ISR" is updated (TIMER4's idle
+  skip reads it): `PushSregs` / `PopSregs` open the bus's interrupt window as `sti` does, and
+  `Rti` calls the new `Bus::service` (next_due = 0: the run loop looks before the next
+  instruction, as it did). A differential test runs every encoding of each shape (thousands, the
+  ISA table's masks and the carry ops' own decoder) from random state through `exec_syntax` and
+  the micro-op and compares state and memory. Felucca -2.5%, X0X -2%, Melodee -0.5%.
+- `R = rev8/rev16/revs(R)` (route 22, X0X 600 k / s through `h_op`) inline on AArch64, popcnt
+  staying with the executor; `sti` (Felucca 700 k / s) through a helper of its own without the
+  executor's dispatch. X0X -2%, Felucca -1%.
+
+All of it together, master (8bc116b) against this branch, the CPU seconds (user + sys) of a 4 s bench
+at 240 MHz with the default keys, boot included, median of three interleaved runs each
+(`CPU=1 tools/bench_ab.sh`, new: on this loaded Mac the real-time factor swung 2x between runs, CPU
+time a few percent). JIT: geomean 0.868 (every firmware faster, 0.77 to 0.94); interpreted 0.982.
+
+| Firmware | JIT before | after | ratio | Interp. before | after | ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| amb | 0.95 | 0.84 | 0.884 | 3.64 | 3.60 | 0.989 |
+| choralroot | 0.67 | 0.59 | 0.881 | 3.57 | 3.56 | 0.997 |
+| felucca | 0.92 | 0.81 | 0.880 | 4.29 | 4.26 | 0.993 |
+| felucca-salt | 0.80 | 0.65 | 0.812 | 4.18 | 4.11 | 0.983 |
+| fm106 | 1.72 | 1.34 | 0.779 | 5.55 | 5.09 | 0.917 |
+| fomni | 0.91 | 0.82 | 0.901 | 3.47 | 3.46 | 0.997 |
+| fumi | 0.97 | 0.86 | 0.887 | 3.89 | 3.87 | 0.995 |
+| ghoulbox | 1.07 | 0.98 | 0.916 | 4.53 | 4.48 | 0.989 |
+| hortator | 0.69 | 0.61 | 0.884 | 3.92 | 3.93 | 1.003 |
+| jangada | 1.17 | 1.04 | 0.889 | 4.48 | 4.45 | 0.993 |
+| melodee | 1.69 | 1.56 | 0.923 | 5.75 | 5.65 | 0.983 |
+| purplemonkey | 1.23 | 1.15 | 0.935 | 4.13 | 4.08 | 0.988 |
+| quest | 0.35 | 0.27 | 0.771 | 1.18 | 1.14 | 0.966 |
+| sid | 0.41 | 0.37 | 0.902 | 1.11 | 1.07 | 0.964 |
+| sloop | 0.72 | 0.61 | 0.847 | 3.47 | 3.44 | 0.991 |
+| sloop-alg | 0.68 | 0.59 | 0.868 | 3.50 | 3.48 | 0.994 |
+| tribe | 0.92 | 0.73 | 0.793 | 3.42 | 3.24 | 0.947 |
+| x0x | 1.10 | 0.99 | 0.900 | 4.76 | 4.74 | 0.996 |
+
+Exactness: all 18 locally available firmwares, JIT and interpreted, 4 s with keys: byte-identical
+to master before this pass after each change; fm1-core's 61 tests and fm1-soc's 42 pass on
+AArch64, fm1-core's 47 as an x86-64 binary under Rosetta; `cargo check` for wasm32 and x86-64.
+
+What the counters say is left, by size (none done here):
+- cpu1's idle probe: X0X's core 1 runs 2 instructions per `run_fast` call, 330 k calls a second,
+  each through `run_stretch`, `block_at`, `jit::run`'s prologue and epilogue: ~8% of X0X's time,
+  ~11% of Melodee's (`run_stretch` + `run_cpu1` + `jit::run<Core1Bus>` in the profile). 5.20
+  tried skipping idle rounds and found the probing calls' fixed cost was the problem; a cheaper
+  call (a remembered "idle at pc with these registers, nothing it reads changed" check before any
+  of the machinery) is the thing to try.
+- The peripheral read path: `h_read` -> `read32` -> `read32_slow` -> `region` -> `Periph::read`,
+  27 ns a read, 1.5 M reads a second of TIMER4's count on Felucca, 3 M on Melodee (the firmware
+  polls it): 19% of Felucca's time. A direct path for the count register from `h_read`, or a
+  cheaper `next_event` (scanned on every polled read), would pay there.
+- Pair heads of raw routes 21 (the 64-bit register-pair ops: Melodee 35 k / s) and 41 (qasl /
+  cls / brev: X0X 43 k / s, Felucca 13 k / s) are careful, and their pairs run interpreted (two
+  careful steps each): micro-ops for them, as `MinMax` was for route 41's min / max.
+- Flag producers whose flags a later `+ c` reads are careful (`flags_live`): Melodee 35 k / s of
+  `A4`. Compiled code could store the flags for those (`adds` and `mrs nzcv` on AArch64).
+- If-else blocks interpreted carefully: X0X 80 k / s (`IfBlk careful`: blocks not at a prefix's
+  end, or inside another construct).
+- The register cache (#49) is flushed at every chain: guest registers live in memory between
+  blocks. A fixed allocation across blocks is the large remaining item in generated code.
+- Loads check RAM then XIP with two immediate pairs each; constants in the two spare callee-saved
+  registers would save 2-4 instructions a load.
+
 ## 6. Phase 5 — Boot & integration
 
 - Boot stock firmware to a stable idle/main-loop state.
