@@ -482,6 +482,9 @@ pub fn run_blocks(cpu: &mut Cpu, soc: &mut Soc, n: u32, pending_tick: &mut bool)
                 if cpu.irq_ready(prio) {
                     let handler = soc.read32(VEC_BASE + 4 * irq as u32);
                     cpu.interrupt(handler, prio);
+                    // the handler's first instruction may stay in compiled code (a micro-op now):
+                    // TIMER4's idle skip must see "in an ISR" from that instruction on
+                    soc.periph.in_isr = true;
                 }
             }
         }

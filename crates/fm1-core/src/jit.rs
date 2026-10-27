@@ -417,11 +417,13 @@ pub(crate) unsafe fn link(slot: *mut u64, body: *const u8) {
             pthread_jit_write_protect_np(1);
             sys_icache_invalidate(site as *mut c_void, 4);
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         {
             site.write_volatile(insn);
             flush_icache(site as *const u8, 4);
         }
+        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "android")))]
+        site.write_volatile(insn); // (as CodeCache::write: no flush on the other systems)
     }
     #[cfg(not(target_arch = "aarch64"))]
     {

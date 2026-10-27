@@ -16,7 +16,10 @@ run() {
   local src=(--fw "$2"); [ "$2" = stock ] && src=(--fwsc "$STOCK")
   local value
   if [ -n "${CPU:-}" ]; then
-    value="$( { TIMEFORMAT="%U %S"; time env ${ENV:-} "$1" "${src[@]}" --mhz "$MHZ" --bench "$MS" >/dev/null 2>&1; } 2>&1 | awk '{printf "%.2f", $1 + $2}')"
+    local out; out="$(mktemp)"
+    value="$( { TIMEFORMAT="%U %S"; time env ${ENV:-} "$1" "${src[@]}" --mhz "$MHZ" --bench "$MS" >"$out" 2>&1; } 2>&1 | awk '{printf "%.2f", $1 + $2}')"
+    grep -q ' ms emulated' "$out" || value=""   # (a run that did not benchmark: no time to report)
+    rm -f "$out"
   else
     value="$(env ${ENV:-} "$1" "${src[@]}" --mhz "$MHZ" --bench "$MS" 2>&1 | sed -nE 's/.* ms emulated.* ([0-9.]+)x real time.*/\1/p' | tail -1)"
   fi
