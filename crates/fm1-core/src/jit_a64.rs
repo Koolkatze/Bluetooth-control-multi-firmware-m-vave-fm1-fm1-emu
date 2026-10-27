@@ -135,6 +135,7 @@ impl Asm {
     pub fn neg(&mut self, rd: Reg, rm: Reg) { self.sub(rd, ZR, rm); }
     pub fn mvn(&mut self, rd: Reg, rm: Reg) { self.e(0x2a20_03e0 | rm << 16 | rd); }
     pub fn rev(&mut self, rd: Reg, rn: Reg) { self.e(0x5ac0_0800 | rn << 5 | rd); }
+    pub fn rev16(&mut self, rd: Reg, rn: Reg) { self.e(0x5ac0_0400 | rn << 5 | rd); }
     pub fn sdiv(&mut self, rd: Reg, rn: Reg, rm: Reg) { self.e(0x1ac0_0c00 | rm << 16 | rn << 5 | rd); }
     pub fn udiv(&mut self, rd: Reg, rn: Reg, rm: Reg) { self.e(0x1ac0_0800 | rm << 16 | rn << 5 | rd); }
     /// rd = ra - rn * rm

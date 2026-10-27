@@ -580,6 +580,28 @@ fn h_op_quiet<const PROF: bool>(ctx: *mut Ctx, op: *const Fast, _idx: u32, _next
 }
 
 code_abi! {
+/// `sti` (`Fast::SetIe { on: true }`): `h_op`'s work for it without the executor's dispatch. It
+/// opens the bus's interrupt window, so the ticks are synced first and brk checked after.
+fn h_sti<B: Bus>(ctx: *mut Ctx, idx: u32) {
+    // SAFETY: as h_op.
+    let ctx = unsafe { &mut *ctx };
+    let bus = unsafe { &mut *(ctx.bus as *mut B) };
+    let cpu = unsafe { &mut *ctx.cpu };
+    unsafe { sync(ctx, bus, idx) };
+    if cpu.stop_pc != 0 {
+        cpu.stop_io = 1;
+    }
+    cpu.profile_helper(&Fast::SetIe { on: true });
+    cpu.ie = true;
+    bus.irq_window();
+    if bus.next_tick_due() || bus.code_writes() != ctx.code_version {
+        ctx.brk = 1;
+    }
+    ctx.irq = 2;
+}
+}
+
+code_abi! {
 /// After a swapped pair whose brk or `Ctx::irq` is set: leave (1) if the next tick is due (or
 /// code was written) or an interrupt is pending; the latter also stops `run_fast` there.
 fn h_pair<B: Bus>(ctx: *mut Ctx) -> u32 {
@@ -1595,6 +1617,26 @@ fn emit_op<B: Bus>(g: &mut Gen, fast: Fast, idx: u32, next_pc: u32, profile: boo
         }
         // (`sti` stays with the executor: it opens the bus's interrupt window)
         Fast::SetIe { on: false } if off_ie() < 4096 => g.a.strb(ZR, CPU, off_ie()),
+        Fast::SetIe { on: true } => {
+            g.a.mov_x(0, CTX);
+            g.a.add_imm(1, DONE, idx);
+            g.call(h_sti::<B> as *const () as u64);
+            bus_used = true;
+        }
+        // rev8 / rev16 / revs (exec_raw's route 22: d bits 28-31, the source 24-27, the form
+        // 22-23; popcnt, form 3, stays with the executor)
+        Fast::Raw { route: 22, raw } if (raw >> 22) & 3 != 3 => {
+            g.ld_reg(0, ((raw >> 24) & 0xf) as u8);
+            match (raw >> 22) & 3 {
+                0 => g.a.rev(0, 0),
+                1 => g.a.rev16(0, 0),
+                _ => {
+                    g.a.rev16(0, 0);
+                    g.a.sxth(0, 0);
+                }
+            }
+            g.st_reg(0, ((raw >> 28) & 0xf) as u8);
+        }
         Fast::LdPair { p, b, off } => {
             match b {
                 Base::Reg(r) => g.ld_reg(0, r),
@@ -2403,6 +2445,8 @@ mod tests {
             Fast::PopRets, Fast::PushRet, Fast::PopRet,
             Fast::CallR { r: 1 }, Fast::CallR { r: 8 }, Fast::GotoR { r: 2 }, Fast::GotoR { r: 9 },
             Fast::SetIe { on: false }, Fast::SetIe { on: true }, Fast::IcfgRd { d: 3 }, Fast::IcfgWr { s: 4 }]);
+        // (route 22: rev8, rev16, revs inline, popcnt through the executor; into another and the same register)
+        for form in 0..4u32 { for d in [0u32, 1] { cases.push(Fast::Raw { route: 22, raw: d << 28 | 1 << 24 | form << 22 | 0xe070 }); } }
         let mut jit = Jit::new(false).unwrap();
         for (j, mut fast) in cases.into_iter().enumerate() {
             for round in 0..24 {
