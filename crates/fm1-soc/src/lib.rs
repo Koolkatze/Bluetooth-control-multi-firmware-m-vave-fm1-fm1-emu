@@ -245,6 +245,23 @@ pub struct Soc {
     pub usb: usb::Usb,
     /// Exact skipping of cpu0's polling loops (`machine::run_blocks`).
     pub loop_skip: machine::LoopSkip,
+    /// Chip resets so far (the watchdog's, PR_PWR's: p33.rs), and the cause of one to come
+    /// (`RST_SRC`'s bit), which `machine::run_blocks` carries out.
+    pub resets: u32,
+    reset_req: Option<u8>,
+    /// How the loader left the chip, taken as cpu0 starts: what a reset goes back to.
+    boot: Option<Box<Boot>>,
+}
+
+/// The chip as the loader hands it to the app (`Soc::chip_reset`).
+struct Boot {
+    cpu: fm1_core::PlainState,
+    sfr_lo: Vec<u32>,
+    sfr: std::collections::HashMap<u32, u32, std::hash::BuildHasherDefault<AddrHasher>>,
+    sfc: (u32, (u32, u32)),
+    bt_window: u32,
+    /// The SPL's boot parameters (r0 into RAM, `write_boot_info`): where, and the bytes.
+    info: Option<(u32, Vec<u8>)>,
 }
 
 fn dbg_line(addr: u32) -> &'static str {
@@ -383,6 +400,102 @@ impl Soc {
             usb: Default::default(),
             // (FM1_TRACE: a trace shows every instruction as it runs, not a probe's)
             loop_skip: machine::LoopSkip::new(std::env::var_os("FM1_NO_LOOPSKIP").is_none() && std::env::var_os("FM1_TRACE").is_none()),
+            resets: 0,
+            reset_req: None,
+            boot: None,
+        }
+    }
+
+    /// cpu0 starts (the runners call this before its first instruction): the chip as it is now
+    /// is what a reset goes back to. A cpu0 that has already run is not at its start: nothing is
+    /// taken, and a reset is then not carried out (`chip_reset`).
+    pub fn take_boot(&mut self, cpu: &fm1_core::Cpu) {
+        if self.boot.is_some() || cpu.insn_count != 0 {
+            return;
+        }
+        // (a cpu that has not run has nothing in flight)
+        let Some(state) = cpu.plain_state() else { return };
+        const INFO: u32 = 24 + 32; // (write_boot_info's block)
+        let r0 = cpu.regs[0];
+        let info = r0.checked_sub(RAM_BASE).filter(|&o| (o + INFO) as usize <= self.ram.len()).map(|_| {
+            (r0, (0..INFO).map(|i| self.ram.read8(r0 - RAM_BASE + i)).collect())
+        });
+        self.boot = Some(Box::new(Boot { cpu: state, sfr_lo: self.sfr_lo.clone(), sfr: self.sfr.clone(), sfc: (self.sfc_con, self.sfc_unenc), bt_window: self.bt_window, info }));
+    }
+
+    /// Is a chip reset due (the watchdog ran out, or the firmware asked through PR_PWR)?
+    #[inline]
+    pub fn reset_due(&self) -> bool {
+        self.reset_req.is_some()
+    }
+
+    /// The reset that is due: cpu0 back where the loader started it, the chip's registers as
+    /// the loader left them, core 1 held (the runner drops it: `resets` counts up), the boot
+    /// parameters written again, the cause in P33's `RST_SRC`. What is not the chip's stays:
+    /// RAM (a word a firmware leaves itself there, Felucca's "usb_update_mode" mailbox), the
+    /// flash, the screen, and what `Periph::chip_reset` keeps.
+    pub fn chip_reset(&mut self, cpu: &mut fm1_core::Cpu) {
+        let Some(cause) = self.reset_req.take() else { return };
+        let Some(boot) = self.boot.take() else {
+            // (half a reset, the peripherals' without cpu0's, would be worse than none)
+            eprintln!("chip reset not carried out: the emulator did not see cpu0 start");
+            return;
+        };
+        if std::env::var_os("FM1_DUAL_TRACE").is_some() || std::env::var_os("FM1_RESET_TRACE").is_some() {
+            eprintln!("chip reset at {} ms ({})", self.periph.ms(), if cause == p33::P33::RST_WDT { "watchdog" } else { "PR_PWR" });
+        }
+        self.resets += 1;
+        self.periph.chip_reset();
+        self.p33.chip_reset(cause);
+        let cable = self.usb.cable;
+        self.usb = Default::default();
+        if cable {
+            self.usb.plug(self.periph.hz);
+        }
+        (self.paused, self.lock_owner, self.cpu1_release, self.cpu1_released_once, self.crc) = ([false; 2], None, false, false, 0);
+        self.flash.chip_reset();
+        cpu.set_plain_state(&boot.cpu);
+        self.sfr_lo.clone_from(&boot.sfr_lo);
+        self.sfr = boot.sfr.clone();
+        (self.sfc_con, self.sfc_unenc, self.bt_window) = (boot.sfc.0, boot.sfc.1, boot.bt_window);
+        if let Some((at, bytes)) = boot.info.clone() {
+            for (i, b) in bytes.into_iter().enumerate() {
+                self.write8(at + i as u32, b);
+            }
+        }
+        self.sfc_reread();
+        self.loop_skip.next_try = 0;
+        self.boot = Some(boot);
+    }
+
+    /// A P33 access done: what it asks of the chip (p33.rs). The watchdog starts its count
+    /// when it is switched on or fed, and stops when it is switched off.
+    fn p33_event(&mut self) {
+        match self.p33.take_event() {
+            Some(p33::Event::Wdt { fed }) => {
+                let con = self.p33.reg(p33::P33::WDT_CON, false);
+                let pd = &mut self.periph;
+                let before = pd.wdt_at;
+                if con & 0x10 == 0 {
+                    pd.wdt_at = u64::MAX;
+                } else if fed || pd.wdt_at == u64::MAX {
+                    pd.wdt_at = pd.cycles + pd.cycle_of_ms(p33::P33::wdt_ms(con)).max(1);
+                }
+                if pd.wdt_at < before {
+                    // sooner than anything the run loop planned for (switched on, or a shorter
+                    // period fed): compiled code leaves at this write, the loop looks again
+                    pd.next_due = 0;
+                } else {
+                    // (a feed moves the deadline later: nothing comes due sooner, and a polling
+                    // loop that feeds it each round can still be skipped)
+                    pd.next_due = pd.next_due.min(pd.wdt_at);
+                }
+            }
+            Some(p33::Event::Reset) => {
+                self.reset_req.get_or_insert(p33::P33::RST_SOFT);
+                self.periph.next_due = 0;
+            }
+            None => {}
         }
     }
 
@@ -457,6 +570,9 @@ impl Soc {
     /// bits — Felucca writes Q15 << 7, audio.c OUT_SHIFT — so >> 8 to i16).
     pub fn advance(&mut self, n: u64) {
         let due = self.periph.advance(n);
+        if due.wdt {
+            self.reset_req.get_or_insert(p33::P33::RST_WDT);
+        }
         if let Some((at, b)) = due.uart_rx {
             self.write8(at, b);
         }
@@ -994,7 +1110,10 @@ impl Soc {
             }
             Region::Iomap => self.sfr_set(addr, value),
             Region::Ana => self.sfr_set(addr, value),
-            Region::P33 => self.p33.write(addr, value),
+            Region::P33 => {
+                self.p33.write(addr, value);
+                self.p33_event();
+            }
             Region::Bt => {
                 if addr == 0x2fc44 {
                     self.bt_window = value;

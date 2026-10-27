@@ -100,6 +100,50 @@ Checked with Felucca 1.6.1, MENU > SYSTEM > 2ND CORE ON (its settings sector, fl
 --seed 7` it shows `2ND CORE MISREAD: OFF` as the notes start and plays on with one core; without
 the option its audio and screens are byte-identical to before.
 
+## The watchdog and chip resets (`fm1_soc::p33`, `Soc::chip_reset`)
+
+The P33 port's watchdog runs as on the chip (#65), so a firmware can test that a hang recovers:
+Felucca's `fm1_sys.h` arms it (`fm1_wdt_arm`), feeds it (`fm1_wdt_feed`) and reboots through it
+(`fm1_reboot`).
+
+- **`WDT_CON` (0x80):** bit 4 runs it, bits 0..3 set the period (1 ms doubling to 512 ms, then
+  1 s doubling to 32 s), and a write of bit 6 feeds it (that bit reads 0). Not fed within its
+  period, it resets the chip.
+- **`PR_PWR` (0xA0):** bit 4 resets the chip.
+- **After a reset:**
+  - cpu0 starts again where the loader started it, and core 1 is held until it is released
+    again.
+  - The chip's registers go back to how the loader left them, and the loader's boot parameters
+    are written again.
+  - `RST_SRC` (P33 0x12) holds the cause (bit 2 the watchdog, bit 6 `PR_PWR`), and the watchdog
+    is stopped.
+  - SPI0 is off, and a flash command under way (chip select low) is abandoned: a page program's
+    bytes are not programmed.
+  - What isn't the chip's stays: RAM (the mailboxes firmwares leave themselves, harbor's
+    hand-over word), the flash, the screen, the audio played so far, the keys, the script and a
+    USB cable (the host enumerates the device again).
+- **Both cores:** the reset comes while core 1 holds core 0 (`C0_CON` bit 2) too, within one
+  of cpu0's slices of the deadline. Core 1 stops at its `PR_PWR` write: it stores nothing after
+  it. Every runner resets: the block loop, fm1-live's reference loop (`FM1_NO_BLOCKS`) at the
+  same cycles, and fm1-emu.
+- **Polling loops:** a loop that feeds the watchdog each round is still skipped, to the same
+  cycle.
+- **The boot state** is cpu0's before its first instruction (`Soc::take_boot`, which the runners
+  call). A runner that let cpu0 run before calling it gets no reset at all, and a warning.
+- **Not modelled:**
+  - the watchdog's exception mode (`VLD_KEEP` bit 6), which resets here too;
+  - `RST_SRC`'s power-on bit, which reads 0 at power-on as before, so firmwares boot as they did;
+  - the core reset through `PWR_CON` (0x10000 bit 4), which the update path uses;
+  - a reboot into a new image: the boot parameters and cpu0's entry are the first boot's, not
+    read again from the flash as the loader would (a firmware that rewrites its app area and
+    reboots starts the old entry with the old header);
+  - USB at the reset: device-to-host messages the host has not taken yet are dropped (as the
+    device's own buffers are), and the host sees no detach before the new enumeration.
+- **Keeping it up to date:** `Periph::chip_reset` names the fields that survive a reset (the
+  board's and the host's: keys, script, audio, clock); a field added to `Periph` is reset unless
+  it is added there.
+- `FM1_RESET_TRACE` prints each reset.
+
 ## Verifying
 
 - Felucca: `fm1-live --bench 6000 --mhz 240` with `FM1_BENCH_WAV`, byte-identical to before.
@@ -109,4 +153,4 @@ the option its audio and screens are byte-identical to before.
   wave) and the WAV's spectrum (the chord's three notes).
 - Debug aids added on the way: `FM1_BREAK_PCS`, `FM1_TRACE_RANGE=a:b` (fm1-emu),
   `FM1_FWSC_DIR` (print the package directory), `FM1_FLASH_TRACE`, `FM1_AUDIO_TRACE`,
-  `FM1_DUAL_TRACE`, `FM1_BENCH_TRACE` (checkpoints to diff JIT against interpreter).
+  `FM1_DUAL_TRACE`, `FM1_BENCH_TRACE` (checkpoints to diff JIT against interpreter), `FM1_RESET_TRACE`.
