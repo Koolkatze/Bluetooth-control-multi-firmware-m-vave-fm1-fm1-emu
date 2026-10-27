@@ -396,6 +396,39 @@ impl Jit {
     }
 }
 
+/// Link a chain exit (`Ctx::slot`, as `run` returned it) to `body`, the compiled block it leads
+/// to: the exit then goes straight in. AArch64: the slot is the exit's own branch instruction,
+/// patched into `b body` (the code cache is one 64 MB mapping, within a `b`'s reach); x86-64:
+/// a word the exit's code loads and jumps through.
+///
+/// # Safety
+/// `slot` must be a chain exit of code in this JIT's cache (non-null), `body` a compiled body.
+pub(crate) unsafe fn link(slot: *mut u64, body: *const u8) {
+    #[cfg(target_arch = "aarch64")]
+    {
+        let site = slot as *mut u32;
+        let off = (body as isize - site as isize) / 4;
+        assert!((-(1 << 25)..(1 << 25)).contains(&off), "chain target out of a branch's reach");
+        let insn = 0x1400_0000u32 | (off as u32) & 0x03ff_ffff;
+        #[cfg(target_os = "macos")]
+        {
+            pthread_jit_write_protect_np(0);
+            site.write_volatile(insn);
+            pthread_jit_write_protect_np(1);
+            sys_icache_invalidate(site as *mut c_void, 4);
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            site.write_volatile(insn);
+            flush_icache(site as *const u8, 4);
+        }
+    }
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        *slot = body as u64;
+    }
+}
+
 /// Run compiled code: returns the instructions executed, the chain slot of the exit taken (or
 /// null), and whether it stopped after a swapped pair with an interrupt pending (where
 /// `run_fast` stops too); cpu.pc is set. `inside`: inside a then-part or rep loop (the careful
@@ -877,18 +910,19 @@ impl Gen<'_> {
     }
     /// Continue at a fixed pc: straight into its compiled body when the slot holds one,
     /// else back to Rust, which fills the slot once that block is compiled.
+    /// (AArch64: the "slot" is the branch itself, `b` to the exit code right after it until
+    /// `link` patches it into `b body`: one direct branch instead of a slot load and a branch
+    /// through a register, on every block's way out)
     fn chain(&mut self, pc: u32, count: u32) {
         self.flush();
-        let slot: &'static mut u64 = Box::leak(Box::new(0u64));
-        let back = self.a.label();
+        let (site, back) = (self.a.label(), self.a.label());
         self.a.add_imm(DONE, DONE, count);
-        self.a.mov64(10, slot as *mut u64 as u64);
-        self.a.ldr_x(9, 10, 0);
-        self.a.cbz(9, back);
-        self.a.br(9);
+        self.a.bind(site);
+        self.a.b(back);
         self.a.bind(back);
         self.a.mov32(9, pc);
         self.a.str(9, CPU, off_pc());
+        self.a.adr(10, site);
         self.a.str_x(10, CTX, OFF_SLOT);
         self.a.mov(0, DONE);
         self.a.b(self.exit);
@@ -1842,7 +1876,7 @@ mod tests {
         hot(&mut j, 1, 32, &[op(Fast::MovI { d: 0, v: 42 })], &mem);
         let (_, slot, _) = unsafe { run(from, &mut cpu, &mut bus, &mem, 0, 10, false) };
         assert!(!slot.is_null());
-        unsafe { *slot = j.body(1).unwrap() as u64; }
+        unsafe { link(slot, j.body(1).unwrap()); }
         assert_eq!(unsafe { run(from, &mut cpu, &mut bus, &mem, 0, 1, false) }.0, 1);
         assert_eq!(cpu.regs[0], 0);
         assert_eq!(unsafe { run(from, &mut cpu, &mut bus, &mem, 0, 10, false) }.0, 2);
@@ -2210,7 +2244,7 @@ mod tests {
         hot(&mut j, 3, 64, &[op(Fast::MovI { d: 2, v: 5 }), careful], &mem);
         for (code, id) in [(from, 1), (from2, 3)] {
             let (_, slot, _) = unsafe { run(code, &mut cpu, &mut bus, &mem, 0, 100, false) };
-            unsafe { *slot = j.body(id).unwrap() as u64; }
+            unsafe { link(slot, j.body(id).unwrap()); }
         }
         let mut go = |code, stop_pc, stop_io, cap| {
             cpu.regs = [0; 16]; cpu.stop_pc = stop_pc; cpu.stop_io = stop_io;
