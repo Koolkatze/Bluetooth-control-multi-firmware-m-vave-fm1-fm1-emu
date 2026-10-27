@@ -866,6 +866,11 @@ mod tests {
     /// with the JIT and interpreted, with the loop skip and without: the same after every chunk
     /// (core, clock, resets). Returns the cycles of the resets, and what the skip skipped.
     fn run_resetting(code: &[u8], setup: fn(&mut Soc), keys: &[(u64, bool)], total: u64) -> (Vec<u64>, u64) {
+        run_resetting_in(code, setup, keys, total, 7919)
+    }
+
+    /// `run_resetting` with the runner's calls `chunk` instructions long.
+    fn run_resetting_in(code: &[u8], setup: fn(&mut Soc), keys: &[(u64, bool)], total: u64, chunk: u32) -> (Vec<u64>, u64) {
         let mut runs = vec![];
         for (jit, skip) in [(false, false), (false, true), (true, false), (true, true)] {
             let (mut cpu, mut soc) = machine(code, &[], skip);
@@ -876,7 +881,7 @@ mod tests {
             }
             let (mut ticked, mut chunks, mut resets) = (false, vec![], vec![]);
             while soc.periph.cycles < total {
-                run_blocks(&mut cpu, &mut soc, 7919, &mut ticked).unwrap();
+                run_blocks(&mut cpu, &mut soc, chunk, &mut ticked).unwrap();
                 if soc.resets as usize > resets.len() {
                     resets.push(soc.periph.cycles);
                     assert_eq!(cpu.pc, XIP_BASE, "cpu0 from its start");
@@ -905,6 +910,29 @@ mod tests {
         assert_eq!(resets.len(), 1, "{resets:?}");
         assert!((KEY_AT + period - 20..KEY_AT + period + 20).contains(&resets[0]), "reset at {}", resets[0]);
         assert!(skipped > 2_000_000, "{skipped} skipped");
+    }
+
+    /// `WDT_CON = 0x10;  for (;;);` (FEED's P33 access with the write command and 0x10): the
+    /// watchdog switched on from code, 1 ms, never fed.
+    const ARM: [u8; 34] = [
+        0xc1, 0xff, 0x08, 0x3e, 0x01, 0x00, 0x42, 0x31, 0x40, 0xea, 0x01, 0x10, 0x41, 0xea, 0x00, 0x10, 0x92, 0x60,
+        0x41, 0xea, 0x80, 0x10, 0x92, 0x60, 0x41, 0xea, 0x10, 0x10, 0x92, 0x60, 0x40, 0xea, 0x00, 0x10,
+    ];
+
+    #[test]
+    fn watchdog_armed_from_code_resets_at_the_same_cycle_compiled_or_not() {
+        // switched on by code with nothing else due, in calls long enough to run past a period:
+        // a reset a period after each boot's arm, compiled or not, with the loop skip or not
+        let period = CPU_HZ / 1000;
+        let code: Vec<u8> = ARM.iter().chain(&[0xf7, 0x9f]).copied().collect();
+        let (resets, _) = run_resetting_in(&code, |_| {}, &[], 5 * period, 1 << 20);
+        assert!(resets.len() >= 4, "{resets:?}");
+        let mut last = 0;
+        for &at in &resets {
+            // (a period after the arm, 10-odd instructions into each boot)
+            assert!((last + period..last + period + 100).contains(&at), "reset at {at}, the one before at {last}: {resets:?}");
+            last = at;
+        }
     }
 
     #[test]

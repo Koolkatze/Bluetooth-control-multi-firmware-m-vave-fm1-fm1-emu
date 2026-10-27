@@ -256,6 +256,7 @@ pub struct Soc {
 /// The chip as the loader hands it to the app (`Soc::chip_reset`).
 struct Boot {
     cpu: fm1_core::PlainState,
+    sfr_lo: Vec<u32>,
     sfr: std::collections::HashMap<u32, u32, std::hash::BuildHasherDefault<AddrHasher>>,
     sfc: (u32, (u32, u32)),
     bt_window: u32,
@@ -419,7 +420,7 @@ impl Soc {
         let info = r0.checked_sub(RAM_BASE).filter(|&o| (o + INFO) as usize <= self.ram.len()).map(|_| {
             (r0, (0..INFO).map(|i| self.ram.read8(r0 - RAM_BASE + i)).collect())
         });
-        self.boot = Some(Box::new(Boot { cpu: state, sfr: self.sfr.clone(), sfc: (self.sfc_con, self.sfc_unenc), bt_window: self.bt_window, info }));
+        self.boot = Some(Box::new(Boot { cpu: state, sfr_lo: self.sfr_lo.clone(), sfr: self.sfr.clone(), sfc: (self.sfc_con, self.sfc_unenc), bt_window: self.bt_window, info }));
     }
 
     /// Is a chip reset due (the watchdog ran out, or the firmware asked through PR_PWR)?
@@ -454,6 +455,7 @@ impl Soc {
         (self.paused, self.lock_owner, self.cpu1_release, self.cpu1_released_once, self.crc) = ([false; 2], None, false, false, 0);
         self.flash.chip_reset();
         cpu.set_plain_state(&boot.cpu);
+        self.sfr_lo.clone_from(&boot.sfr_lo);
         self.sfr = boot.sfr.clone();
         (self.sfc_con, self.sfc_unenc, self.bt_window) = (boot.sfc.0, boot.sfc.1, boot.bt_window);
         if let Some((at, bytes)) = boot.info.clone() {
@@ -473,14 +475,21 @@ impl Soc {
             Some(p33::Event::Wdt { fed }) => {
                 let con = self.p33.reg(p33::P33::WDT_CON, false);
                 let pd = &mut self.periph;
+                let before = pd.wdt_at;
                 if con & 0x10 == 0 {
                     pd.wdt_at = u64::MAX;
                 } else if fed || pd.wdt_at == u64::MAX {
                     pd.wdt_at = pd.cycles + pd.cycle_of_ms(p33::P33::wdt_ms(con)).max(1);
                 }
-                // (a feed moves the deadline later: nothing comes due sooner, and a polling loop
-                // that feeds it each round can still be skipped)
-                pd.next_due = pd.next_due.min(pd.wdt_at);
+                if pd.wdt_at < before {
+                    // sooner than anything the run loop planned for (switched on, or a shorter
+                    // period fed): compiled code leaves at this write, the loop looks again
+                    pd.next_due = 0;
+                } else {
+                    // (a feed moves the deadline later: nothing comes due sooner, and a polling
+                    // loop that feeds it each round can still be skipped)
+                    pd.next_due = pd.next_due.min(pd.wdt_at);
+                }
             }
             Some(p33::Event::Reset) => {
                 self.reset_req.get_or_insert(p33::P33::RST_SOFT);
