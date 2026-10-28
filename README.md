@@ -221,6 +221,12 @@ firmwares that poll it (Felucca's family) enumerate, M-VAVE's own (interrupt-dri
 `FM1_USB_SEND='MS:HEX;…'` sends MIDI over USB at those times and prints what comes back
 (`FM1_USB_TRACE`: the bus's transactions; `FM1_USB_SIE_NS`: the controller's register access time,
 an estimate, 1 µs by default).
+USB audio: with `FM1_USB_WAV=FILE` (`--bench` or `--shot`) the host also records the firmware's
+USB audio input as a computer's recording program would: it chooses the audio streaming
+interface's setting that has the isochronous endpoint, asks for `FM1_USB_RATE` (44100 by
+default) if the endpoint can be set to it and the format offers it (else the device's own rate),
+takes one packet a millisecond and writes the samples to FILE (16-bit, interleaved as the device's
+channels come, no header), printing how many packets came empty (nothing queued: an underrun).
 
 The page builds with `web/build.sh` (Rust to WebAssembly; needs the `wasm32-unknown-unknown`
 target), the whole site with `tools/build_site.sh`.
