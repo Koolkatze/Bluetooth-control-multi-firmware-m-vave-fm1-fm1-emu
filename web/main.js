@@ -4,6 +4,7 @@
 // in the wasm: a catalog entry's fetched from its author's site, or one opened from this
 // computer (M-VAVE's own: their server does not let other pages fetch it).
 import { fetchPackage } from "./fwsc.js";
+import { renderAdaptiveLCD } from "./screen-adapter.js";
 import { SaveStore, packageHash, changedSectors, packSectors, exportSave, importSave } from "./persistence.js";
 
 const CLOCKS = [60, 80, 100, 120, 160, 200, 240];
@@ -366,16 +367,7 @@ function draw() {
   if (SCREEN_ONLY) {
     if (screenDirty) {
       const lcd = new Uint16Array(mem(), ui.panel_lcd(), 240 * 240);
-      const pixels = new Uint8ClampedArray(240 * 240 * 4);
-      for (let i = 0; i < lcd.length; i++) {
-        const p = lcd[i];
-        const o = i * 4;
-        pixels[o] = ((p >> 11) & 31) * 255 / 31;
-        pixels[o + 1] = ((p >> 5) & 63) * 255 / 63;
-        pixels[o + 2] = (p & 31) * 255 / 31;
-        pixels[o + 3] = 255;
-      }
-      ctx.putImageData(new ImageData(pixels, 240, 240), 0, 0);
+      renderAdaptiveLCD(ctx, lcd, 240, 240);
       screenDirty = false;
     }
     requestAnimationFrame(draw);
