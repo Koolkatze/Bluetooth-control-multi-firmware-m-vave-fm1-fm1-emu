@@ -102,7 +102,7 @@ fitToggle.addEventListener("click", () => {
 document.getElementById("view-toggle").addEventListener("click", () => {
   const next = new URLSearchParams(location.search);
   next.set("screen", SCREEN_ONLY ? "0" : "1");
-  location.search = next.toString();
+  location.assign(`${location.pathname}?${next.toString()}`);
 });
 const openInput = document.getElementById("open");
 const bankInput = document.getElementById("bank");
