@@ -67,7 +67,7 @@ import java.util.UUID;
 /**
  * Fully offline FM-1 emulator shell.
  *
- * No INTERNET permission. WebViewAssetLoader serves the Rust WASM and all
+ * Only user-triggered firmware updates require Internet. WebViewAssetLoader serves Rust WASM and all
  * firmware packages from the APK. Android MidiManager provides native USB MIDI
  * and BLE MIDI input even on WebView builds without navigator.requestMIDIAccess.
  */
@@ -550,7 +550,7 @@ public final class MainActivity extends Activity {
         /**
          * Firmware was loaded from bundled APK resources or the Android document
          * picker by the offline web selector. This is called once per boot, NOT
-         * from the audio callback. No network access is needed.
+         * from the audio callback. Synth boot itself needs no network access.
          */
         @JavascriptInterface
         public String bootNative(String base64, int clockMhz, String fingerprint) {
