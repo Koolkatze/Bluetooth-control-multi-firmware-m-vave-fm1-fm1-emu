@@ -1,4 +1,6 @@
 const SIZE = 240;
+const PIXEL_THRESHOLD = 28;
+const ROW_GAP = 2;
 
 function distance(a, b) {
   return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]));
@@ -17,20 +19,25 @@ function rgb565ToImageData(lcd) {
   return new ImageData(pixels, SIZE, SIZE);
 }
 
-function detectContentBounds(image) {
-  const { data } = image;
-  const corner = (x, y) => {
+function sampleBackground(data) {
+  const points = [[0, 0], [SIZE - 1, 0], [0, SIZE - 1], [SIZE - 1, SIZE - 1]];
+  const samples = points.map(([x, y]) => {
     const i = (y * SIZE + x) * 4;
     return [data[i], data[i + 1], data[i + 2]];
-  };
-  const samples = [corner(0, 0), corner(SIZE - 1, 0), corner(0, SIZE - 1), corner(SIZE - 1, SIZE - 1)];
-  const background = [0, 1, 2].map((channel) =>
+  });
+  return [0, 1, 2].map((channel) =>
     [...samples].map((sample) => sample[channel]).sort((a, b) => a - b)[1]);
+}
+
+function isForeground(data, index, background) {
+  return distance([data[index], data[index + 1], data[index + 2]], background) > PIXEL_THRESHOLD;
+}
+
+function getBounds(data, background) {
   let left = SIZE, top = SIZE, right = -1, bottom = -1;
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
-      const i = (y * SIZE + x) * 4;
-      if (distance([data[i], data[i + 1], data[i + 2]], background) <= 28) continue;
+      if (!isForeground(data, (y * SIZE + x) * 4, background)) continue;
       left = Math.min(left, x);
       top = Math.min(top, y);
       right = Math.max(right, x);
@@ -46,9 +53,89 @@ function detectContentBounds(image) {
   return { x: left, y: top, width: right - left + 1, height: bottom - top + 1 };
 }
 
+/*
+ * Pixel-only segmentation is deliberately advisory. It can find occupied horizontal bands,
+ * but cannot know whether pixels represent text, a graph, an icon or a control. The renderer
+ * must not rearrange these regions unless a firmware profile supplies semantic constraints.
+ */
+function detectRegions(data, background) {
+  const rows = [];
+  for (let y = 0; y < SIZE; y++) {
+    let count = 0;
+    let left = SIZE;
+    let right = -1;
+    for (let x = 0; x < SIZE; x++) {
+      if (!isForeground(data, (y * SIZE + x) * 4, background)) continue;
+      count++;
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+    }
+    rows.push({ y, count, left, right });
+  }
+
+  const bands = [];
+  let active = null;
+  let emptyRows = 0;
+  for (const row of rows) {
+    if (row.count > 0) {
+      if (!active || emptyRows > ROW_GAP) {
+        if (active) bands.push(active);
+        active = { top: row.y, bottom: row.y, left: row.left, right: row.right, pixels: 0 };
+      }
+      active.bottom = row.y;
+      active.left = Math.min(active.left, row.left);
+      active.right = Math.max(active.right, row.right);
+      active.pixels += row.count;
+      emptyRows = 0;
+    } else if (active) {
+      emptyRows++;
+    }
+  }
+  if (active) bands.push(active);
+
+  return bands
+    .filter((band) => band.pixels >= 3)
+    .map((band, index) => {
+      const width = band.right - band.left + 1;
+      const height = band.bottom - band.top + 1;
+      const density = band.pixels / (width * height);
+      const shape = width / Math.max(1, height);
+      let kind = "unknown";
+      if (height <= 18 && shape >= 1.5) kind = "text-or-horizontal-control";
+      else if (shape <= 1.25 && height >= 12) kind = "icon-or-vertical-control";
+      else if (width >= 48 && height >= 20) kind = "graphic-or-panel";
+      return {
+        id: index,
+        x: band.left,
+        y: band.top,
+        width,
+        height,
+        pixelCount: band.pixels,
+        density: Number(density.toFixed(3)),
+        kind,
+        confidence: "low",
+      };
+    });
+}
+
+export function analyzeScreenLayout(lcd) {
+  const image = rgb565ToImageData(lcd);
+  const background = sampleBackground(image.data);
+  const bounds = getBounds(image.data, background);
+  const regions = detectRegions(image.data, background);
+  return {
+    source: { width: SIZE, height: SIZE },
+    bounds,
+    regions,
+    semanticConfidence: "insufficient",
+    safeToReflow: false,
+  };
+}
+
 export function renderAdaptiveLCD(ctx, lcd, width = SIZE, height = SIZE, adaptive = true) {
   const image = rgb565ToImageData(lcd);
-  const bounds = adaptive ? detectContentBounds(image) : { x: 0, y: 0, width: SIZE, height: SIZE };
+  const bounds = adaptive ? getBounds(image.data, sampleBackground(image.data)) :
+    { x: 0, y: 0, width: SIZE, height: SIZE };
   const source = document.createElement("canvas");
   source.width = SIZE;
   source.height = SIZE;
