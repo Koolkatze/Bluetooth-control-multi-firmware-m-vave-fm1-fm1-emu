@@ -1,4 +1,4 @@
-# FM-1 Mobile — APK Android 100 % sin Internet durante su uso
+# FM-1 Mobile — sintetizador Android sin conexión, actualizaciones opcionales por Internet
 
 Esta aplicación contiene **dos implementaciones del emulador FM-1**:
 el **motor nativo Rust/AAudio** de baja latencia para Android, y el
