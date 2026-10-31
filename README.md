@@ -6,6 +6,41 @@
 
 > **Estado:** prototipo basado en el emulador de código abierto [joakimeriksson/fm1-emu](https://github.com/joakimeriksson/fm1-emu). La ejecución virtual de firmwares, la LCD del sintetizador emulado, la salida de audio del navegador y la entrada Web MIDI están implementadas en la web. El firmware [CTL-1](https://github.com/charlesvestal/fm1-ctl) **sí permite convertir el FM-1 físico en un controlador MIDI USB y Bluetooth con pantalla propia**, según su autor. **Todavía falta verificar e integrar el enlace CTL-1 físico → Android/Web MIDI → sintetizador emulado**, incluida la compatibilidad con el navegador, los controles y la latencia. Nunca se requiere capturar la LCD del FM-1.
 
+## Aplicación Android: sintetizador sin conexión
+
+**Ya existe un APK Android de prueba generado por GitHub Actions.** A diferencia
+de la página web, el APK **incluye los archivos HTML/JS, el motor WebAssembly
+y los paquetes de firmware admitidos**, de forma que no necesita conectarse a
+Internet en el teléfono. La aplicación **no solicita permiso de Internet**.
+
+**[Descargar APK desde la compilación de GitHub Actions](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/actions/workflows/android-offline.yml)** ·
+**[Código Android, instrucciones y limitaciones](android/README.md)**
+
+La primera compilación offline ha empaquetado **92 firmwares FM-1 más 9 de
+SMK-37 (101 en total)** y ha pasado el arranque de un firmware con salida de
+audio en la prueba automatizada. Esto verifica la construcción del APK,
+**no reemplaza una prueba funcional en un teléfono Android real**. Los
+firmwares incluidos se ejecutan sin conexión; también se pueden importar
+archivos `.fwsc` compatibles desde el almacenamiento local.
+
+- **Pantalla principal:** LCD del sintetizador ejecutado en Android (vista
+  horizontal y vista original).
+- **Pantalla secundaria física:** si conectas un M-VAVE FM-1 con **CTL-1**
+  instalado, la pantalla del instrumento sigue mostrando la propia interfaz
+  del controlador MIDI; **no hay captura ni duplicación de pantalla**.
+- **MIDI:** botón nativo para seleccionar entradas **USB-MIDI** y buscar
+  **BLE-MIDI** por Bluetooth. La integración específica con CTL-1 real todavía
+  necesita pruebas con hardware y Android.
+- **Audio:** generación local desde la CPU del móvil, con salida por la ruta
+  activa de Android, como altavoz Bluetooth o una interfaz USB-C. Para
+  interpretación en directo, USB-C suele ofrecer menor latencia.
+- **Firmware oficial:** `FM-1.fwsc` es propietario y **no se incluye** en el
+  APK público; impórtalo desde tu propia copia ya guardada en el móvil.
+- **Instalación:** descarga el artefacto `FM1-Mobile-Offline-APK` de una
+  ejecución exitosa de GitHub Actions, descomprime el archivo descargado e
+  instala `app-debug.apk`. Es una compilación de prueba, no una versión
+  publicada en Google Play.
+
 ## Qué queremos conseguir
 
 1. **Cambiar entre firmwares del sintetizador sin reflashear el FM-1 físico.** Seleccionar y arrancar en el teléfono cualquier paquete `.fwsc` **compatible con el emulador**, incluidos firmwares comunitarios y el oficial de M-VAVE cuando el usuario aporte el archivo. Los firmwares de síntesis se ejecutan *virtualmente*. **CTL-1 se instala una vez en el FM-1 físico**, si se desea usarlo como controlador; alternar los firmwares de síntesis del móvil no vuelve a escribir su flash.
