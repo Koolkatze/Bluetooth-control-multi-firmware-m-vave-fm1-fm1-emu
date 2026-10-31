@@ -18,6 +18,27 @@ Versión **0.1.2 (experimental)**: APK con el nuevo icono FM-1, emulador y paque
 
 > **Estado:** prototipo basado en el emulador de código abierto [joakimeriksson/fm1-emu](https://github.com/joakimeriksson/fm1-emu). La ejecución virtual de firmwares, la LCD del sintetizador emulado, la salida de audio del navegador y la entrada Web MIDI están implementadas en la web. El firmware [CTL-1](https://github.com/charlesvestal/fm1-ctl) **sí permite convertir el FM-1 físico en un controlador MIDI USB y Bluetooth con pantalla propia**, según su autor. **Todavía falta verificar e integrar el enlace CTL-1 físico → Android/Web MIDI → sintetizador emulado**, incluida la compatibilidad con el navegador, los controles y la latencia. Nunca se requiere capturar la LCD del FM-1.
 
+## Nuevo motor Android nativo — v0.2.0 experimental
+
+La versión Android tiene ahora un motor de síntesis **Rust compilado para el
+procesador del móvil**. La CPU emulada, periféricos y código JIT del FM-1 corren
+en un hilo separado de la salida de audio. **AAudio** reproduce muestras PCM
+mediante una cola lock-free; el hilo de audio no compila JIT, no dibuja pantallas
+y no ejecuta JavaScript. El MIDI USB/BLE entra directamente desde Android al
+hilo Rust.
+
+La pantalla del móvil sigue siendo la del firmware emulado. El FM-1 físico
+puede seguir utilizando CTL-1 como controlador con su propia pantalla. Si el
+motor nativo no está disponible en la arquitectura, la app conserva el
+motor WebAssembly de reserva.
+
+**Estado:** nueva implementación en pruebas. No se ha medido aún una latencia
+equivalente al FM-1 físico en un teléfono real. La salida Bluetooth sigue
+añadiendo retardo; para tocar es preferible **USB-C o cable**. Los cambios de
+flash del firmware nativo se guardan automáticamente en el almacenamiento
+privado Android, pero su exportación al formato web `.fm1save` aún no existe.
+[Arquitectura nativa, instalación y limitaciones](android/README.md).
+
 ## Aplicación Android: sintetizador sin conexión
 
 **Ya existe un APK Android de prueba generado por GitHub Actions.** A diferencia
