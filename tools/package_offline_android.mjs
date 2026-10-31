@@ -39,7 +39,8 @@ const slug = (id) => {
   if (!/^[a-zA-Z0-9_-]{1,90}$/.test(id)) throw new Error("Unsafe firmware id: " + id);
   return id;
 };
-// All network activity takes place in this BUILD script, never inside Android.
+// The built-in packages are downloaded at build time. Optional, user-triggered
+// Android firmware updates are handled separately by the native Java updater.
 // An individual mirror may be down: mark that firmware unavailable rather
 // than claiming it works offline when it has not actually been packaged.
 const download = (uri) => fetch(uri, {
@@ -117,7 +118,7 @@ async function prepareCatalog(spec) {
   if (!catalog.firmwares.some(f => f.package?.startsWith("offline-fw/"))) {
     throw new Error(spec.namespace + ": no redistributable firmware to boot fully offline");
   }
-  catalog.note = `Built-in OFFLINE ${spec.namespace} catalog. Packages use assets/offline-fw/. Internet access is not available in the Android app. To add another firmware, import a local .fwsc with Open .fwsc. Third-party rights remain with their authors.`;
+  catalog.note = `Built-in OFFLINE ${spec.namespace} catalog. Packages use assets/offline-fw/. Offline playback uses these packaged files; optional updater buttons fetch new releases on user request. To add unsupported firmware manually, import a local .fwsc with Open .fwsc. Third-party rights remain with their authors.`;
   await writeFile(target, JSON.stringify(catalog, null, 2) + "\n");
 }
 
