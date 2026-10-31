@@ -67,6 +67,11 @@
         <h2 class="eyebrow" id="h-now">Now running</h2>
         <p id="about"></p>
         <label id="fwlabel">Firmware <select id="fw" aria-label="Firmware"></select></label>
+        <div class="row firmware-updates">
+          <button type="button" id="update-selected-firmware">↻ Actualizar seleccionado</button>
+          <button type="button" id="update-all-firmwares">↻ Actualizar todos</button>
+        </div>
+        <span id="firmware-update-status" role="status" aria-live="polite"></span>
         <label>Clock <select id="mhz" aria-label="Emulated clock"></select></label>
         <div class="row">
           <label class="file">Open .fwsc… <input type="file" id="open"></label>
