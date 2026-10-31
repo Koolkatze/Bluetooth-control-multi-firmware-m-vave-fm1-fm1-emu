@@ -46,9 +46,9 @@ function detectContentBounds(image) {
   return { x: left, y: top, width: right - left + 1, height: bottom - top + 1 };
 }
 
-export function renderAdaptiveLCD(ctx, lcd, width = SIZE, height = SIZE) {
+export function renderAdaptiveLCD(ctx, lcd, width = SIZE, height = SIZE, adaptive = true) {
   const image = rgb565ToImageData(lcd);
-  const bounds = detectContentBounds(image);
+  const bounds = adaptive ? detectContentBounds(image) : { x: 0, y: 0, width: SIZE, height: SIZE };
   const source = document.createElement("canvas");
   source.width = SIZE;
   source.height = SIZE;
