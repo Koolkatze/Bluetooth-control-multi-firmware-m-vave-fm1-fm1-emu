@@ -27,6 +27,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelUuid;
 import android.util.Log;
+import android.util.Base64;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -93,6 +94,7 @@ public final class MainActivity extends Activity {
     private boolean webReady = false;
     private int readyChecks = 0;
     private boolean shuttingDown = false;
+    private volatile boolean nativeActive = false;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -253,7 +255,13 @@ public final class MainActivity extends Activity {
                 "window.fm1SetDisplayMode ? (window.fm1SetDisplayMode(true), 'ok') : 'notready'",
                 "Mostrando LCD del firmware…"));
         midiButton.setOnClickListener(v -> showMidiPicker());
-        audioButton.setOnClickListener(v -> showAudioOptions());
+        audioButton.setOnClickListener(v -> nativeActive
+                ? new AlertDialog.Builder(this).setTitle("Audio nativo AAudio")
+                    .setMessage("El motor Rust nativo utiliza AAudio en modo baja latencia. "
+                            + "La latencia de un altavoz Bluetooth sigue dependiendo del dispositivo. "
+                            + "Para tocar utiliza USB-C o salida de audio por cable.")
+                    .setPositiveButton("Aceptar", null).show()
+                : showAudioOptions());
         setContentView(root);
 
         // Browser location is local HTTPS backed by packaged assets; no network is used.
@@ -352,7 +360,84 @@ public final class MainActivity extends Activity {
             Log.i(TAG, "Local emulator UI ready");
             runOnUiThread(() -> {
                 webReady = true;
-                updateStatus("Preparado. Pulsa Iniciar firmware.");
+                updateStatus(NativeSynth.AVAILABLE
+                        ? "Preparado. Motor Rust/AAudio nativo disponible. Pulsa Iniciar firmware."
+                        : "Preparado. Motor WebAssembly de reserva. Pulsa Iniciar firmware.");
+            });
+        }
+
+        @JavascriptInterface
+        public boolean nativeAvailable() { return NativeSynth.AVAILABLE; }
+
+        /**
+         * Firmware was loaded from bundled APK resources or the Android document
+         * picker by the offline web selector. This is called once per boot, NOT
+         * from the audio callback. No network access is needed.
+         */
+        @JavascriptInterface
+        public String bootNative(String base64, int clockMhz, String fingerprint) {
+            if (!NativeSynth.AVAILABLE) return "ERROR:Biblioteca AAudio no disponible";
+            if (base64 == null || base64.length() > 24000000) return "ERROR:Firmware demasiado grande";
+            try {
+                byte[] packageBytes = Base64.decode(base64, Base64.DEFAULT);
+                String result = NativeSynth.boot(packageBytes, clockMhz, fingerprint,
+                        getFilesDir().getAbsolutePath());
+                nativeActive = result != null && result.startsWith("OK:");
+                runOnUiThread(() -> {
+                    if (nativeActive) {
+                        updateStatus("Rust + AAudio: " + result.substring(3) + " Hz · audio nativo activo");
+                        audioButton.setText("AAudio");
+                    } else {
+                        updateStatus(result);
+                        audioButton.setText("Audio");
+                    }
+                });
+                return result;
+            } catch (Throwable error) {
+                nativeActive = false;
+                Log.e(TAG, "Native synth start failed", error);
+                return "ERROR:" + error.getMessage();
+            }
+        }
+
+        @JavascriptInterface
+        public String nativeLcd() {
+            if (!nativeActive || !NativeSynth.AVAILABLE) return "";
+            try {
+                byte[] pixels = NativeSynth.lcd();
+                return pixels == null ? "" : Base64.encodeToString(pixels, Base64.NO_WRAP);
+            } catch (Throwable error) {
+                return "";
+            }
+        }
+
+        @JavascriptInterface
+        public String nativeStats() {
+            if (!nativeActive || !NativeSynth.AVAILABLE) return "0";
+            return Long.toString(NativeSynth.stats());
+        }
+
+        @JavascriptInterface
+        public void nativeControl(int kind, int key, int value) {
+            if (nativeActive && NativeSynth.AVAILABLE)
+                NativeSynth.control(kind, key, value);
+        }
+
+        @JavascriptInterface
+        public void nativeMidi(int[] values) {
+            if (!nativeActive || !NativeSynth.AVAILABLE || values == null
+                    || values.length == 0 || values.length > 3) return;
+            byte[] b = new byte[values.length];
+            for (int i = 0; i < b.length; i++) b[i] = (byte) values[i];
+            NativeSynth.midi(b);
+        }
+
+        @JavascriptInterface
+        public void stopNative() {
+            if (NativeSynth.AVAILABLE) NativeSynth.stop();
+            nativeActive = false;
+            runOnUiThread(() -> {
+                if (audioButton != null) audioButton.setText("Audio");
             });
         }
 
@@ -513,6 +598,23 @@ public final class MainActivity extends Activity {
     }
 
     private void deliverMidi(byte[] bytes) {
+        if (nativeActive && NativeSynth.AVAILABLE) {
+            // Pass MIDI directly from Android MidiManager to the Rust worker.
+            // No JavaScript/main-thread scheduling is involved in note delivery.
+            for (int i = 0; i < bytes.length;) {
+                int status = bytes[i] & 0xff;
+                if (status < 0x80) { i++; continue; }
+                int len = status >= 0xf8 ? 1 :
+                        status == 0xf1 || status == 0xf3 ? 2 :
+                        status == 0xf2 ? 3 :
+                        status >= 0xf0 ? 1 :
+                        (status & 0xf0) == 0xc0 || (status & 0xf0) == 0xd0 ? 2 : 3;
+                if (i + len > bytes.length) break;
+                NativeSynth.midi(Arrays.copyOfRange(bytes, i, i + len));
+                i += len;
+            }
+            return;
+        }
         if (web == null) return;
         StringBuilder js = new StringBuilder("window.fm1NativeMidi&&window.fm1NativeMidi([");
         for (int i = 0; i < bytes.length; i++) {
@@ -625,6 +727,8 @@ public final class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         shuttingDown = true;
+        if (NativeSynth.AVAILABLE) NativeSynth.stop();
+        nativeActive = false;
         stopBleScan();
         closeMidi();
         if (fileCallback != null) {
