@@ -47,7 +47,7 @@ async function page(disk = storage(), initialSearch = '', selected = '', manualB
     package: `https://example.test/${id}.fwsc`, author: 'test', license: 'MIT', about: '' })) };
   let audio, audioContext;
   class AudioContext {
-    constructor(options = {}) { audioContext = this; this.latencyHint = options.latencyHint; this.state = 'running'; this.audioWorklet = { addModule: async () => {} }; }
+    constructor(options = {}) { audioContext = this; this.latencyHint = options.latencyHint; this.sampleRate = options.sampleRate || 48000; this.state = 'running'; this.audioWorklet = { addModule: async () => {} }; }
     async resume() { this.state = 'running'; } async close() { this.state = 'closed'; }
   }
   class AudioWorkletNode {
@@ -96,7 +96,7 @@ async function page(disk = storage(), initialSearch = '', selected = '', manualB
     get fw() { return fw; }, perf, setMhz(c) { mhz = c; }, get bootSeq() { return bootSeq; }
   }; })()`);
   const api = await run(...Object.values(environment));
-  return { api, disk, elements, location, expireBoot: () => bootTimer(), get audio() { return audio; }, get context() { return audioContext; } };
+  return { api, disk, elements, location, native: environment.window, expireBoot: () => bootTimer(), get audio() { return audio; }, get context() { return audioContext; } };
 }
 test('firmware switch, clock reboot and audio-context replacement retain the latest flash', async () => {
   const p = await page(); await p.api.startAudio(); await p.api.boot(); await settle();
@@ -273,9 +273,10 @@ test('Android receives native audio tuning, while browser defaults stay low late
   await p.api.startAudio(); await p.api.boot();
   assert.equal(p.context.latencyHint, 'interactive', 'Android must favor real-time musical response, not buffering');
   assert.equal(p.audio.messages.find(m => m.type === 'boot').androidOptimized, true);
-  assert.equal(p.native?.fm1SetAudioProfile?.('balanced') ?? true, true);
+  assert.equal(p.context.sampleRate, 48000, 'native Android rate is not forced to 44.1k');
   const browser = await page(); await browser.api.startAudio(); await browser.api.boot();
   assert.equal(browser.context.latencyHint, 'interactive');
+  assert.equal(browser.context.sampleRate, 44100, 'browser keeps previous fixed-rate behavior');
   assert.equal(browser.audio.messages.find(m => m.type === 'boot').androidOptimized, false);
 });
 
@@ -307,4 +308,14 @@ test('performance report separates initial firmware silence from short audio aft
   } });
   assert.match(p.api.perf.report(), /short audio quanta after playback began: 2/);
   assert.match(p.api.perf.report(), /silent startup quanta: 51/);
+});
+
+test('Android native Audio menu can select an optional larger buffer before starting the synthesizer', async () => {
+  const p = await page(storage(), '', '', false, true);
+  assert.equal(p.native.fm1SetAudioProfile('invalid'), false);
+  assert.equal(p.native.fm1SetAudioProfile('balanced'), true);
+  await p.api.startAudio();
+  assert.equal(p.context.latencyHint, 'balanced');
+  assert.equal(p.context.sampleRate, 48000);
+  assert.equal(p.native.fm1SetAudioProfile('interactive'), true);
 });
