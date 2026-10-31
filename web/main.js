@@ -99,7 +99,15 @@ fitToggle.addEventListener("click", () => {
   next.set("fit", ADAPTIVE_FIT ? "0" : "1");
   location.assign(`${location.pathname}?${next.toString()}`);
 });
-document.getElementById("view-toggle").addEventListener("click", () => {
+document.getElementById("view-toggle").addEventListener("click", async () => {
+  if (!SCREEN_ONLY) {
+    try {
+      await document.documentElement.requestFullscreen?.();
+      await screen.orientation?.lock?.("landscape");
+    } catch { /* fullscreen/orientation may be unavailable in the browser */ }
+  } else {
+    try { if (document.fullscreenElement) await document.exitFullscreen(); } catch {}
+  }
   const next = new URLSearchParams(location.search);
   next.set("screen", SCREEN_ONLY ? "0" : "1");
   location.assign(`${location.pathname}?${next.toString()}`);
@@ -146,8 +154,8 @@ function setBoard(b) {
   ui.panel_board(b);
   W = ui.panel_width();
   H = ui.panel_height();
-  canvas.width = SCREEN_ONLY ? 240 : W;
-  canvas.height = SCREEN_ONLY ? 240 : H;
+  canvas.width = W;
+  canvas.height = H;
   // the synth's width follows the room left below the header and the bar (index.html's canvas rule)
   document.documentElement.style.setProperty("--aspect", String(W / H));
   document.documentElement.dataset.board = b ? "smk37" : "fm1";
@@ -419,23 +427,21 @@ function draw() {
     if (turning[i]) turning[i]--;
   }
   if (board === 1) for (let i = 0; i < 23; i++) ui.panel_set(4, i, analog[i]);
+  const p = ui.panel_draw();
+  const img = new ImageData(new Uint8ClampedArray(mem(), p, W * H * 4), W, H);
   if (SCREEN_ONLY) {
-    if (screenDirty && screenFrame) {
-      const lcd = screenFrame;
-      if (DEBUG_LAYOUT) {
-        latestLcdFrame = lcd.slice();
-        latestLayoutAnalysis = screenAnalyzer.analyze(lcd);
-        canvas.dataset.layoutAnalysis = JSON.stringify(latestLayoutAnalysis);
-        if (layoutExportButton) layoutExportButton.disabled = false;
-      }
-      renderAdaptiveLCD(ctx, lcd, 240, 240, ADAPTIVE_FIT);
-      screenDirty = false;
+    ctx.clearRect(0, 0, W, H);
+    ctx.imageSmoothingEnabled = false;
+    if (ADAPTIVE_FIT) {
+      const scale = Math.min(canvas.width / W, canvas.height / H);
+      const dw = W * scale, dh = H * scale;
+      ctx.putImageData(img, 0, 0);
+    } else {
+      ctx.putImageData(img, 0, 0);
     }
     requestAnimationFrame(draw);
     return;
   }
-  const p = ui.panel_draw();
-  const img = new ImageData(new Uint8ClampedArray(mem(), p, W * H * 4), W, H);
   ctx.putImageData(img, 0, 0);
   requestAnimationFrame(draw);
 }
