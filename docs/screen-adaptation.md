@@ -92,3 +92,30 @@ landscape viewport size.
 
 No profile may be inferred solely from the firmware name, and no third-party firmware should be
 bundled unless its licence and redistribution terms permit it.
+
+
+## Emulator instrumentation findings
+
+The current browser-facing API reads the emulated LCD framebuffer through `ui.panel_lcd()`.
+The emulator's SoC LCD model is a ST7789-style SPI peripheral: firmware sends controller
+commands, address-window arguments and RGB565 pixel bytes. The LCD model writes those pixels
+into a 240 × 240 framebuffer. By the time the browser reads `panel_lcd()`, text and shapes have
+already been rasterized into pixels.
+
+This means the existing interface does not expose the firmware's original text strings, font
+glyphs, widget types or drawing-call boundaries. Intercepting the LCD SPI stream would provide
+write windows and pixel payloads, not semantic drawing primitives. Recovering semantic content
+would require a separate firmware-aware layer (for example, tracing known graphics-library
+routines or analysing firmware symbols/source), and must be evaluated per firmware family.
+
+The browser diagnostics now compare consecutive framebuffer samples. Each detected horizontal
+band includes a temporal-change ratio and a coarse dynamic/static hint. This can help locate
+animated waveforms, meters or blinking indicators, but it still cannot identify their meaning.
+The diagnostics remain opt-in with `?layout=1`; they do not alter the rendered image.
+
+### Practical next implementation target
+
+Build a capture/export workflow for diagnostic frames and their analysis metadata. Use those
+captures to validate firmware-specific profiles against real screens before enabling any
+landscape composition. The next trustworthy route to semantic text is firmware-specific
+instrumentation, not pretending that the SPI framebuffer contains UI objects.
