@@ -17,7 +17,11 @@ use std::time::{Duration, Instant};
 const RAM_SIZE: usize = 1 << 20;
 const RAM_BASE: u32 = 0x01c0_0000;
 const AUDIO_CAP: usize = 8192; // power-of-two, single writer and single reader
-const AUDIO_LEAD: usize = 512; // ~10 ms at 48 kHz; not a whole WebAudio output buffer
+// A 512-frame lead (10.7ms @ 48k) was too small for a firmware that creates
+// 256/512-sample DMA bursts and occasionally spends milliseconds in native JIT.
+// 1024 frames covers ~21ms without adding a huge 100ms+ host buffer.
+const AUDIO_LEAD: usize = 1024;
+const WORK_CHUNK: usize = 128;  // produce an entire callback quantum per worker turn
 const LCD_PIXELS: usize = 240 * 240;
 
 /// Only the audio callback reads, and only the worker writes. Acquire/Release
@@ -69,6 +73,10 @@ pub struct Shared {
     pub ready: AtomicBool,
     pub playing: AtomicBool,
     pub halted: AtomicBool,
+    /// Emulated firmware millisecond clock, updated outside AAudio callback.
+    pub emulated_ms: AtomicU64,
+    /// PCM frames produced and submitted to the ring. Helps diagnose stalls.
+    pub produced_frames: AtomicU64,
 }
 impl Shared {
     pub fn new() -> Arc<Self> {
@@ -76,6 +84,7 @@ impl Shared {
             ring: AudioRing::new(), lcd: Mutex::new(vec![0; LCD_PIXELS]),
             quit: AtomicBool::new(false), ready: AtomicBool::new(false),
             playing: AtomicBool::new(false), halted: AtomicBool::new(false),
+            emulated_ms: AtomicU64::new(0), produced_frames: AtomicU64::new(0),
         })
     }
 }
@@ -188,7 +197,10 @@ pub fn run_worker(mut machine: Machine, shared: Arc<Shared>, rx: mpsc::Receiver<
     let mut last_lcd = Instant::now();
     let mut last_save = Instant::now();
     let mut no_audio_chunks = 0usize;
+    let mut last_diagnostics = Instant::now();
     while !shared.quit.load(Ordering::Acquire) && !machine.halted {
+        // MIDI and panel commands are checked once per 128 output frames or
+        // every native emulation burst, not once for each individual sample.
         while let Ok(command) = rx.try_recv() {
             if !machine.command(command) {
                 shared.quit.store(true, Ordering::Release);
@@ -197,40 +209,58 @@ pub fn run_worker(mut machine: Machine, shared: Arc<Shared>, rx: mpsc::Receiver<
         }
         if shared.quit.load(Ordering::Acquire) { break; }
 
-        // The worker runs against consumed PCM, NOT against the 2.9-ms audio
-        // callback. A small lead absorbs firmware DMA bursts and JIT compilation
-        // while minimizing the delay between MIDI input and output.
         if shared.ring.available() >= AUDIO_LEAD {
-            thread::sleep(Duration::from_micros(400));
-        } else if src.len() >= 2 {
-            let a = src[0]; let b = src[1];
-            let fraction_f = fraction as f32;
-            let output = [
-                a[0] + (b[0] - a[0]) * fraction_f,
-                a[1] + (b[1] - a[1]) * fraction_f,
-            ];
-            if shared.ring.push(output) {
+            // Sleep only when the ring is already above its target fill.
+            // Very short sleeps on Android can wake late; this does not need
+            // to be exact because the ring is already primed.
+            thread::sleep(Duration::from_micros(200));
+        } else {
+            // The old loop produced only ONE sample before checking clock,
+            // channel, queue, atomics, LCD and storage. Batch production
+            // makes the CPU/JIT worker materially more efficient at 48 kHz.
+            let mut generated = 0usize;
+            while generated < WORK_CHUNK && src.len() >= 2 &&
+                  shared.ring.available() < AUDIO_LEAD {
+                let a = src[0];
+                let b = src[1];
+                let frac = fraction as f32;
+                let output = [
+                    a[0] + (b[0] - a[0]) * frac,
+                    a[1] + (b[1] - a[1]) * frac,
+                ];
+                if !shared.ring.push(output) { break; }
+                generated += 1;
                 fraction += step;
+                // Drop consumed source frames; keep the next frame for
+                // interpolation across successive bursts and ring callbacks.
                 while fraction >= 1.0 {
                     src.pop_front();
                     fraction -= 1.0;
                 }
             }
-        } else {
-            machine.run(20_000);
-            let samples = std::mem::take(&mut machine.soc.periph.audio);
-            if samples.is_empty() {
-                no_audio_chunks += 1;
-                // A firmware that is silent at boot still gets CPU time.
-                // Yield periodically so the OS can service the audio callback.
-                if no_audio_chunks % 128 == 0 { thread::yield_now(); }
-            } else {
-                no_audio_chunks = 0;
-                shared.playing.store(true, Ordering::Release);
-                for pair in samples.chunks_exact(2) {
-                    src.push_back([pair[0] as f32 / 32768.0, pair[1] as f32 / 32768.0]);
+            if generated != 0 {
+                shared.produced_frames.fetch_add(generated as u64, Ordering::Relaxed);
+            } else if src.len() < 2 {
+                // Firmware I2S produces DMA blocks. Run exactly one CPU slice
+                // and try to fill many PCM frames on the next iteration.
+                machine.run(20_000);
+                let samples = std::mem::take(&mut machine.soc.periph.audio);
+                if samples.is_empty() {
+                    no_audio_chunks += 1;
+                    if no_audio_chunks % 128 == 0 { thread::yield_now(); }
+                } else {
+                    no_audio_chunks = 0;
+                    shared.playing.store(true, Ordering::Release);
+                    for pair in samples.chunks_exact(2) {
+                        src.push_back([pair[0] as f32 / 32768.0,
+                                       pair[1] as f32 / 32768.0]);
+                    }
                 }
             }
+        }
+        if last_diagnostics.elapsed() >= Duration::from_millis(100) {
+            shared.emulated_ms.store(machine.soc.periph.ms(), Ordering::Relaxed);
+            last_diagnostics = Instant::now();
         }
         if last_lcd.elapsed() >= Duration::from_millis(40) {
             if let Ok(mut lcd) = shared.lcd.try_lock() {
@@ -315,6 +345,12 @@ mod tests {
             assert_eq!(sample, [i as f32, -i as f32]);
         }
         join.join().unwrap();
+    }
+    #[test]
+    fn audio_lead_is_large_enough_for_firmware_dma_bursts_but_bounded() {
+        assert!(AUDIO_LEAD >= 512);
+        assert!(AUDIO_LEAD <= 2048, "avoid large instrument latency");
+        assert!(AUDIO_LEAD + WORK_CHUNK < AUDIO_CAP);
     }
     #[test]
     fn native_flash_sectors_round_trip_and_reject_malformed_data() {
