@@ -103,6 +103,7 @@ public final class MainActivity extends Activity {
         getWindow().setNavigationBarColor(0xff08090b);
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         midiManager = (MidiManager) getSystemService(MIDI_SERVICE);
+        Log.i(TAG, "Rust AAudio native library loaded: " + NativeSynth.AVAILABLE);
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
 
         FrameLayout root = new FrameLayout(this);
@@ -296,7 +297,9 @@ public final class MainActivity extends Activity {
             if (web == null || shuttingDown) return;
             if ("true".equals(answer)) {
                 webReady = true;
-                updateStatus("Preparado. Pulsa Iniciar firmware. Panel y Pantalla disponibles.");
+                updateStatus(NativeSynth.AVAILABLE
+                        ? "Preparado. Motor Rust + AAudio nativo. Pulsa Iniciar firmware."
+                        : "Preparado. Motor WebAssembly de reserva. Pulsa Iniciar firmware.");
             } else if (++readyChecks < 35) {
                 ui.postDelayed(this::checkWebReady, 500);
             } else {
