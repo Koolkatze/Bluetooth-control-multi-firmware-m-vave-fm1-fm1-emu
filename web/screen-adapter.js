@@ -152,3 +152,70 @@ export function renderAdaptiveLCD(ctx, lcd, width = SIZE, height = SIZE, adaptiv
   ctx.drawImage(source, bounds.x, bounds.y, bounds.width, bounds.height, x, y, drawWidth, drawHeight);
   return { bounds, cropped: bounds.width < SIZE || bounds.height < SIZE };
 }
+
+export class ScreenAnalyzer {
+  constructor() {
+    this.previous = null;
+    this.samples = 0;
+  }
+
+  analyze(lcd) {
+    const image = rgb565ToImageData(lcd);
+    const background = sampleBackground(image.data);
+    const bounds = getBounds(image.data, background);
+    const regions = detectRegions(image.data, background);
+    const changed = new Uint8Array(SIZE * SIZE);
+    let changedPixels = 0;
+
+    if (this.previous) {
+      for (let i = 0; i < SIZE * SIZE; i++) {
+        const p = i * 4;
+        const different = distance(
+          [image.data[p], image.data[p + 1], image.data[p + 2]],
+          [this.previous[p], this.previous[p + 1], this.previous[p + 2]]
+        ) > 12;
+        if (different) {
+          changed[i] = 1;
+          changedPixels++;
+        }
+      }
+    }
+
+    const dynamicRegions = regions.map((region) => {
+      let changedInRegion = 0;
+      for (let y = region.y; y < region.y + region.height; y++) {
+        for (let x = region.x; x < region.x + region.width; x++) {
+          changedInRegion += changed[y * SIZE + x];
+        }
+      }
+      const area = Math.max(1, region.width * region.height);
+      const temporalRatio = changedInRegion / area;
+      return {
+        ...region,
+        temporalChange: Number(temporalRatio.toFixed(3)),
+        behavior: temporalRatio > 0.12 ? "dynamic" : "mostly-static",
+      };
+    });
+
+    this.previous = image.data.slice();
+    this.samples++;
+
+    return {
+      source: { width: SIZE, height: SIZE },
+      bounds,
+      regions: dynamicRegions,
+      frame: {
+        sample: this.samples,
+        changedPixels,
+        changedRatio: Number((changedPixels / (SIZE * SIZE)).toFixed(4)),
+      },
+      semanticConfidence: "insufficient",
+      safeToReflow: false,
+    };
+  }
+
+  reset() {
+    this.previous = null;
+    this.samples = 0;
+  }
+}
