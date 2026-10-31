@@ -37,6 +37,10 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebResourceError;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import org.json.JSONTokener;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.Toast;
@@ -63,7 +67,7 @@ import java.util.UUID;
 public final class MainActivity extends Activity {
     private static final String TAG = "FM1Mobile";
     private static final String HOST = "appassets.androidplatform.net";
-    private static final String HOME = "https://" + HOST + "/assets/site/index.html?screen=1&fit=1";
+    private static final String HOME = "https://" + HOST + "/assets/site/index.html?screen=0&fit=1";
     private static final int FILE_PICKER = 1001;
     private static final int BLUETOOTH_PERMISSIONS = 1002;
     private static final UUID BLE_MIDI_UUID = UUID.fromString("03B80E5A-EDE8-4B33-A751-6CE34EC4C700");
@@ -79,6 +83,13 @@ public final class MainActivity extends Activity {
     private final Map<String, BluetoothDevice> nearbyMidi = new LinkedHashMap<>();
     private boolean scanning;
     private Button midiButton;
+    private Button startButton;
+    private Button panelButton;
+    private Button lcdButton;
+    private TextView liveStatus;
+    private boolean webReady = false;
+    private int readyChecks = 0;
+    private boolean shuttingDown = false;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -100,7 +111,8 @@ public final class MainActivity extends Activity {
         settings.setAllowFileAccessFromFileURLs(false);
         settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setMediaPlaybackRequiresUserGesture(true);
+        // User initiates the audio via the native Start toolbar.
+        settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setSupportMultipleWindows(false);
         web.addJavascriptInterface(new NativeBridge(), "FM1Android");
 
@@ -108,6 +120,37 @@ public final class MainActivity extends Activity {
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
                 .build();
         web.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                updateStatus("Cargando emulador y firmwares locales…");
+                readyChecks = 0;
+                ui.postDelayed(() -> checkWebReady(), 600);
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (isLocal(request.getUrl())) {
+                    String msg = "No se pudo cargar " + request.getUrl().getLastPathSegment()
+                            + ": " + error.getDescription();
+                    Log.e(TAG, msg);
+                    runOnUiThread(() -> updateStatus(msg));
+                }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request,
+                                            WebResourceResponse response) {
+                super.onReceivedHttpError(view, request, response);
+                if (isLocal(request.getUrl())) {
+                    String msg = "Archivo local no disponible: "
+                            + request.getUrl().getLastPathSegment() + " (" + response.getStatusCode() + ")";
+                    Log.e(TAG, msg);
+                    runOnUiThread(() -> updateStatus(msg));
+                }
+            }
+
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
@@ -152,25 +195,57 @@ public final class MainActivity extends Activity {
             public boolean onConsoleMessage(ConsoleMessage message) {
                 if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
                     Log.e(TAG, "WebView: " + message.message() + " (" + message.lineNumber() + ")");
+                    runOnUiThread(() -> updateStatus("Error web: " + message.message()));
                 }
                 return true;
             }
         });
 
-        root.addView(web, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        midiButton = new Button(this);
-        midiButton.setText("MIDI");
-        midiButton.setTextColor(0xffffffff);
-        midiButton.setAllCaps(false);
-        midiButton.setTextSize(12);
-        midiButton.setMinWidth(dp(66));
-        midiButton.setMinimumHeight(dp(40));
-        midiButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff222832));
-        FrameLayout.LayoutParams buttonParams = new FrameLayout.LayoutParams(dp(76), dp(46),
-                Gravity.TOP | Gravity.START);
-        buttonParams.setMargins(dp(6), dp(45), 0, 0);
-        root.addView(midiButton, buttonParams);
+        FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        pageParams.bottomMargin = dp(82);
+        root.addView(web, pageParams);
+
+        // Persistent Android toolbar. It is independent of the HTML and cannot
+        // disappear when the emulator is in LCD-only mode or fails to initialize.
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.VERTICAL);
+        controls.setBackgroundColor(0xff171b22);
+        controls.setPadding(dp(8), dp(2), dp(8), dp(2));
+        LinearLayout buttons = new LinearLayout(this);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        buttons.setGravity(Gravity.CENTER_VERTICAL);
+        startButton = toolbarButton("▶ Iniciar firmware", 13);
+        panelButton = toolbarButton("Panel", 12);
+        lcdButton = toolbarButton("Pantalla", 12);
+        midiButton = toolbarButton("MIDI", 12);
+        buttons.addView(startButton, new LinearLayout.LayoutParams(0, dp(46), 2.25f));
+        buttons.addView(panelButton, new LinearLayout.LayoutParams(0, dp(46), 1.0f));
+        buttons.addView(lcdButton, new LinearLayout.LayoutParams(0, dp(46), 1.2f));
+        buttons.addView(midiButton, new LinearLayout.LayoutParams(0, dp(46), 1.0f));
+        controls.addView(buttons);
+
+        liveStatus = new TextView(this);
+        liveStatus.setText("Preparando emulador local…");
+        liveStatus.setTextColor(0xffbdc5d3);
+        liveStatus.setTextSize(11);
+        liveStatus.setSingleLine(true);
+        liveStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        controls.addView(liveStatus, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(25)));
+        FrameLayout.LayoutParams controlsParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(76), Gravity.BOTTOM);
+        root.addView(controls, controlsParams);
+
+        startButton.setOnClickListener(v -> invokeInWeb(
+                "window.fm1StartFirmware ? (window.fm1StartFirmware(), 'ok') : 'notready'",
+                "Iniciando firmware…"));
+        panelButton.setOnClickListener(v -> invokeInWeb(
+                "window.fm1SetDisplayMode ? (window.fm1SetDisplayMode(false), 'ok') : 'notready'",
+                "Mostrando panel…"));
+        lcdButton.setOnClickListener(v -> invokeInWeb(
+                "window.fm1SetDisplayMode ? (window.fm1SetDisplayMode(true), 'ok') : 'notready'",
+                "Mostrando LCD del firmware…"));
         midiButton.setOnClickListener(v -> showMidiPicker());
         setContentView(root);
 
