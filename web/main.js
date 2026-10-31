@@ -5,6 +5,7 @@
 // computer (M-VAVE's own: their server does not let other pages fetch it).
 import { fetchPackage } from "./fwsc.js";
 import { ScreenAnalyzer, renderAdaptiveLCD } from "./screen-adapter.js";
+import { drawMobileLCD } from "./mobile-lcd.js";
 import { SaveStore, packageHash, changedSectors, packSectors, exportSave, importSave } from "./persistence.js";
 
 const CLOCKS = [60, 80, 100, 120, 160, 200, 240];
@@ -93,7 +94,7 @@ const about = document.getElementById("about");
 const title = document.getElementById("title");
 document.getElementById("view-toggle").textContent = SCREEN_ONLY ? "Settings" : "Screen only";
 const fitToggle = document.getElementById("fit-toggle");
-fitToggle.textContent = ADAPTIVE_FIT ? "Original" : "Auto fit";
+fitToggle.textContent = ADAPTIVE_FIT ? "Original" : "Horizontal";
 fitToggle.addEventListener("click", () => {
   const next = new URLSearchParams(location.search);
   next.set("fit", ADAPTIVE_FIT ? "0" : "1");
@@ -154,8 +155,8 @@ function setBoard(b) {
   ui.panel_board(b);
   W = ui.panel_width();
   H = ui.panel_height();
-  canvas.width = SCREEN_ONLY ? 240 : W;
-  canvas.height = SCREEN_ONLY ? 240 : H;
+  canvas.width = SCREEN_ONLY ? 960 : W;
+  canvas.height = SCREEN_ONLY ? 540 : H;
   // the synth's width follows the room left below the header and the bar (index.html's canvas rule)
   document.documentElement.style.setProperty("--aspect", String(W / H));
   document.documentElement.dataset.board = b ? "smk37" : "fm1";
@@ -412,6 +413,11 @@ function draw() {
   if (frame) {
     if (frame.lcd) {
       screenFrame = frame.lcd;
+      if (DEBUG_LAYOUT) {
+        latestLcdFrame = frame.lcd.slice();
+        latestLayoutAnalysis = screenAnalyzer.analyze(frame.lcd);
+        if (layoutExportButton) layoutExportButton.disabled = false;
+      }
       new Uint16Array(mem(), ui.panel_lcd(), 240 * 240).set(frame.lcd);
       screenDirty = true;
       frame.lcd = null;
@@ -428,31 +434,21 @@ function draw() {
   }
   if (board === 1) for (let i = 0; i < 23; i++) ui.panel_set(4, i, analog[i]);
   if (SCREEN_ONLY) {
-    // Always render the native panel, including before the audio worklet supplies
-    // its first LCD frame. Never leave this mode with an unpainted black canvas.
-    const panelPointer = ui.panel_draw();
-    const panelPixels = new Uint8ClampedArray(mem(), panelPointer, W * H * 4);
-    const panelImage = new ImageData(new Uint8ClampedArray(panelPixels), W, H);
-    if (!draw.panelCanvas) draw.panelCanvas = document.createElement("canvas");
-    const source = draw.panelCanvas;
-    if (source.width !== W || source.height !== H) {
-      source.width = W;
-      source.height = H;
-    }
-    source.getContext("2d").putImageData(panelImage, 0, 0);
-    ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
-    // Use the isolated LCD only when it contains visible pixels. Some firmwares
-    // do not publish LCD frames immediately (or at all) through the worklet.
-    if (screenFrame && screenFrame.length === 240 * 240) {
-      let nonzero = false;
-      for (let i = 0; i < screenFrame.length; i += 47) {
-        if (screenFrame[i] !== 0) { nonzero = true; break; }
+    // The screen-only route NEVER draws the virtual instrument or its bezel.
+    // RGB565 frames come straight from the emulated 240x240 LCD controller.
+    if (screenFrame) {
+      if (screenDirty) {
+        drawMobileLCD(ctx, screenFrame, canvas.width, canvas.height, { horizontal: ADAPTIVE_FIT });
+        screenDirty = false;
       }
-      if (nonzero) renderAdaptiveLCD(ctx, screenFrame, 240, 240, ADAPTIVE_FIT);
+    } else {
+      ctx.fillStyle = "#06080c";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#aeb8c6";
+      ctx.font = "22px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Inicia el firmware para ver la pantalla LCD", canvas.width / 2, canvas.height / 2);
     }
-    screenDirty = false;
     requestAnimationFrame(draw);
     return;
   }
@@ -1031,6 +1027,8 @@ function onWorklet(e) {
     const session = sessions.get(m.seq), waiter = bootWaiters.get(m.seq);
     if (!session || !waiter) return;
     running = session;
+    screenFrame = null;
+    screenDirty = true;
     for (const key of sessions.keys()) if (key !== m.seq) sessions.delete(key);
     session.base = m.base;
     session.observedRevision = m.revision;
