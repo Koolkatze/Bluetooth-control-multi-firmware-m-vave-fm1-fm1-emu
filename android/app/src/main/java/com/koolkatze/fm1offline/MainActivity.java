@@ -54,6 +54,7 @@ import android.widget.Toast;
 import androidx.webkit.WebViewAssetLoader;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -80,6 +81,7 @@ public final class MainActivity extends Activity {
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private WebView web;
+    private FirmwareUpdater firmwareUpdater;
     private FrameLayout safeAreaRoot;
     private ValueCallback<Uri[]> fileCallback;
     private MidiManager midiManager;
@@ -183,10 +185,16 @@ public final class MainActivity extends Activity {
         // User initiates the audio via the native Start toolbar.
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setSupportMultipleWindows(false);
+        // The WebView remains fully local. Only native, explicit updater
+        // requests can reach the public firmware sources over HTTPS.
+        File updateFolder = getDir("fm1_firmware_updates", MODE_PRIVATE);
+        firmwareUpdater = new FirmwareUpdater(this, web, updateFolder);
         web.addJavascriptInterface(new NativeBridge(), "FM1Android");
 
         WebViewAssetLoader localAssets = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                .addPathHandler("/updates/",
+                        new WebViewAssetLoader.InternalStoragePathHandler(this, updateFolder))
                 .build();
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -234,7 +242,8 @@ public final class MainActivity extends Activity {
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 if (!"https".equals(uri.getScheme()) || !HOST.equals(uri.getHost())
-                        || !uri.getPath().startsWith("/assets/site/")) {
+                        || !(uri.getPath().startsWith("/assets/site/")
+                             || uri.getPath().startsWith("/updates/"))) {
                     // Blobs and data: URLs are internal WebView primitives.
                     if ("blob".equals(uri.getScheme()) || "data".equals(uri.getScheme())) return null;
                     return denied();
@@ -522,6 +531,17 @@ public final class MainActivity extends Activity {
                         ? "Preparado. Motor Rust/AAudio nativo disponible. Pulsa Iniciar firmware."
                         : "Preparado. Motor WebAssembly de reserva. Pulsa Iniciar firmware.");
             });
+        }
+
+        @JavascriptInterface
+        public String installedFirmwareUpdates(String device) {
+            return firmwareUpdater == null ? "{}" : firmwareUpdater.installedJson(device);
+        }
+
+        @JavascriptInterface
+        public boolean updateFirmwares(String device, String selectedId) {
+            return firmwareUpdater != null
+                    && firmwareUpdater.start(device, selectedId == null ? "" : selectedId);
         }
 
         @JavascriptInterface
