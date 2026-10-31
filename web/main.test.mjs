@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as persistence from './persistence.js';
+import * as screenAdapter from './screen-adapter.js';
 const settle = () => new Promise(resolve => setImmediate(resolve));
 class Element {
   constructor(text = '', value = '') {
@@ -84,7 +85,7 @@ async function page(disk = storage(), initialSearch = '', selected = '', manualB
     requestAnimationFrame() {}, addEventListener() {}, AudioContext, AudioWorkletNode,
     matchMedia: () => ({ matches: false }), confirm: () => true,
     fetchPackage: async f => ({ bytes: new Uint8Array(960).fill(f.id === 'a' ? 1 : 2), url: f.package }),
-    ...persistence, SaveStore: class { constructor() { return disk; } } };
+    ...screenAdapter, ...persistence, SaveStore: class { constructor() { return disk; } } };
   const source = readFileSync(new URL('./main.js', import.meta.url), 'utf8').replace(/^import .*;$/gm, '');
   const run = new Function(...Object.keys(environment), `return (async () => { ${source}\nreturn {
     startAudio, boot, flushRunning, setLatency, get running() { return running; },
