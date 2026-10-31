@@ -3,7 +3,7 @@
 // that runs the emulator. Every firmware boots from its whole update package (.fwsc), unpacked
 // in the wasm: a catalog entry's fetched from its author's site, or one opened from this
 // computer (M-VAVE's own: their server does not let other pages fetch it).
-import { fetchPackage } from "./fwsc.js";
+import { fetchPackage, appFromPackage } from "./fwsc.js";
 import { ScreenAnalyzer, renderAdaptiveLCD } from "./screen-adapter.js";
 import { drawMobileLCD } from "./mobile-lcd.js?v=lcd-live-20261031";
 import { computeLCDSize } from "./lcd-fit.js";
@@ -314,6 +314,35 @@ if (DEVICE === "fm1") {
 
 // Cached packages are pinned to their exact bytes. Checking for updates is explicit.
 const packages = new Map();
+const updateSelectedBtn = document.getElementById("update-selected-firmware");
+const updateAllBtn = document.getElementById("update-all-firmwares");
+const updateLine = document.getElementById("firmware-update-status");
+const updateDevice = DEVICE === "smk37" ? "smk37" : "fm1";
+let updatingFirmwares = false;
+// Native packages persist in Android-private storage and take precedence over
+// the APK's original files AND previously saved IndexedDB package records.
+const installedUpdates = (() => {
+  try { return JSON.parse(nativeWindow.FM1Android?.installedFirmwareUpdates?.(updateDevice) || "{}"); }
+  catch { return {}; }
+})();
+function updateButtonsState() {
+  if (updateSelectedBtn) updateSelectedBtn.disabled = updatingFirmwares || fw.id === "local" || !!fw.byo;
+  if (updateAllBtn) updateAllBtn.disabled = updatingFirmwares;
+}
+async function loadInstalledUpdate(f) {
+  const entry = installedUpdates[f.id];
+  if (!entry || !/^[a-zA-Z0-9_-]{1,90}$/.test(f.id)) return null;
+  const res = await fetch("/updates/" + updateDevice + "/" + f.id + ".fwsc");
+  if (!res.ok) throw new Error("No se pudo abrir la actualización guardada");
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length < 1024 || bytes.length > 15 * 1024 * 1024 ||
+      appFromPackage(bytes).length < 512)
+    throw new Error("Paquete .fwsc actualizado inválido");
+  const got = { bytes, url: null, version: entry.version || f.version };
+  packages.set(f.id, got);
+  noteVersion(f, got.version);
+  return got;
+}
 let localFw = null;
 class NeedFile extends Error {}
 async function keptEntry(id) {
@@ -323,6 +352,12 @@ async function keptEntry(id) {
 async function packageOf(f) {
   if (f.id === "local") return { bytes: f.bytes, url: null };
   if (packages.has(f.id)) return packages.get(f.id);
+  if (installedUpdates[f.id] && !f.byo) {
+    try { return await loadInstalledUpdate(f); }
+    catch (error) {
+      updateLine.textContent = "Actualización " + f.name + " dañada: " + error.message;
+    }
+  }
   const kept = await keptEntry(f.id);
   if (kept) {
     const got = { bytes: kept.package, url: kept.url };
@@ -418,8 +453,79 @@ function showFirmware() {
   q.set("mhz", mhz);
   history.replaceState(null, "", `?${q}`);
   document.getElementById("fullpage").href = fw.id === "local" ? "./" : `./?fw=${fw.id}`;
+  updateButtonsState();
 }
 showFirmware();
+
+// Install changed packages only in the emulator cache; never flash hardware.
+// The currently playing synth is not interrupted. It will use the update the
+// next time its firmware is started or selected.
+nativeWindow.fm1FirmwareUpdateProgress = async (event) => {
+  if (!event || typeof event !== "object") return;
+  if (event.kind === "updated" && byId.has(event.id)) {
+    const item = byId.get(event.id);
+    if (item && !item.byo) {
+      installedUpdates[event.id] = { version: event.version };
+      packages.delete(event.id);
+      try { await loadInstalledUpdate(item); }
+      catch (error) { updateLine.textContent = item.name + ": " + error.message; return; }
+    }
+  }
+  if (event.kind === "summary") {
+    updateLine.textContent = event.message + ". Reinicia o vuelve a seleccionar un firmware actualizado para aplicarlo.";
+  } else if (event.kind === "finished") {
+    updatingFirmwares = false;
+    updateButtonsState();
+  } else if (event.message) {
+    updateLine.textContent = event.message;
+  }
+};
+
+async function updateCatalogFirmwares(selectedId = "") {
+  if (updatingFirmwares) return;
+  if (selectedId && (fw.id === "local" || fw.byo)) {
+    updateLine.textContent = "Este firmware se actualiza importando un archivo .fwsc propio.";
+    return;
+  }
+  updatingFirmwares = true;
+  updateButtonsState();
+  updateLine.textContent = selectedId ? "Comprobando firmware seleccionado…" :
+    "Comprobando actualizaciones de todos los firmwares…";
+  if (nativeWindow.FM1Android?.updateFirmwares) {
+    const started = nativeWindow.FM1Android.updateFirmwares(updateDevice, selectedId);
+    if (!started) {
+      updatingFirmwares = false;
+      updateButtonsState();
+      updateLine.textContent = "No se pudo comenzar la actualización.";
+    }
+    return;
+  }
+  // The hosted website still uses the authors' public download URLs.
+  const entries = selectedId ? [byId.get(selectedId)] : catalog.firmwares;
+  let changed = 0, checked = 0, failed = 0;
+  for (const item of entries) {
+    if (!item || item.byo || !item.package) continue;
+    checked++;
+    updateLine.textContent = `Comprobando ${checked}/${entries.length}: ${item.name}…`;
+    try {
+      const fresh = await fetchPackage(item);
+      const old = packages.get(item.id);
+      const oldHash = old ? await packageHash(old.bytes) : null;
+      const newHash = await packageHash(fresh.bytes);
+      if (newHash !== oldHash) changed++;
+      packages.set(item.id, fresh);
+      noteVersion(item, fresh.version);
+    } catch (error) {
+      failed++;
+      updateLine.textContent = item.name + ": " + error.message;
+    }
+  }
+  updatingFirmwares = false;
+  updateButtonsState();
+  updateLine.textContent = `Comprobados ${checked}; nuevos paquetes ${changed}; errores ${failed}. Reinicia el firmware para aplicar los cambios.`;
+}
+updateSelectedBtn?.addEventListener("click", () => updateCatalogFirmwares(fw.id));
+updateAllBtn?.addEventListener("click", () => updateCatalogFirmwares(""));
 
 fwSel.addEventListener("change", () => {
   fw = byId.get(fwSel.value) || localFw;
