@@ -256,13 +256,17 @@ public final class MainActivity extends Activity {
                 "window.fm1SetDisplayMode ? (window.fm1SetDisplayMode(true), 'ok') : 'notready'",
                 "Mostrando LCD del firmware…"));
         midiButton.setOnClickListener(v -> showMidiPicker());
-        audioButton.setOnClickListener(v -> nativeActive
-                ? new AlertDialog.Builder(this).setTitle("Audio nativo AAudio")
-                    .setMessage("El motor Rust nativo utiliza AAudio en modo baja latencia. "
-                            + "La latencia de un altavoz Bluetooth sigue dependiendo del dispositivo. "
-                            + "Para tocar utiliza USB-C o salida de audio por cable.")
-                    .setPositiveButton("Aceptar", null).show()
-                : showAudioOptions());
+        audioButton.setOnClickListener(v -> {
+            if (nativeActive) {
+                new AlertDialog.Builder(this).setTitle("Audio nativo AAudio")
+                        .setMessage("El motor Rust nativo utiliza AAudio en modo baja latencia. "
+                                + "La latencia de un altavoz Bluetooth sigue dependiendo del dispositivo. "
+                                + "Para tocar utiliza USB-C o salida de audio por cable.")
+                        .setPositiveButton("Aceptar", null).show();
+            } else {
+                showAudioOptions();
+            }
+        });
         setContentView(root);
 
         // Browser location is local HTTPS backed by packaged assets; no network is used.
