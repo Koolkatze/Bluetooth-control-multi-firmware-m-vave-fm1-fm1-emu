@@ -1,17 +1,17 @@
 # FM-1 Mobile Companion — multifirmware, pantalla ampliada y síntesis desde el móvil
 
-**Objetivo del proyecto:** convertir un teléfono Android en una pantalla grande y en un motor de síntesis alternativo para el **M-VAVE FM-1**, para probar y tocar distintos firmwares **sin tener que flashear ni sustituir el firmware instalado en el sintetizador físico**. Queremos que pueda usarse tanto **sin el FM-1**, como sintetizador de bolsillo autónomo, como **junto al FM-1**, aprovechando sus controles y trasladando al teléfono el trabajo de síntesis.
+**Objetivo del proyecto:** convertir un teléfono Android en la **pantalla principal y el motor de síntesis** del M-VAVE FM-1, para tocar y alternar entre firmwares compatibles **sin tener que flashear el FM-1 físico cada vez que se cambia de sintetizador**. El teléfono puede funcionar también de forma independiente. En el modo combinado, el FM-1 físico lleva un **firmware controlador MIDI como CTL-1**, que muestra su propia interfaz en la pantalla integrada: esa pantalla queda como **pantalla secundaria de control**, mientras el móvil muestra la pantalla del sintetizador emulado y genera el sonido. **No buscamos capturar ni duplicar la LCD física.**
 
 **[Abrir el proyecto web](https://koolkatze.github.io/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/?screen=1&fit=1)** · [Código fuente](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu) · [Adaptación de la LCD](docs/screen-adaptation.md)
 
-> **Estado:** prototipo basado en el emulador de código abierto [joakimeriksson/fm1-emu](https://github.com/joakimeriksson/fm1-emu). La ejecución de firmwares en el navegador, la LCD aislada, el audio local y la entrada Web MIDI están implementados en la base web. **La conexión directa con el FM-1 físico para duplicar su pantalla, el control Bluetooth MIDI integrado y la descarga efectiva de CPU del dispositivo físico son objetivos pendientes, no funciones ya disponibles.**
+> **Estado:** prototipo basado en el emulador de código abierto [joakimeriksson/fm1-emu](https://github.com/joakimeriksson/fm1-emu). La ejecución virtual de firmwares, la LCD del sintetizador emulado, la salida de audio del navegador y la entrada Web MIDI están implementadas en la web. El firmware [CTL-1](https://github.com/charlesvestal/fm1-ctl) **sí permite convertir el FM-1 físico en un controlador MIDI USB y Bluetooth con pantalla propia**, según su autor. **Todavía falta verificar e integrar el enlace CTL-1 físico → Android/Web MIDI → sintetizador emulado**, incluida la compatibilidad con el navegador, los controles y la latencia. Nunca se requiere capturar la LCD del FM-1.
 
 ## Qué queremos conseguir
 
-1. **Cambiar entre firmwares sin flashear el FM-1.** Seleccionar y arrancar en el teléfono cualquier paquete `.fwsc` **compatible con el emulador**, incluyendo firmwares comunitarios y el oficial de M-VAVE cuando el usuario aporte el archivo. Los firmwares se ejecutan *virtualmente*: cambiar uno en la web **no instala nada en el FM-1 real**, ni altera su memoria flash.
-2. **Una pantalla realmente legible en el móvil.** Mostrar **solo** la pantalla LCD del firmware, sin el dibujo del chasis, las teclas ni los potenciómetros. Ampliarla y aprovechar el teléfono en posición horizontal, intentando distribuir el contenido sin recortar información.
+1. **Cambiar entre firmwares del sintetizador sin reflashear el FM-1 físico.** Seleccionar y arrancar en el teléfono cualquier paquete `.fwsc` **compatible con el emulador**, incluidos firmwares comunitarios y el oficial de M-VAVE cuando el usuario aporte el archivo. Los firmwares de síntesis se ejecutan *virtualmente*. **CTL-1 se instala una vez en el FM-1 físico**, si se desea usarlo como controlador; alternar los firmwares de síntesis del móvil no vuelve a escribir su flash.
+2. **Dos pantallas distintas y útiles.** La pantalla **principal del teléfono** muestra solo la LCD del firmware sintetizador **emulado**, ampliada y adaptada a horizontal sin dibujar el chasis. La **LCD física secundaria** del FM-1 conserva la interfaz del firmware controlador instalado (por ejemplo, CTL-1: notas, bancos MIDI, CC, ajustes, secuenciador). **No se transmite ni se espeja ninguna de las dos pantallas a la otra.**
 3. **Usar el móvil como sintetizador.** Ejecutar la CPU emulada y el motor de audio en el teléfono, recibir notas y controles MIDI y producir el sonido desde el propio móvil. Así el móvil asume el procesamiento cuando se utiliza el motor emulado.
-4. **Integrar el M-VAVE FM-1 como controlador.** Objetivo: conectar el FM-1 físico mediante **MIDI por USB-C o Bluetooth** para controlar los firmwares que se ejecutan en el teléfono y, cuando sea técnicamente viable, usar el móvil como pantalla externa de la unidad real.
+4. **FM-1 físico como controlador MIDI.** Utilizar **CTL-1** (o un firmware equivalente) en el hardware para enviar notas, controles, bancos y mensajes MIDI por **USB-C o Bluetooth** al sintetizador emulado del teléfono. La pantalla del FM-1 seguirá enseñando **la interfaz de CTL-1**, no una copia del firmware del móvil.
 5. **Escuchar el sonido por un altavoz o interfaz externa.** Permitir el uso del audio del teléfono por **Bluetooth** o **USB-C** (por ejemplo, altavoz Bluetooth, interfaz de audio USB o DAC USB-C). Minimizar la latencia, especialmente al tocar en directo.
 
 ## Dos formas de uso
@@ -30,17 +30,25 @@ Emulador FM-1 (CPU/periféricos) en WebAssembly
 
 En este modo **no hace falta conectar el FM-1 físico ni flashearlo**. El móvil ejecuta el sintetizador emulado; el audio se genera en el móvil, no se transmite desde la CPU del FM-1 físico. La CPU del teléfono realiza el trabajo de emulación, de modo que el rendimiento depende del navegador, del dispositivo y del firmware elegido.
 
-### B. M-VAVE FM-1 físico + móvil: modo acompañante (**objetivo futuro**)
+### B. FM-1 físico + móvil: controlador y sintetizador separados (**integración pendiente**)
 
 ```text
-M-VAVE FM-1 físico
-   ├── Controles / notas ───► enlace MIDI USB-C o Bluetooth ───► teléfono
-   └── Pantalla LCD real ──► puente de captura por diseñar ───► pantalla ampliada
-
-Teléfono (firmware emulado + síntesis) ───► audio del móvil ───► altavoz externo
+FM-1 físico — firmware CTL-1 instalado
+  ├── Teclas, botones y potenciómetros
+  │             │
+  │             └── MIDI USB-C o Bluetooth ─────► Android / Web MIDI
+  │                                                   │
+  └── LCD propia: controles CTL-1                    ▼
+      (bancos MIDI, CC, arpegiador...)     Firmware sintetizador EMULADO
+                                             ├── LCD virtual ──► PANTALLA PRINCIPAL DEL MÓVIL
+                                             └── CPU + audio ──► altavoz BT / interfaz USB-C
 ```
 
-Queremos que el FM-1 pueda actuar como superficie de control mientras el teléfono realiza la síntesis, reduciendo la necesidad de que la CPU física ejecute los motores sonoros más exigentes. **Esto no consiste en acelerar mágicamente la CPU interna del FM-1**: exige definir una comunicación MIDI, gestionar sus controles y reproducir el audio del firmware emulado en el teléfono. Reflejar el LCD **del hardware real** requiere además una vía de captura/telemetría que todavía no existe en esta web; el framebuffer que hoy vemos procede **del emulador**, no de una lectura directa de la pantalla física.
+**Ambas pantallas son independientes y tienen funciones distintas.** La LCD del FM-1 muestra **el firmware controlador CTL-1 instalado en el hardware**; la pantalla del teléfono presenta **el firmware de síntesis que esté ejecutando su emulador**. **No hay captura, duplicación ni transmisión de imágenes desde el FM-1 físico**: únicamente necesitamos transmitir eventos de control **MIDI** hacia el móvil.
+
+**El firmware controlador existe:** [CTL-1](https://github.com/charlesvestal/fm1-ctl) de Charles Vestal ofrece controles MIDI, cuatro bancos para los potenciómetros, secuenciación, arpegiador, MIDI USB y Bluetooth en la versión 1.0. [Manual y pantallas de CTL-1](https://charlesvestal.github.io/fm1-ctl/manual/) · [Instalador del autor](https://charlesvestal.github.io/fm1-ctl/install/). **La instalación de CTL-1 en el FM-1 real sí es un flasheo inicial voluntario**, y conlleva los riesgos habituales de instalar firmware de terceros. No es necesario volver a flashear al cambiar de sintetizador en el móvil.
+
+La CPU del teléfono ejecutará la emulación y la síntesis. No se acelera físicamente la CPU del FM-1: el dispositivo seguirá ejecutando CTL-1 para sus controles, mientras la carga de sonido recae en Android. Hay que **comprobar el emparejamiento Bluetooth MIDI o el transporte USB MIDI en el móvil y mapear los mensajes de CTL-1 al firmware emulado**. No se considera aún probado en el conjunto hardware + Android + navegador.
 
 ## Estado actual y trabajo pendiente
 
@@ -55,10 +63,11 @@ Queremos que el FM-1 pueda actuar como superficie de control mientras el teléfo
 | Teclado/controlador MIDI por USB-C | **Dependiente del sistema y navegador** | Puede funcionar si Android, el adaptador/OTG y el navegador reconocen el dispositivo MIDI. No está verificado para todos los móviles/controladores. |
 | MIDI Bluetooth | **Objetivo de integración y pruebas** | No hay emparejamiento BLE-MIDI propio ni puente dedicado en la web. Solo podría aparecer ya como entrada si el sistema/navegador lo expone a Web MIDI. |
 | Sonido en altavoz Bluetooth o interfaz/DAC USB-C | **Depende de la ruta de audio del sistema** | La web reproduce por la salida predeterminada del navegador/Android. La selección del altavoz se hace en el sistema; la web no incluye actualmente un selector de salidas ni control de latencia Bluetooth. |
-| Duplicar en directo el LCD del FM-1 **físico** | **Pendiente** | No hay enlace de captura de pantalla desde el hardware. La LCD web actual es la de la emulación. |
-| Usar los controles del FM-1 físico y descargar su trabajo de síntesis al móvil | **Pendiente** | Requiere validar el transporte MIDI y la correspondencia de mandos, además de diseñar el modo híbrido. |
+| LCD del FM-1 físico como pantalla secundaria | **Disponible al ejecutar CTL-1 en el hardware; integración conjunta pendiente** | La LCD muestra exclusivamente la interfaz de CTL-1, independiente de la LCD emulada en Android. No se requiere captura de pantalla. |
+| FM-1 físico como controlador MIDI USB/Bluetooth | **CTL-1 1.0 lo ofrece; pendiente validar con Android** | Instalar CTL-1 una vez en el hardware, conectar por USB o BLE MIDI y mapear notas/CC al emulador web. |
+| Trasladar el trabajo de síntesis al teléfono con CTL-1 en el FM-1 | **Arquitectura prevista; integración pendiente** | El FM-1 procesa los controles y el teléfono ejecuta el sintetizador. El firmware virtual cambia sin reflashear el físico. |
 
-**Importante:** «cualquier firmware» expresa el objetivo de compatibilidad; en la práctica cada paquete debe ser compatible con el emulador y algunas funciones pueden depender de periféricos que aún no estén emulados. Tampoco se modifica el firmware de terceros por defecto: se ejecuta su paquete original. Un rediseño semántico de la interfaz requiere el código fuente de ese firmware o perfiles verificados.
+**Importante:** «cualquier firmware» expresa el objetivo de compatibilidad; cada paquete de síntesis debe ser compatible con el emulador y algunos periféricos aún pueden no estar implementados. El FM-1 físico **no necesita cambiar su firmware controlador** para cambiar de sintetizador en Android, pero **sí debe tener instalado un firmware MIDI adecuado, como CTL-1**, si se quiere utilizar su Bluetooth y USB MIDI específicos. No se modifican los firmwares de terceros que se ejecutan virtualmente; una remaquetación de sus menús requiere perfiles validados o su código fuente.
 
 ## Cómo probar lo que ya funciona
 
@@ -75,11 +84,11 @@ El navegador guarda los ajustes y cambios de flash emulada por firmware; se reco
 
 El proyecto parte de la emulación de la CPU JieLi pi32v2 y los periféricos del FM-1. El código Rust se compila a **WebAssembly** (`crates/fm1-web/`). `web/worklet.js` ejecuta la máquina en el hilo de audio; `web/main.js` coordina los firmwares, los mensajes MIDI y la vista; `web/mobile-lcd.js` convierte los píxeles de la LCD y compone la presentación móvil. Los firmwares comunitarios se obtienen según `web/firmwares.json`; los archivos de M-VAVE se importan localmente. [Detalles de la adaptación de pantalla](docs/screen-adaptation.md).
 
-Las siguientes fases de desarrollo son: (1) probar MIDI USB-C en Android con el FM-1 físico y otros controladores; (2) estudiar una conexión BLE-MIDI utilizable en Android; (3) registrar latencias de audio Bluetooth y USB-C; (4) diseñar el mapeo de controles del FM-1 hacia la emulación; (5) evaluar si es posible obtener datos de la pantalla del FM-1 físico **sin modificar su firmware**; y (6) desarrollar perfiles de interfaz horizontal específicos por firmware, sin perder menús ni parámetros.
+Las siguientes fases de desarrollo son: (1) **probar CTL-1 1.0** en el FM-1 físico como controlador (su instalación inicial es opcional y exige flashear una vez); (2) comprobar el **USB-MIDI hacia Android** mediante un adaptador USB-C/OTG; (3) validar la ruta **Bluetooth MIDI** de CTL-1 y cómo exponerla a Web MIDI en Android; (4) mapear los mensajes MIDI, bancos, notas y CC de CTL-1 al sintetizador emulado en la web; (5) evaluar la latencia del audio Bluetooth y USB-C; y (6) crear perfiles de interfaz horizontal específicos por firmware, sin perder menús ni parámetros. **No se desarrollará un sistema de captura/duplicación de la pantalla física:** esta permanece a cargo de CTL-1.
 
 ### English project summary
 
-**FM-1 Mobile Companion** aims to run compatible M-VAVE FM-1 firmware packages on an Android phone **without flashing the physical synthesizer**, display the emulated LCD in a larger, clearer mobile view, and use the phone as a standalone synth engine with external MIDI input and Bluetooth/USB-C audio routing. The future hybrid mode aims to use the physical FM-1 as a MIDI controller while the phone handles synthesis; direct mirroring of the physical device's LCD and dedicated Bluetooth-MIDI bridging are **not implemented yet**. The browser currently runs the emulated LCD and audio using WebAssembly and AudioWorklet; MIDI input requires browser/OS Web MIDI support.
+**FM-1 Mobile Companion** aims to run compatible M-VAVE FM-1 synthesizer firmware packages on an Android phone **without repeatedly flashing the physical device when changing synths**. In standalone mode, the phone runs the emulated firmware, enlarged LCD and audio engine. In combined mode, the physical FM-1 **runs the CTL-1 MIDI controller firmware**, showing CTL-1's control interface on **its own secondary display**, while the phone shows the **virtual synthesizer LCD as the primary display** and produces the sound. CTL-1 1.0 supports USB and Bluetooth MIDI, but the end-to-end Android browser link is **not yet validated**. **No physical LCD capture or mirroring is intended**. Installing CTL-1 on the real FM-1 requires an initial optional firmware flash; switching virtual synths thereafter does not.
 
 ## Proyecto de base y atribución
 
