@@ -63,6 +63,8 @@ mod android {
         let shared = &*(user as *const Shared);
         let pcm = std::slice::from_raw_parts_mut(audio_data as *mut f32, frames as usize * 2);
         // AUDIO THREAD: no allocations, mutexes, logging, or JNI calls.
+        // Accumulate starvation and publish ONE atomic update per callback.
+        let mut missing = 0u64;
         for pair in pcm.chunks_exact_mut(2) {
             if let Some(sample) = shared.ring.pop() {
                 pair[0] = sample[0];
@@ -70,10 +72,11 @@ mod android {
             } else {
                 pair[0] = 0.0;
                 pair[1] = 0.0;
-                if shared.playing.load(Ordering::Relaxed) {
-                    shared.ring.underruns.fetch_add(1, Ordering::Relaxed);
-                }
+                missing += 1;
             }
+        }
+        if missing != 0 && shared.playing.load(Ordering::Relaxed) {
+            shared.ring.underruns.fetch_add(missing, Ordering::Relaxed);
         }
         CALLBACK_CONTINUE
     }
@@ -194,6 +197,16 @@ mod android {
                 return respond(&mut env, &format!("ERROR:Motor Rust: {e}"));
             }
         };
+        // Pre-fill PCM BEFORE starting the audio callback. Previously AAudio
+        // immediately consumed an empty ring during JIT warmup / firmware boot.
+        // Wait only a bounded time so a genuinely stalled firmware still
+        // reports a meaningful problem instead of freezing the app.
+        let prefill_start = std::time::Instant::now();
+        while shared.ring.available() < 512 &&
+              prefill_start.elapsed() < std::time::Duration::from_millis(1000) &&
+              !shared.halted.load(Ordering::Acquire) {
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
         let rc = unsafe { AAudioStream_requestStart(stream) };
         if rc != AAUDIO_OK {
             shared.quit.store(true, Ordering::Release);
@@ -269,6 +282,29 @@ mod android {
             Ok(array) => array.into_raw(),
             Err(_) => ptr::null_mut(),
         }
+    }
+
+    /// Diagnostics that do not touch AAudio callback and are safe to sample
+    /// from the WebView every 250ms: firmware time, output frames produced,
+    /// ring fill. All values are monotonic except instantaneous ring fill.
+    #[no_mangle]
+    pub extern "system" fn Java_com_koolkatze_fm1offline_NativeSynth_diagnostics(
+        mut env: JNIEnv, _: JClass,
+    ) -> jstring {
+        let message = if let Ok(state) = state().try_lock() {
+            if let Some(active) = state.as_ref() {
+                let s = &active.shared;
+                format!("{},{},{}",
+                    s.emulated_ms.load(Ordering::Relaxed),
+                    s.produced_frames.load(Ordering::Relaxed),
+                    s.ring.available())
+            } else {
+                "0,0,0".to_owned()
+            }
+        } else {
+            "".to_owned()
+        };
+        respond(&mut env, &message)
     }
 
     #[no_mangle]
