@@ -217,27 +217,23 @@ section li { margin: 4px 0; }
 [hidden] { display: none !important; }
 
 
-/* Screen-only phone mode: render the firmware's native 240×240 LCD, without the virtual faceplate. */
+/* Screen-only: show the firmware LCD, not the complete virtual front panel. */
 [data-screen-only] { color-scheme: dark; background: #08090b; }
-[data-screen-only] body { min-height: 100svh; overflow-x: hidden; background: #08090b; }
+[data-screen-only] body { min-height: 100svh; overflow: hidden; background: #08090b; }
 [data-screen-only] header.site, [data-screen-only] .side, [data-screen-only] .hint,
 [data-screen-only] .rotate, [data-screen-only] .library, [data-screen-only] .guide,
 [data-screen-only] footer.site, [data-screen-only] .deck-head h1 { display: none !important; }
-[data-screen-only] main { min-height: 100svh; padding: env(safe-area-inset-top) 12px env(safe-area-inset-bottom); display: grid; place-items: center; }
+[data-screen-only] main { width: 100%; max-width: none; height: 100svh; min-height: 100svh; margin: 0; padding: 12px; display: grid; place-items: center; }
 [data-screen-only] .player, [data-screen-only] .deck { width: 100%; min-width: 0; max-width: none; display: grid; place-items: center; }
 [data-screen-only] .deck { gap: 0; }
 [data-screen-only] .deck-head { position: fixed; z-index: 2; top: max(8px, env(safe-area-inset-top)); left: 12px; right: 12px; justify-content: center; pointer-events: none; }
 [data-screen-only] #status { padding: 4px 9px; border: 1px solid #30343b; border-radius: 999px; background: #111419; color: #c4c9d2; font-size: 11px; }
-[data-screen-only] .stage { position: relative; width: min(calc(100vw - 24px), calc((100svh - 24px) * var(--aspect, 1))); aspect-ratio: var(--aspect, 1); padding: 0; margin: 0 auto; border: 0; border-radius: 0; background: #000; box-shadow: none; overflow: hidden; }
+[data-screen-only] .stage { position: relative; width: min(calc(100vw - 24px), calc(100svh - 24px)); aspect-ratio: 1; padding: 0; margin: 0 auto; border: 0; border-radius: 0; background: #000; box-shadow: none; overflow: hidden; }
 [data-screen-only] canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; touch-action: none; }
 [data-screen-only] #start { width: 132px; height: 44px; font-size: 15px; }
 @media (orientation: landscape) {
-  [data-screen-only] main { width: 100vw; height: 100svh; min-height: 100svh; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
-  [data-screen-only] .stage { width: min(calc(100vw - 24px), calc((100svh - 20px) * var(--aspect, 1))); }
-}
-@media (orientation: portrait) and (max-width: 760px) {
-  [data-screen-only] main { width: 100vw; height: 100svw; min-height: 100svw; padding: 8px; transform: rotate(90deg); transform-origin: top left; position: absolute; top: 0; left: 100vw; }
-  [data-screen-only] .stage { width: min(calc(100svh - 16px), calc((100vw - 16px) * var(--aspect, 1))); }
+  [data-screen-only] main { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  [data-screen-only] .stage { width: min(calc(100vw - 24px), calc(100svh - 24px)); }
 }
 
 .display-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
