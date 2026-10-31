@@ -10,6 +10,25 @@ The default renderer therefore preserves the original screen geometry. Auto fit 
 the empty outer margin and scales the remaining image proportionally with nearest-neighbour
 sampling. It does not stretch a square screen into a landscape rectangle.
 
+## Obtaining the official firmware without installing it
+
+The FM-1 stock package does not need to be extracted from the physical synth. M-VAVE publishes
+its PC firmware package on the official [Downloads page](https://www.m-vave.com/download), under
+**PC Firmware → FM-1 → Download**. The current download catalogue lists FM-1 V16 (dated
+2026-10-21). Select the download link itself; do not open M-UPGRADE or Firmware Hub and do not
+press an install/update action. The expected package is named `FM-1.fwsc`.
+
+The official file is a firmware update package, not a read-back of the exact flash contents of a
+particular unit. It is suitable for loading the matching stock firmware in the emulator, but it
+does not contain the factory user patch bank from a physical FM-1. Do not attempt to obtain it by
+starting an update or sending SysEx to the device: that is a write/update protocol, not a passive
+backup procedure.
+
+For reproducibility, record the downloaded version, file size and SHA-256 before using it. A
+community-verified V15 package reference is 699,956 bytes with SHA-256
+`db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a`; do not apply that
+checksum to V16. Keep the original file unchanged and use a separate copy for any analysis.
+
 ## Analysis layer
 
 `web/screen-adapter.js` exports `analyzeScreenLayout(lcd)`. It currently:
