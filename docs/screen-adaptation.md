@@ -6,9 +6,20 @@ The emulator exposes a 240 × 240 RGB565 framebuffer. The browser receives pixel
 labels, controls, text runs or drawing commands. Consequently, pixel analysis can identify occupied
 areas, but it cannot reliably tell a label from a waveform, icon, meter or decorative border.
 
-The default renderer therefore preserves the original screen geometry. Auto fit may remove only
-the empty outer margin and scales the remaining image proportionally with nearest-neighbour
-sampling. It does not stretch a square screen into a landscape rectangle.
+The browser's Screen-only view now draws **only LCD pixels**, never the instrument
+panel or its bezel. The mobile canvas has a 16:9 viewport. `Original` renders the
+complete square LCD in that viewport without distortion. `Horizontal` attempts
+a conservative two-column rearrangement only when a sufficiently wide empty
+horizontal row band divides actual content; otherwise it shows the original
+square LCD centered in the landscape viewport.
+
+This is not firmware-level semantic reflow: source text, knob widgets, menu items
+and labels are raster pixels by the time they reach the browser. Arbitrarily
+moving connected pixels would break drawings and menus. Actual per-control
+landscape rearrangements require the specific firmware's graphics source or a
+validated per-firmware profile. The official stock M-VAVE `.fwsc` update is a
+binary package, not published editable graphics source. Community firmwares
+with available code can instead be modified and rebuilt individually.
 
 ## Obtaining the official firmware without installing it
 
