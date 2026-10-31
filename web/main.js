@@ -428,10 +428,31 @@ function draw() {
   }
   if (board === 1) for (let i = 0; i < 23; i++) ui.panel_set(4, i, analog[i]);
   if (SCREEN_ONLY) {
-    if (screenDirty && screenFrame) {
-      renderAdaptiveLCD(ctx, screenFrame, 240, 240, ADAPTIVE_FIT);
-      screenDirty = false;
+    // Always render the native panel, including before the audio worklet supplies
+    // its first LCD frame. Never leave this mode with an unpainted black canvas.
+    const panelPointer = ui.panel_draw();
+    const panelPixels = new Uint8ClampedArray(mem(), panelPointer, W * H * 4);
+    const panelImage = new ImageData(new Uint8ClampedArray(panelPixels), W, H);
+    if (!draw.panelCanvas) draw.panelCanvas = document.createElement("canvas");
+    const source = draw.panelCanvas;
+    if (source.width !== W || source.height !== H) {
+      source.width = W;
+      source.height = H;
     }
+    source.getContext("2d").putImageData(panelImage, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+    // Use the isolated LCD only when it contains visible pixels. Some firmwares
+    // do not publish LCD frames immediately (or at all) through the worklet.
+    if (screenFrame && screenFrame.length === 240 * 240) {
+      let nonzero = false;
+      for (let i = 0; i < screenFrame.length; i += 47) {
+        if (screenFrame[i] !== 0) { nonzero = true; break; }
+      }
+      if (nonzero) renderAdaptiveLCD(ctx, screenFrame, 240, 240, ADAPTIVE_FIT);
+    }
+    screenDirty = false;
     requestAnimationFrame(draw);
     return;
   }
