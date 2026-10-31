@@ -46,7 +46,9 @@ function jitImports(exports, stats) {
 const AHEAD_FRAMES = 1024;
 const ANDROID_AHEAD_FRAMES = 512;
 function budgets(mhz, frames) {
-  return { boot: mhz * 1e6 * 0.02, play: mhz * 1e6 * 1.5 * frames / sampleRate };
+  // These frames are produced by firmware I2S at 44.1 kHz. Never divide by
+  // Android's 48 kHz OUTPUT sample rate: that would under-budget the synth.
+  return { boot: mhz * 1e6 * 0.02, play: mhz * 1e6 * 1.5 * frames / 44100 };
 }
 
 // The firmware's I2S audio is exactly 44.1 kHz. Android output devices often run
