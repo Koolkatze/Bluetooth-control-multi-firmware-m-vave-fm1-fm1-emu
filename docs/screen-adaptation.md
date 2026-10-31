@@ -29,6 +29,26 @@ community-verified V15 package reference is 699,956 bytes with SHA-256
 `db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a`; do not apply that
 checksum to V16. Keep the original file unchanged and use a separate copy for any analysis.
 
+### Uploaded stock package verified
+
+A user-supplied package was inspected locally without sending it to the FM-1 or changing the device.
+Its package markers identify it as `FM-1_016` (V16). The UFW header CRC-16/CCITT validates, the
+flash-image entry is in bounds, the `isd_config.ini` CRC validates, and the JLFS directory
+contains `app_dir_head`, `app.bin`, and the protected-image metadata expected by the emulator.
+
+| Property | Verified value |
+|---|---|
+| Package identity | `FM-1_016` |
+| File size | 718,196 bytes |
+| SHA-256 | `d017fb65e70aca97ee29d944470c3515a74581df5c0576bf70de917c7b2b61d5` |
+| Flash image | 692,224 bytes |
+| App entry | `app.bin`, offset `0x140` in the app area |
+| App payload after trailing 0xFF padding | 597,928 bytes |
+
+This validates the package structure and its compatibility with the documented FM-1 package
+format; it is not yet a runtime boot test on Android or in the browser. The firmware binary is
+user-supplied and is deliberately not committed to this repository.
+
 ## Analysis layer
 
 `web/screen-adapter.js` exports `analyzeScreenLayout(lcd)`. It currently:
