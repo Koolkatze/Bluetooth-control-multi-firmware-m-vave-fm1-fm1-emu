@@ -42,7 +42,10 @@ let fw = byId.get(params.get("fw")) || byId.get(stored(DEV.key + "fw")) || byId.
 let mhz = Number(params.get("mhz") || stored("fm1.mhz") || 100);
 // the audio buffer: "interactive" (small: keys answer quickly) unless this device needed a larger
 // one ("playback", offered when the sound drops out with time to spare; ?latency= overrides)
-let latency = params.get("latency") || stored("fm1.latency") || "interactive";
+// A little buffering helps Android WebView absorb short scheduling hiccups.
+ // Users may override with ?latency=interactive or the existing audio setting.
+let latency = params.get("latency") || stored("fm1.latency") ||
+  (nativeWindow.FM1Android ? "balanced" : "interactive");
 
 const canvas = document.getElementById("panel");
 let layoutExportButton = null;
@@ -742,7 +745,8 @@ const warnBox = document.getElementById("perfwarn");
 const perf = {
   reset() {
     this.busy = 0; this.span = 0; this.emulated = 0; this.idle = 0; this.idleShare = 0; this.worst = 0;
-    this.secs = 0; this.bad = 0; this.drops = 0; this.loads = []; this.speeds = []; this.drift = 0;
+    this.secs = 0; this.bad = 0; this.good = 0; this.drops = 0; this.loads = []; this.speeds = []; this.drift = 0;
+    this.lastShort = 0; this.shortRecent = 0; this.startupShort = 0;
     this.stamp = null; this.jit = null; this.dismissed = false;
     warnBox.hidden = true;
   },
@@ -753,6 +757,7 @@ const perf = {
     this.idle += m.idle ?? 0;                      // of which idle skipping jumped over
     if (m.worst > this.worst) this.worst = m.worst;
     this.jit = m.jit;
+    this.startupShort = m.shortStartup ?? this.startupShort;
   },
   load() { return this.loads.length ? this.loads[this.loads.length - 1] : 0; },
   loadText() { return this.loads.length ? `${Math.round(100 * this.load())}%` : "…"; },
@@ -777,10 +782,25 @@ const perf = {
       this.stamp = ts;
     }
     this.drift = drift;
-    if (++this.secs <= 3 || m.halted) return;      // (the first seconds: booting, compiling)
+    // The firmware's initial silent boot quanta are NOT audio dropouts.
+    // short is cumulative only after playback begins (reported by the worklet).
+    const totalShort = Number.isFinite(m.short) ? m.short : this.lastShort;
+    this.shortRecent = Math.max(0, totalShort - this.lastShort);
+    this.lastShort = totalShort;
+    if (++this.secs <= 3 || m.halted) return;      // startup/JIT warming
     const over = this.load() > 0.95, late = drift > 0.02;
+    const shortAudio = this.shortRecent >= 2;
     if (late) this.drops++;
-    this.bad = over || late ? this.bad + 1 : 0;
+    this.bad = over || late || shortAudio ? this.bad + 1 : 0;
+    const recovered = this.load() < 0.85 && drift < 0.01 &&
+      this.shortRecent === 0 && this.speed() > 1.15;
+    this.good = recovered ? this.good + 1 : 0;
+    // Do not retain a stale overload warning after Android's JIT has warmed.
+    // If new glitches return later, a fresh warning can appear.
+    if (this.good >= 6 && !warnBox.hidden) {
+      warnBox.hidden = true;
+      this.bad = 0;
+    }
     if (this.bad >= 3 && warnBox.hidden && !this.dismissed) this.warn(over);
   },
   // A lower clock that brings the load down to ~80%, if one does. The cost of emulating a
@@ -846,7 +866,7 @@ const perf = {
       `audio clock drift: ${r(100 * this.drift, 1)}% · seconds with drops: ${this.drops} · idle skipped: ${r(100 * this.idleShare)}% of the time`,
       `jit: ${jit ? `${jit.regions} regions compiled, ${jit.failed} failed${jit.error ? ` (${jit.error})` : ""} · ` +
         `compiling took ${r(jit.compileMs)} ms, the longest ${r(jit.compileMaxMs, 1)} ms` : "?"}`,
-      `emulated: ${frame ? r(frame.ms / 1000, 1) : "?"} s · short audio quanta: ${frame?.short ?? "?"}`,
+      `emulated: ${frame ? r(frame.ms / 1000, 1) : "?"} s · short audio quanta after playback began: ${frame?.short ?? "?"} · silent startup quanta: ${frame?.shortStartup ?? "?"} · short quanta in last second: ${this.shortRecent}`,
     ].join("\n");
   },
 };
@@ -998,6 +1018,7 @@ function boot(options = {}) {
       node.port.postMessage({ type: "boot", seq, wasm: wasm.slice(0), package: got.bytes.slice().buffer,
         sectors: packSectors(sectors).buffer, syx: importedBank ? importedBank.slice().buffer : null,
         mhz: clock, jit: params.get("jit") !== "0",
+        androidOptimized: Boolean(nativeWindow.FM1Android),
         // (?ahead=0: each quantum emulates only for its own frames, as before the even pace)
         ahead: params.has("ahead") ? Number(params.get("ahead")) : undefined });
       status.textContent = `booting ${f.name}…`;
@@ -1098,7 +1119,7 @@ function onWorklet(e) {
       `(emulated time per time spent emulating; below 1x the sound breaks up)`,
       `load: the share of the audio thread's time the emulator takes (over 100%: the sound breaks up)`,
       m.jit ? `JIT: ${m.jit.regions} regions compiled, ${m.jit.failed} failed${m.jit.error ? ` (${m.jit.error})` : ""}` : "",
-      `${m.short} short audio quanta (the firmware's audio fell behind its own clock)`].filter(Boolean).join("\n");
+      `${m.short} short audio quanta after playback began (${m.shortStartup ?? "?"} silent startup quanta)`].filter(Boolean).join("\n");
     last = { t: now };
   }
 }
