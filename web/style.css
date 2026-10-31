@@ -244,4 +244,4 @@ section li { margin: 4px 0; }
 [data-screen-only] .deck-head { padding-right: 220px; }
 [data-screen-only] canvas { pointer-events: none; }
 
-[data-screen-only] #fit-toggle { position: fixed; z-index: 5; top: max(8px, env(safe-area-inset-top)); right: max(104px, calc(env(safe-area-inset-right) + 104px)); padding: 5px 10px; border: 1px solid #343a44; border-radius: 999px; background: #171b22; color: #e3e7ed; font: 12px system-ui, sans-serif; }
+
