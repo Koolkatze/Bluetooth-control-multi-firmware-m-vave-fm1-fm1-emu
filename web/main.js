@@ -44,6 +44,12 @@ const fwSel = document.getElementById("fw");
 const mhzSel = document.getElementById("mhz");
 const about = document.getElementById("about");
 const title = document.getElementById("title");
+document.getElementById("view-toggle").textContent = SCREEN_ONLY ? "Settings" : "Screen only";
+document.getElementById("view-toggle").addEventListener("click", () => {
+  const next = new URLSearchParams(location.search);
+  next.set("screen", SCREEN_ONLY ? "0" : "1");
+  location.search = next.toString();
+});
 const openInput = document.getElementById("open");
 const bankInput = document.getElementById("bank");
 const bankName = document.getElementById("bankname");
