@@ -24,7 +24,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p dist
-          gh run download 41217132261 --repo "$GITHUB_REPOSITORY" \
+          gh run download 41218606166 --repo "$GITHUB_REPOSITORY" \
             --name FM1-Mobile-Offline-APK --dir dist
           test -s dist/app-debug.apk
 
@@ -43,15 +43,27 @@ jobs:
               assert len(packages) >= 1, 'No built-in FM-1 firmware packages'
               print('Included FM-1 firmware packages:', len(packages))
               print('APK SHA256:', hashlib.sha256(open(path, 'rb').read()).hexdigest())
-          os.rename(path, 'dist/M-VAVE-FM1-Firmware-bundle-v0.1.0.apk')
+          os.rename(path, 'dist/M-VAVE-FM1-Firmware-bundle-v0.1.1.apk')
           PY
 
       - name: Write versioned release notes
         run: |
           cat > dist/RELEASE-NOTES.md <<'EOF'
-          # M-VAVE FM1: Firmware bundle — v0.1.0 (experimental)
+          # M-VAVE FM1: Firmware bundle — v0.1.1 (experimental)
 
-          First **offline Android APK** of the community **FM-1 Mobile Companion** project, with a bespoke orange FM-1 synthesizer launcher icon.
+          Experimental Android patch release focused on audio stability on mobile WebView, including reports from **Choralroot 0.27** and **AMB 1.3**.
+
+          ### Changes in v0.1.1
+          - **Reduced real-time JIT bursts on Android**: 4 regions per callback during startup and 2 per callback after playback starts (previously 16), to reduce long audio stalls.
+          - **Lower LCD transfer overhead** on Android: 20 display updates per second instead of 30, while retaining the audio's 44.1 kHz sampling rate.
+          - **Balanced audio buffer** selected by default for new Android installs; users can still choose a more responsive or larger buffer through existing settings.
+          - Audio report distinguishes silent startup blocks from **actual underruns after playback begins**.
+          - Overload warnings now **clear after six consecutive healthy seconds** instead of persisting after JIT warmup.
+          - Added regression tests for JIT scheduling, native Android defaults, audio startup counters and warning recovery.
+
+          **Important:** these changes target JIT/audio scheduling spikes, not the sound engine itself. WebAudio/Android timing still varies by phone. Persistent dropouts or artifacts may need more firmware-specific measurements.
+
+          Retains the orange FM-1 synthesizer launcher icon and the offline emulator, locally bundled firmware collection and MIDI features of v0.1.0.
 
           ### Features
           - WebAssembly-based FM-1 firmware emulation and audio generation on Android.
@@ -63,7 +75,7 @@ jobs:
           - No Android Internet permission: bundled components and included firmwares function offline.
 
           ### Install
-          Download **M-VAVE-FM1-Firmware-bundle-v0.1.0.apk**, transfer it to Android and open it to install.
+          Download **M-VAVE-FM1-Firmware-bundle-v0.1.1.apk**, transfer it to Android and open it to install.
           If an older development build has a different signature, export saved presets and uninstall the older build first.
 
           ### Important limitations
@@ -83,10 +95,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v0.1.0 \
-            "dist/M-VAVE-FM1-Firmware-bundle-v0.1.0.apk" \
+          gh release create v0.1.1 \
+            "dist/M-VAVE-FM1-Firmware-bundle-v0.1.1.apk" \
             --repo "$GITHUB_REPOSITORY" \
-            --target 86bddc16c303e10d6f5f6d66b96a422decf3d396 \
+            --target be523c1e727a7dea008c8600ecb8c3af52a5cf02 \
             --title "M-VAVE FM1: Firmware bundle" \
             --notes-file dist/RELEASE-NOTES.md \
             --prerelease
@@ -95,7 +107,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view v0.1.0 --repo "$GITHUB_REPOSITORY" --json name,tagName,isDraft,isPrerelease,assets \
+          gh release view v0.1.1 --repo "$GITHUB_REPOSITORY" --json name,tagName,isDraft,isPrerelease,assets \
             --jq '{name,tag: .tagName,draft: .isDraft,prerelease: .isPrerelease,assets: [.assets[].name]}'
-          gh release view v0.1.0 --repo "$GITHUB_REPOSITORY" --json assets \
-            --jq '.assets[].name' | grep -Fx 'M-VAVE-FM1-Firmware-bundle-v0.1.0.apk'
+          gh release view v0.1.1 --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name' | grep -Fx 'M-VAVE-FM1-Firmware-bundle-v0.1.1.apk'
