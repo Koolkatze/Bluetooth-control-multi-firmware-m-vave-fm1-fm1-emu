@@ -42,10 +42,14 @@ let fw = byId.get(params.get("fw")) || byId.get(stored(DEV.key + "fw")) || byId.
 let mhz = Number(params.get("mhz") || stored("fm1.mhz") || 100);
 // the audio buffer: "interactive" (small: keys answer quickly) unless this device needed a larger
 // one ("playback", offered when the sound drops out with time to spare; ?latency= overrides)
-// A little buffering helps Android WebView absorb short scheduling hiccups.
- // Users may override with ?latency=interactive or the existing audio setting.
-let latency = params.get("latency") || stored("fm1.latency") ||
-  (nativeWindow.FM1Android ? "balanced" : "interactive");
+// A musical instrument needs the FAST output path. The previous Android default
+// of 'balanced' caused perceptible key lag, so migrate that setting on upgrade.
+// 'playback' remains available ONLY when selected to work around real dropouts.
+const previousAudioHint = stored("fm1.latency");
+let latency = params.get("latency") ||
+  (nativeWindow.FM1Android && previousAudioHint === "balanced" ? "interactive" : previousAudioHint) ||
+  "interactive";
+if (nativeWindow.FM1Android && previousAudioHint === "balanced") store("fm1.latency", "interactive");
 
 const canvas = document.getElementById("panel");
 let layoutExportButton = null;
@@ -752,7 +756,8 @@ const perf = {
   },
   add(m) {
     this.busy += m.busy;
-    this.span += (m.quanta * m.frames) / 44.1;     // ms of audio those quanta stand for
+    // Frames/quanta describe OUTPUT samples, which may be native 48 kHz on Android.
+    this.span += (m.quanta * m.frames) * 1000 / (m.outputRate || ac?.sampleRate || 44100);
     this.emulated += m.emulated ?? 0;              // ms of emulated time they ran
     this.idle += m.idle ?? 0;                      // of which idle skipping jumped over
     if (m.worst > this.worst) this.worst = m.worst;
@@ -859,10 +864,10 @@ const perf = {
       `firmware: ${fw.id} ${fw.version || ""} · clock ${mhz} MHz · JIT ${params.get("jit") === "0" ? "off" : "on"}`,
       `browser: ${navigator.userAgent}`,
       `cores: ${navigator.hardwareConcurrency ?? "?"} · memory: ${navigator.deviceMemory ?? "?"} GB`,
-      `audio: ${ac ? `${ac.sampleRate} Hz, buffer "${latency}", base latency ${r(1000 * (ac.baseLatency ?? NaN), 1)} ms, ` +
+      `audio: ${ac ? `${ac.sampleRate} Hz output (44.1 kHz firmware source), buffer "${latency}", base latency ${r(1000 * (ac.baseLatency ?? NaN), 1)} ms, ` +
         `output latency ${r(1000 * (ac.outputLatency ?? NaN), 1)} ms` : "not started"}`,
       `speed (emulated time per time spent emulating, last ${this.speeds.length} s): ${this.speeds.map((v) => r(v, 2)).join(" ")}x real time`,
-      `load (last ${loads.length} s): ${loads.join(" ")}% · worst quantum since the audio started ${r(this.worst, 1)} ms of ${r(128 / 44.1, 1)}`,
+      `load (last ${loads.length} s): ${loads.join(" ")}% · worst quantum since the audio started ${r(this.worst, 1)} ms of ${r(1000 * 128 / (ac?.sampleRate || 44100), 1)}`,
       `audio clock drift: ${r(100 * this.drift, 1)}% · seconds with drops: ${this.drops} · idle skipped: ${r(100 * this.idleShare)}% of the time`,
       `jit: ${jit ? `${jit.regions} regions compiled, ${jit.failed} failed${jit.error ? ` (${jit.error})` : ""} · ` +
         `compiling took ${r(jit.compileMs)} ms, the longest ${r(jit.compileMaxMs, 1)} ms` : "?"}`,
@@ -1040,7 +1045,12 @@ function boot(options = {}) {
 
 // the audio graph: a context with the chosen buffer, the emulator's worklet node in it
 async function startAudio() {
-  ac = new AudioContext({ sampleRate: 44100, latencyHint: latency });
+  // Android usually outputs at 48 kHz. Forcing 44.1 kHz on a 48 kHz device can
+  // select a slower Android audio path. The worklet keeps firmware I2S at its
+  // original 44.1 kHz, and resamples to the native AudioContext output rate.
+  const audioOptions = nativeWindow.FM1Android ? { latencyHint: latency }
+    : { sampleRate: 44100, latencyHint: latency };
+  ac = new AudioContext(audioOptions);
   await ac.audioWorklet.addModule("worklet.js");
   node = new AudioWorkletNode(ac, "fm1", { numberOfInputs: 0, outputChannelCount: [2] });
   node.connect(ac.destination);
