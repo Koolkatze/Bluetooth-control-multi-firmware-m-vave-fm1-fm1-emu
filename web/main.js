@@ -5,7 +5,7 @@
 // computer (M-VAVE's own: their server does not let other pages fetch it).
 import { fetchPackage } from "./fwsc.js";
 import { ScreenAnalyzer, renderAdaptiveLCD } from "./screen-adapter.js";
-import { drawMobileLCD } from "./mobile-lcd.js";
+import { drawMobileLCD } from "./mobile-lcd.js?v=lcd-live-20261031";
 import { SaveStore, packageHash, changedSectors, packSectors, exportSave, importSave } from "./persistence.js";
 
 const CLOCKS = [60, 80, 100, 120, 160, 200, 240];
