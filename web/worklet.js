@@ -46,6 +46,60 @@ function budgets(mhz, frames) {
   return { boot: mhz * 1e6 * 0.02, play: mhz * 1e6 * 1.5 * frames / sampleRate };
 }
 
+// The firmware's I2S audio is exactly 44.1 kHz. Android output devices often run
+// at 48 kHz; forcing a 44.1 kHz AudioContext may incur an extra system resampler
+// and latency. Convert the audio *inside this worklet*, preserving the original
+// firmware rate and a continuous fractional phase across quantum boundaries.
+// A fixed 512-sample workspace avoids allocations or dynamic array growth on
+// the real-time audio thread. On browsers at 44.1 kHz this stage is bypassed.
+class FirmwareRateBridge {
+  constructor(outputRate) {
+    if (!Number.isFinite(outputRate) || outputRate < 32000 || outputRate > 192000) {
+      throw new Error("unsupported output sample rate: " + outputRate);
+    }
+    this.step = 44100 / outputRate;
+    this.phase = 0;
+    this.used = 0;
+    this.left = new Float32Array(512);
+    this.right = new Float32Array(512);
+  }
+
+  demand(outputFrames) {
+    // Linear interpolation needs the sample immediately after the last position.
+    const needed = Math.floor(this.phase + (outputFrames - 1) * this.step) + 2;
+    const missing = Math.max(0, needed - this.used);
+    if (needed > this.left.length) throw new Error("audio resampler workspace exhausted");
+    return missing;
+  }
+
+  push(left, right) {
+    const n = left.length;
+    if (this.used + n > this.left.length || right.length !== n) {
+      throw new Error("invalid source audio block");
+    }
+    this.left.set(left, this.used);
+    this.right.set(right, this.used);
+    this.used += n;
+  }
+
+  output(destLeft, destRight) {
+    const n = destLeft.length;
+    let position = this.phase;
+    for (let i = 0; i < n; i++) {
+      const a = Math.floor(position);
+      const fraction = position - a;
+      destLeft[i] = this.left[a] + (this.left[a + 1] - this.left[a]) * fraction;
+      if (destRight) destRight[i] = this.right[a] + (this.right[a + 1] - this.right[a]) * fraction;
+      position += this.step;
+    }
+    const consumed = Math.floor(position);
+    this.phase = position - consumed;
+    this.left.copyWithin(0, consumed, this.used);
+    this.right.copyWithin(0, consumed, this.used);
+    this.used -= consumed;
+  }
+}
+
 // the wall clock, for how long each quantum's emulation takes (where an AudioWorklet has no
 // performance.now(), Date.now(): whole milliseconds, which still average out over a second)
 const now = globalThis.performance?.now ? () => performance.now() : () => Date.now();
@@ -107,6 +161,8 @@ class Fm1 extends AudioWorkletProcessor {
     // audio thread. Limit compilation bursts: 4 while booting, just 2 once audio
     // begins; keep the desktop/browser throughput setting unchanged.
     this.androidOptimized = Boolean(m.androidOptimized);
+    this.resampler = this.androidOptimized && sampleRate !== 44100
+      ? new FirmwareRateBridge(sampleRate) : null;
     this.jitEnabled = m.jit !== false;
     x.fm1_jit(this.jitEnabled ? 1 : 0, this.androidOptimized ? 4 : 16);
     const ahead = x.fm1_ahead ? m.ahead ?? AHEAD_FRAMES : 0;
@@ -200,12 +256,16 @@ class Fm1 extends AudioWorkletProcessor {
     const x = this.x;
     if (!x || this.paused) return true;
     const n = out[0].length;
-    const playing = this.playing;       // (the worst quantum: of those once audio played)
+    const playing = this.playing;       // was already playing BEFORE this quantum
     const t0 = now();
+    // One source block at firmware rate per output callback. The Android
+    // output is normally 48k, but the firmware must still run at 44.1k.
+    const sourceFrames = this.resampler ? this.resampler.demand(n) : n;
+    if (this.playing && this.ahead > 0) this.budget = budgets(this.mhz, sourceFrames).play;
     let have;
     try {
-      have = x.fm1_render(n, this.budget);
-    } catch (err) {                       // a trap in the emulator: stop and say so
+      have = sourceFrames ? x.fm1_render(sourceFrames, this.budget) : sourceFrames;
+    } catch (err) {                     // emulator trap: stop and report
       this.x = null;
       for (const request of this.snapshots.splice(0)) {
         this.port.postMessage({ type: "snapshot", seq: this.seq, request: request.request, unavailable: true });
@@ -213,21 +273,29 @@ class Fm1 extends AudioWorkletProcessor {
       this.port.postMessage({ type: "error", seq: this.seq, fatal: true, message: `render: ${err}` });
       return true;
     }
-    const buffer = x.memory.buffer, lp = x.fm1_out_l(), rp = x.fm1_out_r();
-    if (!this.views || this.views.l.buffer !== buffer || this.views.l.length !== n ||
-        this.views.l.byteOffset !== lp || this.views.r.byteOffset !== rp) {
-      this.views = { l: new Float32Array(buffer, lp, n), r: new Float32Array(buffer, rp, n) };
+    if (sourceFrames) {
+      const buffer = x.memory.buffer, lp = x.fm1_out_l(), rp = x.fm1_out_r();
+      if (!this.views || this.views.l.buffer !== buffer || this.views.l.length !== sourceFrames ||
+          this.views.l.byteOffset !== lp || this.views.r.byteOffset !== rp) {
+        this.views = { l: new Float32Array(buffer, lp, sourceFrames),
+          r: new Float32Array(buffer, rp, sourceFrames) };
+      }
+      const { l, r } = this.views;
+      if (this.resampler) {
+        this.resampler.push(l, r);
+      } else {
+        out[0].set(l);
+        if (out[1]) out[1].set(r);
+      }
     }
-    const { l, r } = this.views;
-    out[0].set(l);
-    if (out[1]) out[1].set(r);
+    if (this.resampler) this.resampler.output(out[0], out[1]);
     if (have > 0 && !this.playing) {
       this.playing = true;
       if (this.ahead > 0) this.budget = budgets(this.mhz, n).play;
       // Compiling 16 hot regions at once can stall Android's 2.9 ms audio callback.
       if (this.androidOptimized && this.jitEnabled) x.fm1_jit(1, 2);
     }
-    if (have < n) {
+    if (have < sourceFrames) {
       if (playing) this.short++;
       else this.startupShort++;
     }
@@ -255,7 +323,8 @@ class Fm1 extends AudioWorkletProcessor {
         halted: x.fm1_halted(), jit: this.jit, pads, playing: this.playing,
         busy: this.lastTiming?.busy ?? 0, worst: this.lastTiming?.worst ?? 0,
         emulated: this.lastTiming?.emulated ?? 0, idle: this.lastTiming?.idle ?? 0,
-        quanta: this.lastTiming?.quanta ?? 0, frames: this.lastTiming?.frames ?? n }, transfer);
+        quanta: this.lastTiming?.quanta ?? 0, frames: this.lastTiming?.frames ?? n,
+        outputRate: sampleRate }, transfer);
       const took = now() - t0;
       // busy: ms of wall clock the interval's quanta took; emulated: ms of emulated time they ran,
       // idle: of which idle skipping jumped over (cost nothing)
