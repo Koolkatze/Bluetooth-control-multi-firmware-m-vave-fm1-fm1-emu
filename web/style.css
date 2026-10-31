@@ -263,22 +263,39 @@ section li { margin: 4px 0; }
   border: 0; font-weight: 700; opacity: 1; pointer-events: auto;
 }
 [data-offline-app] .display-controls { z-index: 25; }
+/* The native root already applied Android's system-bar/keyboard insets.
+   Fill only the WebView area, leaving an actual 56px bottom safe strip for
+   its translucent ▲/▼ and ⓘ buttons. Neither LCD mode may overflow it. */
+[data-offline-app][data-screen-only] body {
+  height: 100dvh; min-height: 0; overflow: hidden;
+}
 [data-offline-app][data-screen-only] main {
-  height: 100%; min-height: 0; padding: 8px 8px 38px;
+  height: 100dvh; min-height: 0; max-height: 100dvh;
+  padding: 8px 8px 56px; overflow: hidden;
 }
 [data-offline-app][data-screen-only] .player,
 [data-offline-app][data-screen-only] .deck {
   width: 100%; height: 100%; min-height: 0;
 }
+/* CSS fallback is aspect-preserving; main.js additionally measures the
+   live WebView viewport (including rotation and visualViewport changes) and
+   sets an exact pixel size. Never stretch a 16:9 LCD beyond available height. */
 [data-offline-app][data-screen-only] .stage {
-  width: 100%; max-width: 100%;
-  height: auto; max-height: 100%;
-  aspect-ratio: 16 / 9;
-  min-height: 150px; background: #10151c;
+  width: min(calc(100vw - 16px), calc((100dvh - 64px) * 16 / 9));
+  max-width: 100%; height: auto; max-height: calc(100dvh - 64px);
+  min-height: 0; aspect-ratio: 16 / 9;
+  background: #10151c;
+}
+[data-offline-app][data-screen-only][data-lcd-original] .stage {
+  width: min(calc(100vw - 16px), calc(100dvh - 64px));
+  aspect-ratio: 1;
 }
 [data-offline-app][data-screen-only] .stage canvas {
   width: 100% !important; height: 100% !important;
-  max-width: none !important; display: block;
+  max-width: none !important; min-height: 0; display: block;
+}
+[data-offline-app][data-screen-only][data-lcd-original] .stage canvas {
+  aspect-ratio: 1; object-fit: contain;
 }
 [data-offline-app][data-screen-only] .display-controls {
   top: 6px; right: 8px;
