@@ -14,6 +14,14 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "android")]
+unsafe extern "C" {
+    // setpriority(0, 0, nice): Android applies this to the *current Linux
+    // thread*. -8 is below the AAudio callback's priority but above ordinary
+    // WebView/UI background work; failure is harmless and we never need root.
+    fn setpriority(which: i32, who: u32, nice: i32) -> i32;
+}
+
 const RAM_SIZE: usize = 1 << 20;
 const RAM_BASE: u32 = 0x01c0_0000;
 const AUDIO_CAP: usize = 8192; // power-of-two, single writer and single reader
@@ -185,6 +193,10 @@ impl Machine {
 
 pub fn run_worker(mut machine: Machine, shared: Arc<Shared>, rx: mpsc::Receiver<Cmd>,
                   output_rate: u32, save: Option<std::path::PathBuf>) {
+    // This is the CPU/JIT thread, *not* the AAudio callback. Raise scheduling
+    // priority modestly so WebView animations don't starve firmware PCM.
+    #[cfg(target_os = "android")]
+    unsafe { let _ = setpriority(0, 0, -8); }
     if let Some(path) = &save {
         if let Ok(bytes) = std::fs::read(path) {
             machine.restore(&decode_sectors(&bytes));
