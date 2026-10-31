@@ -24,7 +24,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p dist
-          gh run download 41218606166 --repo "$GITHUB_REPOSITORY" \
+          gh run download 41220501678 --repo "$GITHUB_REPOSITORY" \
             --name FM1-Mobile-Offline-APK --dir dist
           test -s dist/app-debug.apk
 
@@ -43,27 +43,33 @@ jobs:
               assert len(packages) >= 1, 'No built-in FM-1 firmware packages'
               print('Included FM-1 firmware packages:', len(packages))
               print('APK SHA256:', hashlib.sha256(open(path, 'rb').read()).hexdigest())
-          os.rename(path, 'dist/M-VAVE-FM1-Firmware-bundle-v0.1.1.apk')
+          os.rename(path, 'dist/M-VAVE-FM1-Firmware-bundle-v0.1.2.apk')
           PY
 
       - name: Write versioned release notes
         run: |
           cat > dist/RELEASE-NOTES.md <<'EOF'
-          # M-VAVE FM1: Firmware bundle — v0.1.1 (experimental)
+          # M-VAVE FM1: Firmware bundle — v0.1.2 (experimental)
 
-          Experimental Android patch release focused on audio stability on mobile WebView, including reports from **Choralroot 0.27** and **AMB 1.3**.
+          Android audio architecture update focused on **much lower note-to-speaker latency** and cleaner playback. The user-reported issue was not a lack of CPU throughput: the previous APK forced a 44.1 kHz output stream on Android, defaulted to a higher-latency audio buffer and performed unnecessary graphics allocation.
 
-          ### Changes in v0.1.1
-          - **Reduced real-time JIT bursts on Android**: 4 regions per callback during startup and 2 per callback after playback starts (previously 16), to reduce long audio stalls.
-          - **Lower LCD transfer overhead** on Android: 20 display updates per second instead of 30, while retaining the audio's 44.1 kHz sampling rate.
-          - **Balanced audio buffer** selected by default for new Android installs; users can still choose a more responsive or larger buffer through existing settings.
-          - Audio report distinguishes silent startup blocks from **actual underruns after playback begins**.
-          - Overload warnings now **clear after six consecutive healthy seconds** instead of persisting after JIT warmup.
-          - Added regression tests for JIT scheduling, native Android defaults, audio startup counters and warning recovery.
+          ### Changes in v0.1.2
+          - **Fast audio is the default**: `interactive` output latency hint instead of the prior `balanced` setting. Any older larger-buffer preference is migrated to fast mode once on upgrade.
+          - **Respect Android's natural output sample rate** (often 48 kHz) instead of forcing Android's audio device to run at 44.1 kHz.
+          - **Continuous stereo resampling in the AudioWorklet** between the FM-1's fixed 44.1 kHz firmware I2S and the Android output rate. The fractional phase is preserved between render blocks.
+          - **Correct CPU budget at 44.1 kHz**, independent of Android's output sample rate, to avoid synthetic underruns.
+          - **Half-size emulated audio lookahead on Android** (512 firmware samples, reduced from 1024), reducing the delay between MIDI notes and newly generated sound.
+          - **Lower main-thread graphics overhead**: reuse LCD/panel buffers and cap expensive Android redraws so MIDI/keys don't compete with frequent canvas allocations.
+          - **Native Audio button** with Fast, Balanced and Playback modes and an indication of the Android native output rate; a larger buffer remains optional for devices that need it.
+          - Maintains the existing Android JIT compilation safeguards and separates startup silence from post-start audio underruns.
+          - New regression tests check 44.1→48 kHz stereo continuity, accurate timing and buffer defaults.
 
-          **Important:** these changes target JIT/audio scheduling spikes, not the sound engine itself. WebAudio/Android timing still varies by phone. Persistent dropouts or artifacts may need more firmware-specific measurements.
+          ### Listening guidance
+          For **playing notes live**, use a wired USB-C audio interface or wired headphones and the **Fast** mode. Bluetooth A2DP speakers inherently introduce additional buffering and latency that an emulator cannot eliminate.
 
-          Retains the orange FM-1 synthesizer launcher icon and the offline emulator, locally bundled firmware collection and MIDI features of v0.1.0.
+          **Limits:** This remains a WebAssembly/AudioWorklet prototype, not an Oboe/AAudio native synthesizer. It has not yet been benchmarked end-to-end on the specific physical phone or with the CTL-1 MIDI hardware, so identical performance to the real FM-1 is not yet established.
+
+          Retains the orange FM-1 launcher artwork and the offline firmware bundle.
 
           ### Features
           - WebAssembly-based FM-1 firmware emulation and audio generation on Android.
@@ -75,7 +81,7 @@ jobs:
           - No Android Internet permission: bundled components and included firmwares function offline.
 
           ### Install
-          Download **M-VAVE-FM1-Firmware-bundle-v0.1.1.apk**, transfer it to Android and open it to install.
+          Download **M-VAVE-FM1-Firmware-bundle-v0.1.2.apk**, transfer it to Android and open it to install.
           If an older development build has a different signature, export saved presets and uninstall the older build first.
 
           ### Important limitations
@@ -95,8 +101,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v0.1.1 \
-            "dist/M-VAVE-FM1-Firmware-bundle-v0.1.1.apk" \
+          gh release create v0.1.2 \
+            "dist/M-VAVE-FM1-Firmware-bundle-v0.1.2.apk" \
             --repo "$GITHUB_REPOSITORY" \
             --target master \
             --title "M-VAVE FM1: Firmware bundle" \
@@ -107,7 +113,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view v0.1.1 --repo "$GITHUB_REPOSITORY" --json name,tagName,isDraft,isPrerelease,assets \
+          gh release view v0.1.2 --repo "$GITHUB_REPOSITORY" --json name,tagName,isDraft,isPrerelease,assets \
             --jq '{name,tag: .tagName,draft: .isDraft,prerelease: .isPrerelease,assets: [.assets[].name]}'
-          gh release view v0.1.1 --repo "$GITHUB_REPOSITORY" --json assets \
-            --jq '.assets[].name' | grep -Fx 'M-VAVE-FM1-Firmware-bundle-v0.1.1.apk'
+          gh release view v0.1.2 --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name' | grep -Fx 'M-VAVE-FM1-Firmware-bundle-v0.1.2.apk'
