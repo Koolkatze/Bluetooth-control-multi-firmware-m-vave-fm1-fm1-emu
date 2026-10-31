@@ -4,6 +4,7 @@
 // in the wasm: a catalog entry's fetched from its author's site, or one opened from this
 // computer (M-VAVE's own: their server does not let other pages fetch it).
 import { fetchPackage } from "./fwsc.js";
+import { ScreenAnalyzer, renderAdaptiveLCD } from "./screen-adapter.js";
 import { SaveStore, packageHash, changedSectors, packSectors, exportSave, importSave } from "./persistence.js";
 
 const CLOCKS = [60, 80, 100, 120, 160, 200, 240];
@@ -17,6 +18,13 @@ const DEV = DEVICE === "smk37"
   : { product: "M-VAVE FM-1", board: 0, key: "fm1.", stock: "FM-1.fwsc", stockFile: /^FM-1( \(\d+\))?\.fwsc$/i,
       other: { name: "SMK-37", href: "smk37/" } };
 const params = new URLSearchParams(location.search);
+const SCREEN_ONLY = params.get("screen") !== "0";
+const ADAPTIVE_FIT = params.get("fit") !== "0";
+const DEBUG_LAYOUT = params.get("layout") === "1";
+const screenAnalyzer = new ScreenAnalyzer();
+let latestLayoutAnalysis = null;
+let latestLcdFrame = null;
+if (SCREEN_ONLY) document.documentElement.setAttribute("data-screen-only", "");
 const stored = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const store = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
 
@@ -35,6 +43,47 @@ let mhz = Number(params.get("mhz") || stored("fm1.mhz") || 100);
 let latency = params.get("latency") || stored("fm1.latency") || "interactive";
 
 const canvas = document.getElementById("panel");
+let layoutExportButton = null;
+if (DEBUG_LAYOUT) {
+  layoutExportButton = document.createElement("button");
+  layoutExportButton.type = "button";
+  layoutExportButton.textContent = "Export frame";
+  layoutExportButton.disabled = true;
+  layoutExportButton.setAttribute("aria-label", "Export current firmware screen and layout analysis");
+  layoutExportButton.style.cssText = "position:fixed;z-index:6;left:max(12px,env(safe-area-inset-left));bottom:max(12px,env(safe-area-inset-bottom));padding:8px 12px;border:1px solid #46505e;border-radius:999px;background:#171b22;color:#e3e7ed;font:12px system-ui,sans-serif";
+  layoutExportButton.addEventListener("click", async () => {
+    if (!latestLcdFrame || !latestLayoutAnalysis) return;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const base = `fm1-${fw.id}-${stamp}`;
+    const download = (blob, name) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    };
+    const report = {
+      capturedAt: new Date().toISOString(),
+      device: DEV.product,
+      firmware: { id: fw.id, name: fw.name, version: fw.version || null },
+      board,
+      source: { width: 240, height: 240, format: "RGB565 framebuffer rendered as PNG" },
+      options: { adaptiveFit: ADAPTIVE_FIT, screenOnly: SCREEN_ONLY },
+      analysis: latestLayoutAnalysis,
+    };
+    download(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }), `${base}.json`);
+    const rawCanvas = document.createElement("canvas");
+    rawCanvas.width = 240;
+    rawCanvas.height = 240;
+    const rawContext = rawCanvas.getContext("2d");
+    renderAdaptiveLCD(rawContext, latestLcdFrame, 240, 240, false);
+    rawCanvas.toBlob((blob) => {
+      if (blob) download(blob, `${base}.png`);
+    }, "image/png");
+  });
+  document.body.append(layoutExportButton);
+}
 const ctx = canvas.getContext("2d");
 const status = document.getElementById("status");
 const startBtn = document.getElementById("start");
@@ -42,6 +91,19 @@ const fwSel = document.getElementById("fw");
 const mhzSel = document.getElementById("mhz");
 const about = document.getElementById("about");
 const title = document.getElementById("title");
+document.getElementById("view-toggle").textContent = SCREEN_ONLY ? "Settings" : "Screen only";
+const fitToggle = document.getElementById("fit-toggle");
+fitToggle.textContent = ADAPTIVE_FIT ? "Original" : "Auto fit";
+fitToggle.addEventListener("click", () => {
+  const next = new URLSearchParams(location.search);
+  next.set("fit", ADAPTIVE_FIT ? "0" : "1");
+  location.search = next.toString();
+});
+document.getElementById("view-toggle").addEventListener("click", () => {
+  const next = new URLSearchParams(location.search);
+  next.set("screen", SCREEN_ONLY ? "0" : "1");
+  location.search = next.toString();
+});
 const openInput = document.getElementById("open");
 const bankInput = document.getElementById("bank");
 const bankName = document.getElementById("bankname");
@@ -67,6 +129,7 @@ fitPanel();
 
 let node = null;
 let frame = null;            // the latest LCD + LEDs from the audio thread
+let screenDirty = true;
 const down = new Uint8Array(64);           // keys and buttons held (FM-1: matrix ids 0..40; SMK-37: keys 0..36, buttons 37..54)
 const encClicks = new Int32Array(8);
 const turning = new Uint32Array(9);
@@ -82,8 +145,8 @@ function setBoard(b) {
   ui.panel_board(b);
   W = ui.panel_width();
   H = ui.panel_height();
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = SCREEN_ONLY ? 240 : W;
+  canvas.height = SCREEN_ONLY ? 240 : H;
   // the synth's width follows the room left below the header and the bar (index.html's canvas rule)
   document.documentElement.style.setProperty("--aspect", String(W / H));
   document.documentElement.dataset.board = b ? "smk37" : "fm1";
@@ -340,6 +403,7 @@ function draw() {
   if (frame) {
     if (frame.lcd) {
       new Uint16Array(mem(), ui.panel_lcd(), 240 * 240).set(frame.lcd);
+      screenDirty = true;
       frame.lcd = null;
     }
     new Float32Array(mem(), ui.panel_leds(), 41).set(frame.leds);
@@ -353,6 +417,21 @@ function draw() {
     if (turning[i]) turning[i]--;
   }
   if (board === 1) for (let i = 0; i < 23; i++) ui.panel_set(4, i, analog[i]);
+  if (SCREEN_ONLY) {
+    if (screenDirty) {
+      const lcd = new Uint16Array(mem(), ui.panel_lcd(), 240 * 240);
+      if (DEBUG_LAYOUT) {
+        latestLcdFrame = lcd.slice();
+        latestLayoutAnalysis = screenAnalyzer.analyze(lcd);
+        canvas.dataset.layoutAnalysis = JSON.stringify(latestLayoutAnalysis);
+        if (layoutExportButton) layoutExportButton.disabled = false;
+      }
+      renderAdaptiveLCD(ctx, lcd, 240, 240, ADAPTIVE_FIT);
+      screenDirty = false;
+    }
+    requestAnimationFrame(draw);
+    return;
+  }
   const p = ui.panel_draw();
   const img = new ImageData(new Uint8ClampedArray(mem(), p, W * H * 4), W, H);
   ctx.putImageData(img, 0, 0);

@@ -215,3 +215,29 @@ section li { margin: 4px 0; }
 
 /* (an element the page hides stays hidden whatever its display rule) */
 [hidden] { display: none !important; }
+
+
+/* Screen-only phone mode: render the firmware's native 240×240 LCD, without the virtual faceplate. */
+[data-screen-only] { color-scheme: dark; background: #08090b; }
+[data-screen-only] body { min-height: 100svh; overflow-x: hidden; background: #08090b; }
+[data-screen-only] header.site, [data-screen-only] .side, [data-screen-only] .hint,
+[data-screen-only] .rotate, [data-screen-only] .library, [data-screen-only] .guide,
+[data-screen-only] footer.site, [data-screen-only] .deck-head h1 { display: none !important; }
+[data-screen-only] main { min-height: 100svh; padding: env(safe-area-inset-top) 12px env(safe-area-inset-bottom); display: grid; place-items: center; }
+[data-screen-only] .player, [data-screen-only] .deck { width: 100%; min-width: 0; max-width: none; display: grid; place-items: center; }
+[data-screen-only] .deck { gap: 0; }
+[data-screen-only] .deck-head { position: fixed; z-index: 2; top: max(8px, env(safe-area-inset-top)); left: 12px; right: 12px; justify-content: center; pointer-events: none; }
+[data-screen-only] #status { padding: 4px 9px; border: 1px solid #30343b; border-radius: 999px; background: #111419; color: #c4c9d2; font-size: 11px; }
+[data-screen-only] .stage { position: relative; width: min(100%, calc(100svh - 44px)); aspect-ratio: 1; padding: 0; margin: 0 auto; border: 0; border-radius: 4px; background: #000; box-shadow: 0 12px 48px #0009; overflow: hidden; }
+[data-screen-only] canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; touch-action: none; }
+[data-screen-only] #start { width: 132px; height: 44px; font-size: 15px; }
+@media (orientation: landscape) {
+  [data-screen-only] main { padding-left: max(18px, env(safe-area-inset-left)); padding-right: max(18px, env(safe-area-inset-right)); }
+  [data-screen-only] .stage { width: min(calc(100vw - 36px), calc(100svh - 28px)); }
+}
+
+[data-screen-only] #view-toggle { position: fixed; z-index: 5; top: max(8px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); padding: 5px 10px; border: 1px solid #343a44; border-radius: 999px; background: #171b22; color: #e3e7ed; font: 12px system-ui, sans-serif; }
+[data-screen-only] .deck-head { justify-content: flex-start; }
+[data-screen-only] canvas { pointer-events: none; }
+
+[data-screen-only] #fit-toggle { position: fixed; z-index: 5; top: max(8px, env(safe-area-inset-top)); right: max(104px, calc(env(safe-area-inset-right) + 104px)); padding: 5px 10px; border: 1px solid #343a44; border-radius: 999px; background: #171b22; color: #e3e7ed; font: 12px system-ui, sans-serif; }
