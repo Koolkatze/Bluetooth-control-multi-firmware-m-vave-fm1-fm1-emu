@@ -425,6 +425,12 @@ public final class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public String nativeDiagnostics() {
+            if (!nativeActive || !NativeSynth.AVAILABLE) return "0,0,0";
+            return NativeSynth.diagnostics();
+        }
+
+        @JavascriptInterface
         public void nativeControl(int kind, int key, int value) {
             if (nativeActive && NativeSynth.AVAILABLE)
                 NativeSynth.control(kind, key, value);
