@@ -73,7 +73,12 @@ if (DEBUG_LAYOUT) {
       analysis: latestLayoutAnalysis,
     };
     download(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }), `${base}.json`);
-    canvas.toBlob((blob) => {
+    const rawCanvas = document.createElement("canvas");
+    rawCanvas.width = 240;
+    rawCanvas.height = 240;
+    const rawContext = rawCanvas.getContext("2d");
+    renderAdaptiveLCD(rawContext, latestLcdFrame, 240, 240, false);
+    rawCanvas.toBlob((blob) => {
       if (blob) download(blob, `${base}.png`);
     }, "image/png");
   });
