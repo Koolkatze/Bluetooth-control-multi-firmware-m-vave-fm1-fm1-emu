@@ -5,6 +5,7 @@
 // two horizontal strips side by side when a genuinely empty row separates them.
 // Otherwise the complete, unmodified LCD is shown, never the instrument body.
 const SIDE = 240;
+const cachedSurfaces = new WeakMap(); // reuse raster and backing canvas across LCD frames
 
 export function findSafeSplit(lcd) {
   if (!lcd || lcd.length !== SIDE * SIDE) return null;
@@ -38,7 +39,16 @@ export function findSafeSplit(lcd) {
 
 export function drawMobileLCD(ctx, lcd, width, height, { horizontal = true } = {}) {
   if (!lcd || lcd.length !== SIDE * SIDE) return { mode: "missing" };
-  const pixels = new Uint8ClampedArray(SIDE * SIDE * 4);
+  let cached = cachedSurfaces.get(ctx);
+  if (!cached) {
+    const source = document.createElement("canvas");
+    source.width = source.height = SIDE;
+    const pixels = new Uint8ClampedArray(SIDE * SIDE * 4);
+    cached = { source, pixels, image: new ImageData(pixels, SIDE, SIDE),
+      sourceContext: source.getContext("2d") };
+    cachedSurfaces.set(ctx, cached);
+  }
+  const { source, pixels } = cached;
   let visible = false;
   for (let i = 0; i < lcd.length; i++) {
     const p = lcd[i], j = i * 4;
@@ -48,9 +58,7 @@ export function drawMobileLCD(ctx, lcd, width, height, { horizontal = true } = {
     pixels[j + 3] = 255;
     if (p !== 0) visible = true;
   }
-  const source = document.createElement("canvas");
-  source.width = source.height = SIDE;
-  source.getContext("2d").putImageData(new ImageData(pixels, SIDE, SIDE), 0, 0);
+  cached.sourceContext.putImageData(cached.image, 0, 0);
   ctx.fillStyle = "#06080c";
   ctx.fillRect(0, 0, width, height);
   ctx.imageSmoothingEnabled = false;
