@@ -4,7 +4,7 @@
 // in the wasm: a catalog entry's fetched from its author's site, or one opened from this
 // computer (M-VAVE's own: their server does not let other pages fetch it).
 import { fetchPackage } from "./fwsc.js";
-import { analyzeScreenLayout, renderAdaptiveLCD } from "./screen-adapter.js";
+import { ScreenAnalyzer, renderAdaptiveLCD } from "./screen-adapter.js";
 import { SaveStore, packageHash, changedSectors, packSectors, exportSave, importSave } from "./persistence.js";
 
 const CLOCKS = [60, 80, 100, 120, 160, 200, 240];
@@ -21,6 +21,7 @@ const params = new URLSearchParams(location.search);
 const SCREEN_ONLY = params.get("screen") !== "0";
 const ADAPTIVE_FIT = params.get("fit") !== "0";
 const DEBUG_LAYOUT = params.get("layout") === "1";
+const screenAnalyzer = new ScreenAnalyzer();
 if (SCREEN_ONLY) document.documentElement.setAttribute("data-screen-only", "");
 const stored = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const store = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
@@ -376,7 +377,7 @@ function draw() {
   if (SCREEN_ONLY) {
     if (screenDirty) {
       const lcd = new Uint16Array(mem(), ui.panel_lcd(), 240 * 240);
-      if (DEBUG_LAYOUT) canvas.dataset.layoutAnalysis = JSON.stringify(analyzeScreenLayout(lcd));
+      if (DEBUG_LAYOUT) canvas.dataset.layoutAnalysis = JSON.stringify(screenAnalyzer.analyze(lcd));
       renderAdaptiveLCD(ctx, lcd, 240, 240, ADAPTIVE_FIT);
       screenDirty = false;
     }
