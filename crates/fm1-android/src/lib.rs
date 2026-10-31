@@ -325,4 +325,4 @@ mod android {
     }
 }
 
-pub use engine::{AudioRing, Shared};
+pub use engine::{run_worker, AudioRing, Cmd, Machine, Shared};
