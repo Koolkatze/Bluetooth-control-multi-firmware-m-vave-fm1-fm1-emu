@@ -6,6 +6,7 @@ on:
     paths:
       - "android/**"
       - "tools/package_offline_android.mjs"
+      - "tools/check_offline_android.mjs"
       - "web/**"
       - "crates/**"
       - ".github/workflows/android-offline.yml"
