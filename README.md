@@ -7,7 +7,7 @@
 
 **Sin instalar nada:** elige un firmware compatible, pulsa **Start** y utiliza la LCD ampliada desde tu navegador. Esta edición online necesita conexión para cargar los archivos y algunos firmwares.
 
-### **[⬇ Descargar la aplicación Android sin Internet — M-VAVE FM1: Firmware bundle](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/v0.2.1)**
+### **[⬇ Descargar la aplicación Android sin Internet — M-VAVE FM1: Firmware bundle](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/v0.2.2)**
 
 Versión **0.2.1 (motor nativo experimental)**: APK con el nuevo icono FM-1, emulador y paquetes compatibles integrados. Tras instalarlo, los firmwares incluidos funcionan sin conexión. La integración con el FM-1 físico por MIDI sigue en fase de pruebas. Versión **v0.2.1**: corrige la falta de muestras PCM detectada en **AMB-1** y otros firmwares del motor Rust/AAudio: el hilo de síntesis genera 128 muestras por ciclo, mantiene una reserva de 1.024 muestras, prepara audio antes de iniciar AAudio y tiene prioridad sobre el dibujo. El informe ahora distingue **muestras perdidas por segundo**, velocidad de CPU emulada, PCM producido y nivel de la cola. **Experimental:** el banco de pruebas Linux pasó sin pérdidas, pero todavía no hay medición equivalente en un Android real. Utiliza USB-C o cable, no altavoz Bluetooth, para interpretar en directo.
 
@@ -39,6 +39,14 @@ flash del firmware nativo se guardan automáticamente en el almacenamiento
 privado Android, pero su exportación al formato web `.fm1save` aún no existe.
 [Arquitectura nativa, instalación y limitaciones](android/README.md).
 
+### Interfaz Android corregida en v0.2.2
+
+La aplicación reserva automáticamente una **franja superior vacía bajo el reloj,
+la batería y la conectividad** del teléfono. Esta protección se aplica a **todas
+las páginas**, tanto FM-1 como SMK-37, catálogo, panel y modo Solo LCD. También
+respeta las muescas laterales y la navegación inferior en horizontal. No altera
+el audio ni el motor de síntesis.
+
 ## Aplicación Android: sintetizador sin conexión
 
 **Ya existe un APK Android de prueba generado por GitHub Actions.** A diferencia
@@ -46,7 +54,7 @@ de la página web, el APK **incluye los archivos HTML/JS, el motor WebAssembly
 y los paquetes de firmware admitidos**, de forma que no necesita conectarse a
 Internet en el teléfono. La aplicación **no solicita permiso de Internet**.
 
-**[Descargar APK de la release v0.1.0](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/v0.2.1)** ·
+**[Descargar APK de la release v0.1.0](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/v0.2.2)** ·
 **[Código Android, instrucciones y limitaciones](android/README.md)**
 
 La primera compilación offline ha empaquetado **92 firmwares FM-1 más 9 de
