@@ -32,9 +32,11 @@ checksum to V16. Keep the original file unchanged and use a separate copy for an
 ### Uploaded stock package verified
 
 A user-supplied package was inspected locally without sending it to the FM-1 or changing the device.
-Its package markers identify it as `FM-1_016` (V16). The UFW header CRC-16/CCITT validates, the
-flash-image entry is in bounds, the `isd_config.ini` CRC validates, and the JLFS directory
-contains `app_dir_head`, `app.bin`, and the protected-image metadata expected by the emulator.
+Its package markers identify it as `FM-1_016` (V16). The UFW header CRC-16/CCITT validates;
+the flash-image range is within the package; the JLFS directory's `isd_config.ini` checksum
+validates; and the app-area directory contains an `app.bin` entry with the expected flags and
+an in-range payload. The app payload can be extracted using the same package format implemented
+by `web/fwsc.js`.
 
 | Property | Verified value |
 |---|---|
@@ -48,6 +50,13 @@ contains `app_dir_head`, `app.bin`, and the protected-image metadata expected by
 This validates the package structure and its compatibility with the documented FM-1 package
 format; it is not yet a runtime boot test on Android or in the browser. The firmware binary is
 user-supplied and is deliberately not committed to this repository.
+
+To try this exact package in the emulator, open the FM-1 page, select the M-VAVE stock firmware
+entry, choose **Open .fwsc…**, and select the downloaded `FM-1.fwsc`. The page recognises it as
+the stock package, keeps it in that browser's local storage, and uses it on the next **Start**.
+If the emulator is already running, selecting the file triggers a reboot with that package.
+Screen-only mode is the default; add `&layout=1` to the page URL to enable the diagnostic
+**Export frame** control while collecting representative screens.
 
 ## Analysis layer
 
