@@ -117,11 +117,15 @@ jobs:
           This Android APK includes offline FM-1 firmware emulation, native
           Rust/AAudio synthesis and MIDI USB/BLE support.
 
-          In v0.2.3, the audio/CPU diagnostics are hidden in the small ⓘ
-          info button, the bottom toolbar starts collapsed and can be shown
-          or hidden using a semi-transparent ▲ / ▼ toggle. The LCD no longer
-          reserves the height of the native toolbar. The Android safe area
-          still protects the top status bar and device navigation.
+          In v0.2.4, both the original square LCD (1:1) and the
+          horizontal layout (16:9) scale to fit the phone's actual usable
+          viewport. Neither mode crops firmware content at the top/bottom,
+          and layout adapts when rotating the device. The sizing reserves
+          space for system bars and floating bottom controls.
+
+          In v0.2.3, the audio/CPU diagnostics were moved to the small ⓘ
+          info button, and the bottom toolbar became collapsible with
+          a semi-transparent ▲ / ▼ toggle.
 
           Warning: development APK. Android debug signing keys may differ
           between CI runs; updating an older development APK can require
