@@ -23,8 +23,12 @@ la frecuencia de salida nativa del teléfono (normalmente 48 kHz).
 
 La app empaqueta bibliotecas Android para **arm64-v8a y x86_64**. Si la
 biblioteca no se carga, utiliza el motor WebAssembly/AudioWorklet de reserva.
-La barra inferior muestra qué motor está disponible; cuando arranca el nativo
-indica `Rust + AAudio` y muestra un contador de **muestras de audio perdidas**.
+En v0.2.3 la barra inferior empieza **plegada**: la pantalla del sintetizador
+ocupa todo el espacio disponible. Una flecha semitransparente **▲** abre los
+controles «Iniciar firmware», «Panel», «Pantalla», «MIDI» y «Audio», y cambia a
+**▼** para plegarlos. El botón **ⓘ** muestra los datos del motor Rust/AAudio,
+el estado del emulador y las estadísticas de audio sin ocupar espacio permanente.
+La zona superior continúa reservada para la barra de estado de Android.
 
 Las notas del MIDI USB-C/BLE entran directamente desde `MidiManager` en la
 cola del motor Rust, **sin esperar a que la pantalla termine de redibujarse**.
@@ -53,8 +57,9 @@ firmwares concretos.
    **FM1-Mobile-Offline-APK** y extrae `app-debug.apk` del ZIP.
 3. Copia el APK al teléfono e instálalo permitiendo temporalmente la instalación
    desde esa fuente. No necesitas una cuenta ni conexión una vez instalado.
-4. Abre **FM-1 Mobile** en horizontal y pulsa **Start**. La pantalla muestra
-   la LCD del firmware emulado (no la carcasa física).
+4. Abre **FM-1 Mobile** en horizontal. Pulsa **▲** para desplegar los
+   controles y **Iniciar firmware** para arrancar. Después usa **▼** para
+   recuperar toda la pantalla. El botón **ⓘ** abre los datos de sonido.
 5. El botón **MIDI** de la app (esquina izquierda) permite escoger dispositivos
    USB-MIDI detectados por Android o buscar controladores **BLE-MIDI**.
 6. El audio sale por la ruta activa de Android. Para latencia más baja, conecta
