@@ -117,15 +117,25 @@ jobs:
           This Android APK includes offline FM-1 firmware emulation, native
           Rust/AAudio synthesis and MIDI USB/BLE support.
 
-          In v0.2.4, both the original square LCD (1:1) and the
-          horizontal layout (16:9) scale to fit the phone's actual usable
-          viewport. Neither mode crops firmware content at the top/bottom,
-          and layout adapts when rotating the device. The sizing reserves
-          space for system bars and floating bottom controls.
+          In v0.2.5 the Firmware tab adds two explicit update actions:
+          "Actualizar seleccionado" checks the chosen firmware, while
+          "Actualizar todos" checks all built-in open-source firmwares.
+          When the public HTTPS catalog lists a changed version, the native
+          Android updater downloads and verifies its .fwsc container, stores
+          it privately, and makes it available at next selection/boot.
+          No physical FM-1/SMK-37 hardware is flashed and no audio session
+          is interrupted by downloading. Proprietary stock firmware and
+          user-imported local packages still require manual import.
+          Existing saved patches are preserved under their original SHA.
 
-          In v0.2.3, the audio/CPU diagnostics were moved to the small ⓘ
-          info button, and the bottom toolbar became collapsible with
-          a semi-transparent ▲ / ▼ toggle.
+          Android now requests INTERNET permission solely for explicit
+          user-initiated firmware updates; offline synth functionality
+          and local resources remain available without connectivity.
+
+          In v0.2.4, original 1:1 and horizontal 16:9 LCD layouts were
+          adapted to the device viewport to prevent vertical clipping.
+          In v0.2.3, the diagnostics moved behind the info button and
+          the bottom native toolbar became collapsible.
 
           Warning: development APK. Android debug signing keys may differ
           between CI runs; updating an older development APK can require
