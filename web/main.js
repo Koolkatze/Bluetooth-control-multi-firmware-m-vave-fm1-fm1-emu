@@ -18,6 +18,7 @@ const DEV = DEVICE === "smk37"
       other: { name: "FM-1", href: "../" } }
   : { product: "M-VAVE FM-1", board: 0, key: "fm1.", stock: "FM-1.fwsc", stockFile: /^FM-1( \(\d+\))?\.fwsc$/i,
       other: { name: "SMK-37", href: "smk37/" } };
+const nativeWindow = typeof window === "undefined" ? {} : window;
 const params = new URLSearchParams(location.search);
 let SCREEN_ONLY = params.get("screen") !== "0";
 let ADAPTIVE_FIT = params.get("fit") !== "0";
@@ -650,8 +651,8 @@ midiChSel.value = midiCh;
 const midiWant = () => stored("fm1.midi") || "";
 if (!navigator.requestMIDIAccess) {
   midiSel.disabled = true;
-  midiChSel.disabled = !window.FM1Android;
-  document.getElementById("midiin").title = window.FM1Android
+  midiChSel.disabled = !nativeWindow.FM1Android;
+  document.getElementById("midiin").title = nativeWindow.FM1Android
     ? "Usa el botón MIDI de Android para conectar dispositivos USB o Bluetooth; el canal se configura aquí."
     : "this browser has no Web MIDI (Chrome, Edge and Firefox do)";
 }
@@ -686,7 +687,7 @@ function midiMessage(e) {
 // Android offline app: its native MidiManager owns USB and BLE-MIDI devices.
 // Deliver byte arrays through the same path as Web MIDI, respecting channel selection.
 // Keep the bridge one-way: no firmware or page needs network permission.
-window.fm1NativeMidi = (values) => {
+nativeWindow.fm1NativeMidi = (values) => {
   if (!Array.isArray(values) || values.length < 1 || values.length > 1024 ||
       !values.every(v => Number.isInteger(v) && v >= 0 && v <= 255)) return;
   midiMessage({ data: Uint8Array.from(values) });
@@ -1117,18 +1118,18 @@ startBtn.addEventListener("click", async () => {
 
 // Native offline Android controls live outside WebView: they remain usable even
 // when the page is in fullscreen LCD-only mode.
-window.fm1StartFirmware = () => {
+nativeWindow.fm1StartFirmware = () => {
   if (!node || !startBtn.hidden) startBtn.click();
   else boot();
 };
-window.fm1SetDisplayMode = (lcd) => setDisplayMode(Boolean(lcd));
-window.fm1NativeStatus = () => ({
+nativeWindow.fm1SetDisplayMode = (lcd) => setDisplayMode(Boolean(lcd));
+nativeWindow.fm1NativeStatus = () => ({
   ready: true, playing: Boolean(running), lcd: Boolean(screenFrame),
   firmware: fw?.name || "", mode: SCREEN_ONLY ? "lcd" : "panel",
   booting: Boolean(booting), startVisible: !startBtn.hidden,
   status: status.textContent || ""
 });
-if (window.FM1Android?.ready) window.FM1Android.ready();
+if (nativeWindow.FM1Android?.ready) nativeWindow.FM1Android.ready();
 
 // Persistence controls use the running machine's identity, even while another firmware is selected.
 const action = fn => async () => { try { await fn(); } catch (error) { saveFailure(error); } };
