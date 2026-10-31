@@ -97,7 +97,7 @@ fitToggle.textContent = ADAPTIVE_FIT ? "Original" : "Auto fit";
 fitToggle.addEventListener("click", () => {
   const next = new URLSearchParams(location.search);
   next.set("fit", ADAPTIVE_FIT ? "0" : "1");
-  location.search = next.toString();
+  location.assign(`${location.pathname}?${next.toString()}`);
 });
 document.getElementById("view-toggle").addEventListener("click", () => {
   const next = new URLSearchParams(location.search);
