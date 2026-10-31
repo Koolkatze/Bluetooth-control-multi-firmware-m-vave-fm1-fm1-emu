@@ -76,10 +76,14 @@ async function page(disk = storage(), initialSearch = '', selected = '', manualB
   }
   const local = new Map(selected ? [['fm1.fw', selected]] : []);
   const location = { search: initialSearch, origin: 'http://localhost', pathname: '/' };
+  const firmwareUpdateCalls = [];
   const environment = {
     setTimeout(fn, ms) { if (manualBootTimeout && ms === 30000) { bootTimer = fn; return 'boot-timer'; } return setTimeout(fn, ms); },
     clearTimeout(id) { if (id !== 'boot-timer') clearTimeout(id); },
-    document, location, window: nativeAndroid ? { FM1Android: { ready() {} }, innerWidth: 1000, innerHeight: 520, addEventListener() {} } : undefined,
+    document, location, window: nativeAndroid ? { FM1Android: {
+      ready() {}, installedFirmwareUpdates() { return "{}"; },
+      updateFirmwares(device, selected) { firmwareUpdateCalls.push({ device, selected }); return true; },
+    }, innerWidth: 1000, innerHeight: 520, addEventListener() {} } : undefined,
     history: { replaceState(_a, _b, url) { location.search = url; } },
     localStorage: { getItem: key => local.get(key), setItem: (key, value) => local.set(key, value) },
     ResizeObserver: class { observe() {} }, scrollY: 0, Option: Element, navigator: {},
@@ -97,7 +101,7 @@ async function page(disk = storage(), initialSearch = '', selected = '', manualB
     get fw() { return fw; }, perf, setMhz(c) { mhz = c; }, get bootSeq() { return bootSeq; }
   }; })()`);
   const api = await run(...Object.values(environment));
-  return { api, disk, elements, location, native: environment.window, expireBoot: () => bootTimer(), get audio() { return audio; }, get context() { return audioContext; } };
+  return { api, disk, elements, location, native: environment.window, firmwareUpdateCalls, expireBoot: () => bootTimer(), get audio() { return audio; }, get context() { return audioContext; } };
 }
 test('firmware switch, clock reboot and audio-context replacement retain the latest flash', async () => {
   const p = await page(); await p.api.startAudio(); await p.api.boot(); await settle();
@@ -321,4 +325,21 @@ test('Android native Audio menu can select an optional larger buffer before star
   await p.api.startAudio();
   assert.equal(p.context.latencyHint, 'balanced');
   assert.equal(p.context.sampleRate, 48000);
+});
+
+test('Firmware tab buttons invoke only selected or all native firmware updates', async () => {
+  const p = await page(storage(), '?screen=0&fit=1', '', false, true);
+  const selected = p.elements.get('update-selected-firmware');
+  const all = p.elements.get('update-all-firmwares');
+  assert.equal(selected.disabled, false);
+  await selected.listeners.click();
+  assert.deepEqual(p.firmwareUpdateCalls, [{ device: 'fm1', selected: 'a' }]);
+  assert.equal(all.disabled, true, 'prevent simultaneous downloads');
+  await p.native.fm1FirmwareUpdateProgress({ kind: 'finished' });
+  assert.equal(all.disabled, false);
+  await all.listeners.click();
+  assert.deepEqual(p.firmwareUpdateCalls, [
+    { device: 'fm1', selected: 'a' }, { device: 'fm1', selected: '' }
+  ]);
+  await p.native.fm1FirmwareUpdateProgress({ kind: 'finished' });
 });
