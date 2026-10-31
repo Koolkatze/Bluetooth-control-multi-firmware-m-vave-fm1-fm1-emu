@@ -113,9 +113,19 @@ band includes a temporal-change ratio and a coarse dynamic/static hint. This can
 animated waveforms, meters or blinking indicators, but it still cannot identify their meaning.
 The diagnostics remain opt-in with `?layout=1`; they do not alter the rendered image.
 
-### Practical next implementation target
+### Diagnostic capture workflow
 
-Build a capture/export workflow for diagnostic frames and their analysis metadata. Use those
-captures to validate firmware-specific profiles against real screens before enabling any
-landscape composition. The next trustworthy route to semantic text is firmware-specific
-instrumentation, not pretending that the SPI framebuffer contains UI objects.
+The page now provides a diagnostic capture control when opened with `?layout=1`. After starting
+a firmware, the **Export frame** control downloads:
+
+- a PNG of the current 240 × 240 rendered LCD;
+- a JSON report with firmware identity/version, board, capture time, current fit setting,
+  occupied bounds, detected bands and temporal-change estimates.
+
+Capture representative states independently: boot/home, menus, parameter editing, sequencers,
+waveforms and animated pages. Let animated pages run before capture so the temporal comparison has
+multiple samples. The capture is evidence for profile development, not a semantic interpretation;
+`safeToReflow` remains false.
+
+The next step is to collect captures from named firmware versions and compare them with firmware
+source or drawing-library traces. Only then can a profile define which elements may be rearranged.
