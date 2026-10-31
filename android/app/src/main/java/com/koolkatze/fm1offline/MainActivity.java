@@ -253,6 +253,77 @@ public final class MainActivity extends Activity {
         web.loadUrl(HOME);
     }
 
+    private boolean isLocal(Uri uri) {
+        return "https".equals(uri.getScheme()) && HOST.equals(uri.getHost())
+                && uri.getPath() != null && uri.getPath().startsWith("/assets/site/");
+    }
+
+    private Button toolbarButton(String label, int fontSize) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setTextColor(0xffffffff);
+        button.setTextSize(fontSize);
+        button.setAllCaps(false);
+        button.setMinWidth(0);
+        button.setMinHeight(0);
+        button.setPadding(0, 0, 0, 0);
+        button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff343e4a));
+        return button;
+    }
+
+    private void updateStatus(String message) {
+        if (liveStatus != null && !shuttingDown) liveStatus.setText(message);
+    }
+
+    private void checkWebReady() {
+        if (web == null || shuttingDown || webReady) return;
+        web.evaluateJavascript("typeof window.fm1NativeStatus === 'function'", answer -> {
+            if (web == null || shuttingDown) return;
+            if ("true".equals(answer)) {
+                webReady = true;
+                updateStatus("Preparado. Pulsa Iniciar firmware. Panel y Pantalla disponibles.");
+            } else if (++readyChecks < 35) {
+                ui.postDelayed(this::checkWebReady, 500);
+            } else {
+                updateStatus("Error: interfaz no iniciada. Revisa el motor WebView de Android.");
+            }
+        });
+    }
+
+    private void invokeInWeb(String js, String message) {
+        if (web == null) return;
+        if (!webReady) {
+            updateStatus("El emulador no está preparado. Comprueba el mensaje de diagnóstico.");
+            checkWebReady();
+            return;
+        }
+        web.evaluateJavascript(js, value -> {
+            if ("\\"ok\\"".equals(value)) {
+                updateStatus(message);
+                ui.postDelayed(this::reportRunningStatus, 1300);
+            } else {
+                updateStatus("No se pudo ejecutar: " + value);
+            }
+        });
+    }
+
+    private void reportRunningStatus() {
+        if (web == null || !webReady || shuttingDown) return;
+        String js = "(function(){var s=window.fm1NativeStatus?.();"
+                + "return s ? (s.firmware + ' · ' + s.mode + ' · '"
+                + "+ (s.playing ? 'sonando' : 'sin iniciar') + ' · ' + s.status)"
+                + " : 'Motor no preparado';})()";
+        web.evaluateJavascript(js, value -> {
+            if (shuttingDown || web == null) return;
+            try {
+                String statusText = String.valueOf(new JSONTokener(value).nextValue());
+                updateStatus(statusText);
+            } catch (Exception e) {
+                updateStatus("Diagnóstico: " + value);
+            }
+        });
+    }
+
     private static WebResourceResponse denied() {
         return new WebResourceResponse("text/plain", "UTF-8", 403, "Offline only",
                 Collections.singletonMap("Cache-Control", "no-store"),
@@ -270,7 +341,19 @@ public final class MainActivity extends Activity {
     /** This bridge is available only to the packaged, origin-restricted local page. */
     public final class NativeBridge {
         @JavascriptInterface
-        public void ready() { Log.i(TAG, "Local emulator UI ready"); }
+        public void ready() {
+            Log.i(TAG, "Local emulator UI ready");
+            runOnUiThread(() -> {
+                webReady = true;
+                updateStatus("Preparado. Pulsa Iniciar firmware.");
+            });
+        }
+
+        @JavascriptInterface
+        public void error(String message) {
+            Log.e(TAG, "JavaScript: " + message);
+            runOnUiThread(() -> updateStatus("Error: " + message));
+        }
     }
 
     @Override
@@ -495,6 +578,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        shuttingDown = true;
         stopBleScan();
         closeMidi();
         if (fileCallback != null) {
