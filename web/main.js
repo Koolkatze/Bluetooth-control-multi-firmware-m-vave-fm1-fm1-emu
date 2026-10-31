@@ -649,8 +649,11 @@ for (let c = 1; c <= 16; c++) midiChSel.add(new Option(String(c), c));
 midiChSel.value = midiCh;
 const midiWant = () => stored("fm1.midi") || "";
 if (!navigator.requestMIDIAccess) {
-  midiSel.disabled = midiChSel.disabled = true;
-  document.getElementById("midiin").title = "this browser has no Web MIDI (Chrome, Edge and Firefox do)";
+  midiSel.disabled = true;
+  midiChSel.disabled = !window.FM1Android;
+  document.getElementById("midiin").title = window.FM1Android
+    ? "Usa el botón MIDI de Android para conectar dispositivos USB o Bluetooth; el canal se configura aquí."
+    : "this browser has no Web MIDI (Chrome, Edge and Firefox do)";
 }
 function midiMessage(e) {
   const d = e.data;
@@ -680,6 +683,14 @@ function midiMessage(e) {
     midiActOff = setTimeout(() => midiAct.classList.remove("on"), 120);
   }
 }
+// Android offline app: its native MidiManager owns USB and BLE-MIDI devices.
+// Deliver byte arrays through the same path as Web MIDI, respecting channel selection.
+// Keep the bridge one-way: no firmware or page needs network permission.
+window.fm1NativeMidi = (values) => {
+  if (!Array.isArray(values) || values.length < 1 || values.length > 1024 ||
+      !values.every(v => Number.isInteger(v) && v >= 0 && v <= 255)) return;
+  midiMessage({ data: Uint8Array.from(values) });
+};
 // listen to the wanted inputs only; the list follows devices coming and going
 function midiConnect() {
   if (!midi) return;
