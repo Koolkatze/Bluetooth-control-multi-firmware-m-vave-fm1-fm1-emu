@@ -19,8 +19,8 @@ const DEV = DEVICE === "smk37"
   : { product: "M-VAVE FM-1", board: 0, key: "fm1.", stock: "FM-1.fwsc", stockFile: /^FM-1( \(\d+\))?\.fwsc$/i,
       other: { name: "SMK-37", href: "smk37/" } };
 const params = new URLSearchParams(location.search);
-const SCREEN_ONLY = params.get("screen") !== "0";
-const ADAPTIVE_FIT = params.get("fit") !== "0";
+let SCREEN_ONLY = params.get("screen") !== "0";
+let ADAPTIVE_FIT = params.get("fit") !== "0";
 const DEBUG_LAYOUT = params.get("layout") === "1";
 const screenAnalyzer = new ScreenAnalyzer();
 let latestLayoutAnalysis = null;
@@ -92,26 +92,55 @@ const fwSel = document.getElementById("fw");
 const mhzSel = document.getElementById("mhz");
 const about = document.getElementById("about");
 const title = document.getElementById("title");
-document.getElementById("view-toggle").textContent = SCREEN_ONLY ? "Settings" : "Screen only";
+const viewToggle = document.getElementById("view-toggle");
 const fitToggle = document.getElementById("fit-toggle");
-fitToggle.textContent = ADAPTIVE_FIT ? "Original" : "Horizontal";
-fitToggle.addEventListener("click", () => {
+
+function showDisplayMode() {
+  // Button text describes the next action, and aria-pressed exposes current mode.
+  viewToggle.textContent = SCREEN_ONLY ? "Mostrar panel" : "Solo LCD";
+  viewToggle.setAttribute("aria-pressed", String(SCREEN_ONLY));
+  viewToggle.setAttribute("aria-label", SCREEN_ONLY ? "Mostrar panel completo" : "Mostrar únicamente la LCD");
+  fitToggle.textContent = ADAPTIVE_FIT ? "Original" : "Horizontal";
+  fitToggle.setAttribute("aria-pressed", String(ADAPTIVE_FIT));
+}
+
+function setDisplayMode(screenOnly, adaptiveFit = ADAPTIVE_FIT) {
+  SCREEN_ONLY = screenOnly;
+  ADAPTIVE_FIT = adaptiveFit;
+  if (SCREEN_ONLY) document.documentElement.setAttribute("data-screen-only", "");
+  else document.documentElement.removeAttribute("data-screen-only");
+
+  // Do not reboot the audio worklet or reload the page to change display mode.
+  // The full panel is available only when explicitly requested.
+  if (W > 0 && H > 0) {
+    canvas.width = SCREEN_ONLY ? 960 : W;
+    canvas.height = SCREEN_ONLY ? 540 : H;
+  }
+  screenDirty = true;
+  showDisplayMode();
+
   const next = new URLSearchParams(location.search);
-  next.set("fit", ADAPTIVE_FIT ? "0" : "1");
-  location.assign(`${location.pathname}?${next.toString()}`);
+  next.set("screen", SCREEN_ONLY ? "1" : "0");
+  next.set("fit", ADAPTIVE_FIT ? "1" : "0");
+  history.replaceState(null, "", `${location.pathname}?${next.toString()}${location.hash || ""}`);
+}
+
+showDisplayMode();
+fitToggle.addEventListener("click", () => {
+  setDisplayMode(SCREEN_ONLY, !ADAPTIVE_FIT);
 });
-document.getElementById("view-toggle").addEventListener("click", async () => {
-  if (!SCREEN_ONLY) {
+viewToggle.addEventListener("click", async () => {
+  const enteringLCD = !SCREEN_ONLY;
+  setDisplayMode(enteringLCD);
+  if (enteringLCD) {
+    // This is a best-effort orientation request, not a prerequisite for LCD view.
     try {
       await document.documentElement.requestFullscreen?.();
       await screen.orientation?.lock?.("landscape");
-    } catch { /* fullscreen/orientation may be unavailable in the browser */ }
+    } catch { /* fullscreen or orientation lock may be blocked on mobile */ }
   } else {
     try { if (document.fullscreenElement) await document.exitFullscreen(); } catch {}
   }
-  const next = new URLSearchParams(location.search);
-  next.set("screen", SCREEN_ONLY ? "0" : "1");
-  location.assign(`${location.pathname}?${next.toString()}`);
 });
 const openInput = document.getElementById("open");
 const bankInput = document.getElementById("bank");
