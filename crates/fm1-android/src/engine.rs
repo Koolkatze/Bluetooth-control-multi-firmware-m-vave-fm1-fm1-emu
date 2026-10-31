@@ -211,7 +211,7 @@ pub fn run_worker(mut machine: Machine, shared: Arc<Shared>, rx: mpsc::Receiver<
             ];
             if shared.ring.push(output) {
                 fraction += step;
-                while fraction >= 1.0 && src.len() >= 2 {
+                while fraction >= 1.0 {
                     src.pop_front();
                     fraction -= 1.0;
                 }
