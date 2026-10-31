@@ -15,7 +15,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.midi.MidiDevice;
 import android.media.midi.MidiDeviceInfo;
-import android.media.midi.MidiDeviceOutputPort;
+import android.media.midi.MidiOutputPort;
 import android.media.midi.MidiManager;
 import android.media.midi.MidiReceiver;
 import android.net.Uri;
@@ -73,7 +73,7 @@ public final class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private MidiManager midiManager;
     private MidiDevice midiDevice;
-    private final List<MidiDeviceOutputPort> outputPorts = new ArrayList<>();
+    private final List<MidiOutputPort> outputPorts = new ArrayList<>();
     private BluetoothLeScanner scanner;
     private ScanCallback scannerCallback;
     private final Map<String, BluetoothDevice> nearbyMidi = new LinkedHashMap<>();
@@ -286,7 +286,7 @@ public final class MainActivity extends Activity {
         midiDevice = device;
         int connected = 0;
         for (int i = 0; i < device.getInfo().getOutputPortCount(); i++) {
-            MidiDeviceOutputPort port = device.openOutputPort(i);
+            MidiOutputPort port = device.openOutputPort(i);
             if (port == null) continue;
             port.connect(new MidiReceiver() {
                 @Override
@@ -320,7 +320,7 @@ public final class MainActivity extends Activity {
     }
 
     private void closeMidi() {
-        for (MidiDeviceOutputPort port : outputPorts) {
+        for (MidiOutputPort port : outputPorts) {
             try { port.close(); } catch (IOException ignored) {}
         }
         outputPorts.clear();
