@@ -1115,6 +1115,21 @@ startBtn.addEventListener("click", async () => {
   if (matchMedia("(orientation: landscape) and (max-height: 560px)").matches) canvas.scrollIntoView({ block: "center" });
 });
 
+// Native offline Android controls live outside WebView: they remain usable even
+// when the page is in fullscreen LCD-only mode.
+window.fm1StartFirmware = () => {
+  if (!node || !startBtn.hidden) startBtn.click();
+  else boot();
+};
+window.fm1SetDisplayMode = (lcd) => setDisplayMode(Boolean(lcd));
+window.fm1NativeStatus = () => ({
+  ready: true, playing: Boolean(running), lcd: Boolean(screenFrame),
+  firmware: fw?.name || "", mode: SCREEN_ONLY ? "lcd" : "panel",
+  booting: Boolean(booting), startVisible: !startBtn.hidden,
+  status: status.textContent || ""
+});
+if (window.FM1Android?.ready) window.FM1Android.ready();
+
 // Persistence controls use the running machine's identity, even while another firmware is selected.
 const action = fn => async () => { try { await fn(); } catch (error) { saveFailure(error); } };
 document.getElementById("save-now").addEventListener("click", action(async () => {
