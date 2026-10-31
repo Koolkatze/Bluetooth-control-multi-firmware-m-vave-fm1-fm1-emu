@@ -916,6 +916,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         shuttingDown = true;
+        if (firmwareUpdater != null) firmwareUpdater.close();
         if (NativeSynth.AVAILABLE) NativeSynth.stop();
         nativeActive = false;
         stopBleScan();
