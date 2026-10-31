@@ -235,3 +235,7 @@ section li { margin: 4px 0; }
   [data-screen-only] main { padding-left: max(18px, env(safe-area-inset-left)); padding-right: max(18px, env(safe-area-inset-right)); }
   [data-screen-only] .stage { width: min(calc(100vw - 36px), calc(100svh - 28px)); }
 }
+
+[data-screen-only] #view-toggle { position: fixed; z-index: 5; top: max(8px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); padding: 5px 10px; border: 1px solid #343a44; border-radius: 999px; background: #171b22; color: #e3e7ed; font: 12px system-ui, sans-serif; }
+[data-screen-only] .deck-head { justify-content: flex-start; }
+[data-screen-only] canvas { pointer-events: none; }
