@@ -13,6 +13,8 @@ import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.media.AudioManager;
+import android.media.AudioDeviceInfo;
 import android.media.midi.MidiDevice;
 import android.media.midi.MidiDeviceInfo;
 import android.media.midi.MidiOutputPort;
@@ -86,6 +88,7 @@ public final class MainActivity extends Activity {
     private Button startButton;
     private Button panelButton;
     private Button lcdButton;
+    private Button audioButton;
     private TextView liveStatus;
     private boolean webReady = false;
     private int readyChecks = 0;
@@ -98,6 +101,7 @@ public final class MainActivity extends Activity {
         getWindow().setNavigationBarColor(0xff08090b);
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         midiManager = (MidiManager) getSystemService(MIDI_SERVICE);
+        setVolumeControlStream(AudioManager.STREAM_MUSIC);
 
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(0xff08090b);
@@ -219,10 +223,12 @@ public final class MainActivity extends Activity {
         panelButton = toolbarButton("Panel", 12);
         lcdButton = toolbarButton("Pantalla", 12);
         midiButton = toolbarButton("MIDI", 12);
-        buttons.addView(startButton, new LinearLayout.LayoutParams(0, dp(46), 2.25f));
-        buttons.addView(panelButton, new LinearLayout.LayoutParams(0, dp(46), 1.0f));
-        buttons.addView(lcdButton, new LinearLayout.LayoutParams(0, dp(46), 1.2f));
-        buttons.addView(midiButton, new LinearLayout.LayoutParams(0, dp(46), 1.0f));
+        audioButton = toolbarButton("Audio", 12);
+        buttons.addView(startButton, new LinearLayout.LayoutParams(0, dp(46), 2.0f));
+        buttons.addView(panelButton, new LinearLayout.LayoutParams(0, dp(46), 0.8f));
+        buttons.addView(lcdButton, new LinearLayout.LayoutParams(0, dp(46), 1.0f));
+        buttons.addView(midiButton, new LinearLayout.LayoutParams(0, dp(46), 0.8f));
+        buttons.addView(audioButton, new LinearLayout.LayoutParams(0, dp(46), 0.9f));
         controls.addView(buttons);
 
         liveStatus = new TextView(this);
@@ -247,6 +253,7 @@ public final class MainActivity extends Activity {
                 "window.fm1SetDisplayMode ? (window.fm1SetDisplayMode(true), 'ok') : 'notready'",
                 "Mostrando LCD del firmware…"));
         midiButton.setOnClickListener(v -> showMidiPicker());
+        audioButton.setOnClickListener(v -> showAudioOptions());
         setContentView(root);
 
         // Browser location is local HTTPS backed by packaged assets; no network is used.
@@ -395,6 +402,45 @@ public final class MainActivity extends Activity {
         for (int g : grants) if (g != PackageManager.PERMISSION_GRANTED) granted = false;
         if (granted) startBleScan();
         else show("Permiso Bluetooth denegado");
+    }
+
+    private void showAudioOptions() {
+        AudioManager manager = (AudioManager) getSystemService(AUDIO_SERVICE);
+        String nativeRate = manager != null
+                ? manager.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE) : null;
+        StringBuilder description = new StringBuilder("Salida nativa Android: ")
+                .append(nativeRate == null ? "automática" : nativeRate + " Hz")
+                .append(".\n");
+        boolean bluetooth = false;
+        boolean usb = false;
+        if (manager != null) {
+            for (AudioDeviceInfo device : manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+                final int type = device.getType();
+                bluetooth |= type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                        || type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO;
+                usb |= type == AudioDeviceInfo.TYPE_USB_DEVICE || type == AudioDeviceInfo.TYPE_USB_HEADSET;
+            }
+        }
+        if (usb) description.append("Hay un dispositivo de audio USB disponible.\n");
+        if (bluetooth) description.append("Hay audio Bluetooth disponible; puede añadir mucha latencia.\n");
+        description.append("Para tocar en directo, usa cable/USB-C y perfil rápido. ")
+                .append("Cambiar el perfil reinicia el firmware, preservando sus ajustes guardados.");
+        String[] profiles = {
+                "Rápido — baja latencia (recomendado)",
+                "Equilibrado — más estabilidad, más retraso",
+                "Reproducción — búfer grande, NO para tocar en directo"
+        };
+        String[] ids = { "interactive", "balanced", "playback" };
+        new AlertDialog.Builder(this)
+                .setTitle("Audio del sintetizador")
+                .setMessage(description.toString())
+                .setItems(profiles, (dialog, index) -> {
+                    String expression = "window.fm1SetAudioProfile ? (window.fm1SetAudioProfile('"
+                            + ids[index] + "') ? 'ok' : 'invalid') : 'notready'";
+                    invokeInWeb(expression, "Perfil de audio: " + ids[index]);
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
     }
 
     private void showMidiPicker() {
