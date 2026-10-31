@@ -3,12 +3,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-function harness() {
+function harness(outputRate = 44100) {
   let Processor, time = 0, revision = 0, flashRevision = 0, busy = false;
   const messages = [];
   const memory = new WebAssembly.Memory({ initial: 4 });
   const context = vm.createContext({ WebAssembly, Float32Array, Uint16Array, Uint32Array, Uint8Array,
-    sampleRate: 44100, performance: { now: () => time },
+    sampleRate: outputRate, performance: { now: () => time },
     AudioWorkletProcessor: class { constructor() { this.port = { postMessage(m) { messages.push(m); time += 2; } }; } },
     registerProcessor(_, cls) { Processor = cls; } });
   vm.runInContext(readFileSync(new URL('./worklet.js', import.meta.url), 'utf8'), context);
@@ -22,7 +22,11 @@ function harness() {
     budget: 100000, board: 0, short: 0, reportFrames: 0, reportCalls: 0,
     busy: 0, worst: 0, lcdRevision: null, seq: 1, flashRevision: 0, observedRevision: 0,
     flashChangedAt: 0, lastSnapshot: 0 });
-  const render = () => p.process([], [[new Float32Array(128), new Float32Array(128)]]);
+  const render = () => {
+    const left = new Float32Array(128), right = new Float32Array(128);
+    p.process([], [[left, right]]);
+    return { left, right };
+  };
   return { p, context, messages, memory, render, change: () => revision++, advance: ms => time += ms,
     flashChange: () => flashRevision++, flashBusy: value => busy = value };
 }
@@ -256,4 +260,80 @@ test('no JIT budget is re-enabled on Android when JIT is explicitly disabled', a
   } });
   h.render();
   assert.deepEqual(settings, [[0, 4]]);
+});
+
+test('Android 48 kHz output resamples a continuous firmware 44.1 kHz ramp with no boundary clicks', () => {
+  const h = harness(48000);
+  const Bridge = vm.runInContext('FirmwareRateBridge', h.context);
+  h.p.resampler = new Bridge(48000);
+  h.p.ahead = 0;
+  h.p.playing = true;
+  h.p.startupShort = 0;
+  h.p.short = 0;
+  let sourceIndex = 0;
+  h.p.x.fm1_render = function(sourceFrames) {
+    const left = new Float32Array(h.memory.buffer, 0, sourceFrames);
+    const right = new Float32Array(h.memory.buffer, 4096, sourceFrames);
+    for (let i = 0; i < sourceFrames; i++) {
+      left[i] = sourceIndex / 10000;
+      right[i] = -sourceIndex / 10000;
+      sourceIndex++;
+    }
+    return sourceFrames;
+  };
+  let outputIndex = 0;
+  for (let quantum = 0; quantum < 36; quantum++) {
+    const { left, right } = h.render();
+    for (let i = 0; i < 128; i++) {
+      const wanted = outputIndex * 44100 / 48000 / 10000;
+      assert.ok(Math.abs(left[i] - wanted) < 1e-6,
+        `continuity at output sample ${outputIndex}: ${left[i]} vs ${wanted}`);
+      assert.ok(Math.abs(right[i] + wanted) < 1e-6, 'stereo phase must be preserved');
+      outputIndex++;
+    }
+  }
+  assert.ok(sourceIndex > 4000 && sourceIndex < 4500);
+  assert.equal(h.p.short, 0);
+  assert.equal(h.p.resampler.used, 1);
+});
+
+test('Android 48 kHz firmware audio preserves source-time pace, not output-time pace', () => {
+  const h = harness(48000);
+  const Bridge = vm.runInContext('FirmwareRateBridge', h.context);
+  h.p.resampler = new Bridge(48000);
+  h.p.ahead = 512;
+  h.p.mhz = 60;
+  h.p.playing = true;
+  const counts = [], budgets = [];
+  h.p.x.fm1_render = function(frames, budget) {
+    counts.push(frames);
+    budgets.push(budget);
+    return frames;
+  };
+  for (let i = 0; i < 20; i++) h.render();
+  assert.ok(counts.some(n => n === 117 || n === 118),
+    '48k output must demand about 117/118 frames from the 44.1k firmware');
+  assert.ok(counts.reduce((a, b) => a + b, 0) < 20 * 128,
+    'do not accelerate firmware to match output sample rate');
+  for (let i = 0; i < budgets.length; i++) {
+    assert.ok(Math.abs(budgets[i] - 60e6 * 1.5 * counts[i] / 44100) < 0.01,
+      'JIT instruction budget must follow actual 44.1k firmware frames');
+  }
+});
+
+test('Android 44.1k output bypasses resampling and keeps previous behavior', async () => {
+  const h = harness();
+  const x = h.p.x;
+  Object.assign(x, {
+    fm1_alloc: () => 1000, fm1_jit() {}, fm1_ahead() {},
+    fm1_boot_fwsc: () => 0, fm1_board: () => 0, fm1_flash_base: () => 140000,
+  });
+  h.p.module = {};
+  h.context.WebAssembly = { instantiate: async () => ({ exports: x }) };
+  await h.p.port.onmessage({ data: {
+    type: 'boot', seq: 2, mhz: 60, jit: true, androidOptimized: true,
+    package: new Uint8Array(960).buffer,
+  } });
+  assert.equal(h.p.resampler, null);
+  assert.equal(h.p.ahead, 512);
 });
