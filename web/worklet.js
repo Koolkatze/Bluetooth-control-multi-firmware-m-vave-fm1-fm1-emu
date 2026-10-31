@@ -103,7 +103,12 @@ class Fm1 extends AudioWorkletProcessor {
     x = (await WebAssembly.instantiate(this.module, { env: jitImports(() => x, this.jit) })).exports;
     if (token !== this.bootToken) return;
     // hot code compiled to WebAssembly, a few blocks per quantum at most (?jit=0: interpreter only)
-    x.fm1_jit(m.jit === false ? 0 : 1, 16);
+    // Android WebView may compile a region for several milliseconds on the real-time
+    // audio thread. Limit compilation bursts: 4 while booting, just 2 once audio
+    // begins; keep the desktop/browser throughput setting unchanged.
+    this.androidOptimized = Boolean(m.androidOptimized);
+    this.jitEnabled = m.jit !== false;
+    x.fm1_jit(this.jitEnabled ? 1 : 0, this.androidOptimized ? 4 : 16);
     const ahead = x.fm1_ahead ? m.ahead ?? AHEAD_FRAMES : 0;
     x.fm1_ahead?.(ahead);               // (?ahead=0: each quantum runs for its own frames only)
     // the whole update package (.fwsc): the machine unpacks it, gets the flash chip and the
@@ -133,7 +138,9 @@ class Fm1 extends AudioWorkletProcessor {
     this.lcdRevision = null;
     this.reportFrames = 0;
     this.reportCalls = 0;
-    this.short = 0;
+    this.short = 0;               // underruns AFTER playback has started
+    this.startupShort = 0;        // expected incomplete quanta while firmware boots
+    this.uiRate = this.androidOptimized ? 20 : 30; // fewer LCD transfers on Android
     this.calls = 0;
     this.busy = 0;                      // ms spent emulating since the last frame message
     this.worst = 0;                     // the longest quantum among them (once audio plays)
@@ -217,11 +224,16 @@ class Fm1 extends AudioWorkletProcessor {
     if (have > 0 && !this.playing) {
       this.playing = true;
       if (this.ahead > 0) this.budget = budgets(this.mhz, n).play;
+      // Compiling 16 hot regions at once can stall Android's 2.9 ms audio callback.
+      if (this.androidOptimized && this.jitEnabled) x.fm1_jit(1, 2);
     }
-    this.short = (this.short || 0) + (have < n ? 1 : 0);
+    if (have < n) {
+      if (playing) this.short++;
+      else this.startupShort++;
+    }
     this.reportFrames += n;
     this.reportCalls++;
-    if (this.reportFrames >= sampleRate / 30) {
+    if (this.reportFrames >= sampleRate / (this.uiRate || 30)) {
       const flashRevision = this.observeFlash();
       if (flashRevision !== this.flashRevision && now() - this.lastSnapshot >= 1000 &&
           now() - this.flashChangedAt >= 250 && !this.snapshots.length) {
@@ -239,7 +251,8 @@ class Fm1 extends AudioWorkletProcessor {
       // Report the preceding interval: its final postMessage is included in its timing.
       const ms = x.fm1_ms(), idle = x.fm1_idle_ms?.() ?? 0;
       this.port.postMessage({ type: "frame", seq: this.seq, lcd, leds, ms,
-        short: this.short, halted: x.fm1_halted(), jit: this.jit, pads, playing: this.playing,
+        short: this.short, shortStartup: this.startupShort,
+        halted: x.fm1_halted(), jit: this.jit, pads, playing: this.playing,
         busy: this.lastTiming?.busy ?? 0, worst: this.lastTiming?.worst ?? 0,
         emulated: this.lastTiming?.emulated ?? 0, idle: this.lastTiming?.idle ?? 0,
         quanta: this.lastTiming?.quanta ?? 0, frames: this.lastTiming?.frames ?? n }, transfer);
