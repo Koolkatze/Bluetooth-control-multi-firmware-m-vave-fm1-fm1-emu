@@ -582,7 +582,12 @@ public final class MainActivity extends Activity {
                 public void onSend(byte[] bytes, int offset, int count, long timestamp) {
                     if (count < 1 || count > 4096) return;
                     byte[] copy = Arrays.copyOfRange(bytes, offset, offset + count);
-                    ui.post(() -> deliverMidi(copy));
+                    if (nativeActive && NativeSynth.AVAILABLE) {
+                        // Native MIDI should never queue behind JavaScript/UI painting.
+                        deliverMidi(copy);
+                    } else {
+                        ui.post(() -> deliverMidi(copy));
+                    }
                 }
             });
             outputPorts.add(port);
