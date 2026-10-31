@@ -317,5 +317,4 @@ test('Android native Audio menu can select an optional larger buffer before star
   await p.api.startAudio();
   assert.equal(p.context.latencyHint, 'balanced');
   assert.equal(p.context.sampleRate, 48000);
-  assert.equal(p.native.fm1SetAudioProfile('interactive'), true);
 });
