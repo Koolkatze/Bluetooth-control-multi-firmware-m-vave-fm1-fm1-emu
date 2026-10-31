@@ -271,8 +271,9 @@ test('page starts directly in LCD-only mode by default', async () => {
 test('Android receives native audio tuning, while browser defaults stay low latency', async () => {
   const p = await page(storage(), '', '', false, true);
   await p.api.startAudio(); await p.api.boot();
-  assert.equal(p.context.latencyHint, 'balanced', 'Android starts with a compromise between response and resilience');
+  assert.equal(p.context.latencyHint, 'interactive', 'Android must favor real-time musical response, not buffering');
   assert.equal(p.audio.messages.find(m => m.type === 'boot').androidOptimized, true);
+  assert.equal(p.native?.fm1SetAudioProfile?.('balanced') ?? true, true);
   const browser = await page(); await browser.api.startAudio(); await browser.api.boot();
   assert.equal(browser.context.latencyHint, 'interactive');
   assert.equal(browser.audio.messages.find(m => m.type === 'boot').androidOptimized, false);
