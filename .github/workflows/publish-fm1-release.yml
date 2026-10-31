@@ -1,0 +1,101 @@
+name: Publish M-VAVE FM1 firmware bundle
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/publish-fm1-release.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    name: Publish APK to GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout release automation
+        uses: actions/checkout@v4
+
+      - name: Fetch previously built and validated FM-1 Android APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist
+          gh run download 41217132261 --repo "$GITHUB_REPOSITORY" \
+            --name FM1-Mobile-Offline-APK --dir dist
+          test -s dist/app-debug.apk
+
+      - name: Verify APK identity, icon, and local firmware contents
+        run: |
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          import hashlib, os
+          path = 'dist/app-debug.apk'
+          with ZipFile(path) as apk:
+              paths = set(apk.namelist())
+              assert 'res/drawable-nodpi-v4/fm1_launcher.webp' in paths, 'Custom FM-1 launcher icon missing'
+              assert 'assets/site/fm1_web.wasm' in paths, 'Offline synth engine missing'
+              assert 'assets/site/firmwares.json' in paths, 'Offline firmware catalog missing'
+              packages = [x for x in paths if x.startswith('assets/site/offline-fw/') and x.endswith('.fwsc')]
+              assert len(packages) >= 1, 'No built-in FM-1 firmware packages'
+              print('Included FM-1 firmware packages:', len(packages))
+              print('APK SHA256:', hashlib.sha256(open(path, 'rb').read()).hexdigest())
+          os.rename(path, 'dist/M-VAVE-FM1-Firmware-bundle-v0.1.0.apk')
+          PY
+
+      - name: Write versioned release notes
+        run: |
+          cat > dist/RELEASE-NOTES.md <<'EOF'
+          # M-VAVE FM1: Firmware bundle — v0.1.0 (experimental)
+
+          First **offline Android APK** of the community **FM-1 Mobile Companion** project, with a bespoke orange FM-1 synthesizer launcher icon.
+
+          ### Features
+          - WebAssembly-based FM-1 firmware emulation and audio generation on Android.
+          - **92 FM-1 community firmwares** bundled locally, plus 9 SMK-37 firmwares in the packaged catalog.
+          - Switch between compatible emulated firmwares **without reflashing the physical M-VAVE FM-1**.
+          - Dedicated native Android buttons for **Iniciar firmware**, **Panel**, **Pantalla** and **MIDI**.
+          - FM-1 LCD view designed for landscape use; imported local `.fwsc` firmware packages supported.
+          - Native Android MIDI input through USB MIDI or BLE MIDI; audio uses the phone's active system output, including Bluetooth/USB-C when supported.
+          - No Android Internet permission: bundled components and included firmwares function offline.
+
+          ### Install
+          Download **M-VAVE-FM1-Firmware-bundle-v0.1.0.apk**, transfer it to Android and open it to install.
+          If an older development build has a different signature, export saved presets and uninstall the older build first.
+
+          ### Important limitations
+          - **Experimental, unsigned for production:** APK is a debug/development build, not a Google Play release.
+          - The end-to-end FM-1 / CTL-1 MIDI controller connection still requires real-device validation.
+          - Firmware performance depends on Android device, JIT warmup and audio buffer selection; some programs may run slowly.
+          - Proprietary stock M-VAVE firmware is **not distributed**: import your own `FM-1.fwsc` locally.
+          - This is an **unofficial community project**, not affiliated with M-VAVE.
+          - The emulator's automated boot/audio checks pass; a completed hardware acceptance test on a physical Android phone is not yet available.
+
+          **Try in browser (GitHub Pages):** https://koolkatze.github.io/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/?screen=1&fit=1
+
+          **Source / README:** https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu
+          EOF
+
+      - name: Publish public GitHub release with the actual APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v0.1.0 \
+            "dist/M-VAVE-FM1-Firmware-bundle-v0.1.0.apk" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target 86bddc16c303e10d6f5f6d66b96a422decf3d396 \
+            --title "M-VAVE FM1: Firmware bundle" \
+            --notes-file dist/RELEASE-NOTES.md \
+            --prerelease
+
+      - name: Verify published release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v0.1.0 --repo "$GITHUB_REPOSITORY" --json name,tagName,isDraft,isPrerelease,assets \
+            --jq '{name,tag: .tagName,draft: .isDraft,prerelease: .isPrerelease,assets: [.assets[].name]}'
+          gh release view v0.1.0 --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name' | grep -Fx 'M-VAVE-FM1-Firmware-bundle-v0.1.0.apk'
