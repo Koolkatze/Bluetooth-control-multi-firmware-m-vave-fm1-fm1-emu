@@ -27,3 +27,11 @@ _site/
 
 # tools/hwdsp.py run: raw results (tests/hwdsp/fm1.txt is the reference, from export)
 tests/hwdsp/*.json
+
+# Android offline build outputs (bundled firmware blobs must not be committed)
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/app/src/main/assets/site/
+_offline_web/
