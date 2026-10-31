@@ -154,8 +154,8 @@ function setBoard(b) {
   ui.panel_board(b);
   W = ui.panel_width();
   H = ui.panel_height();
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = SCREEN_ONLY ? 240 : W;
+  canvas.height = SCREEN_ONLY ? 240 : H;
   // the synth's width follows the room left below the header and the bar (index.html's canvas rule)
   document.documentElement.style.setProperty("--aspect", String(W / H));
   document.documentElement.dataset.board = b ? "smk37" : "fm1";
@@ -427,21 +427,16 @@ function draw() {
     if (turning[i]) turning[i]--;
   }
   if (board === 1) for (let i = 0; i < 23; i++) ui.panel_set(4, i, analog[i]);
-  const p = ui.panel_draw();
-  const img = new ImageData(new Uint8ClampedArray(mem(), p, W * H * 4), W, H);
   if (SCREEN_ONLY) {
-    ctx.clearRect(0, 0, W, H);
-    ctx.imageSmoothingEnabled = false;
-    if (ADAPTIVE_FIT) {
-      const scale = Math.min(canvas.width / W, canvas.height / H);
-      const dw = W * scale, dh = H * scale;
-      ctx.putImageData(img, 0, 0);
-    } else {
-      ctx.putImageData(img, 0, 0);
+    if (screenDirty && screenFrame) {
+      renderAdaptiveLCD(ctx, screenFrame, 240, 240, ADAPTIVE_FIT);
+      screenDirty = false;
     }
     requestAnimationFrame(draw);
     return;
   }
+  const p = ui.panel_draw();
+  const img = new ImageData(new Uint8ClampedArray(mem(), p, W * H * 4), W, H);
   ctx.putImageData(img, 0, 0);
   requestAnimationFrame(draw);
 }
