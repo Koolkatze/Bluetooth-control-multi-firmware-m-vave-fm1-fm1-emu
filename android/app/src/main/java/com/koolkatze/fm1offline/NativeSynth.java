@@ -33,4 +33,6 @@ public final class NativeSynth {
     /** Bit 0 ready; bit 1 firmware audio started; bit 2 CPU halted;
         upper bits = cumulative callback starvation samples. */
     public static native long stats();
+    /** Native firmware ms, PCM frames submitted, and instantaneous ring fill. */
+    public static native String diagnostics();
 }
