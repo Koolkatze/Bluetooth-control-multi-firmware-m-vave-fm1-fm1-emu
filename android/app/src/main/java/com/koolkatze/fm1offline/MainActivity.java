@@ -95,6 +95,8 @@ public final class MainActivity extends Activity {
     private Button lcdButton;
     private Button audioButton;
     private TextView liveStatus;
+    private Button toggleControlsButton;
+    private Button infoButton;
     private boolean webReady = false;
     private int readyChecks = 0;
     private boolean shuttingDown = false;
@@ -190,6 +192,16 @@ public final class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                // The browser's sound/CPU status remains up to date, but the
+                // Android shell presents it through the small info button.
+                // Apply this to FM-1, SMK-37, and all local subpages.
+                view.evaluateJavascript("(function(){"
+                        + "if(document.getElementById('fm1-android-status-style'))return;"
+                        + "var css=document.createElement('style');"
+                        + "css.id='fm1-android-status-style';"
+                        + "css.textContent='#status{display:none!important}';"
+                        + "document.head.appendChild(css);"
+                        + "})()", null);
                 updateStatus("Cargando emulador y firmwares locales…");
                 readyChecks = 0;
                 ui.postDelayed(() -> checkWebReady(), 600);
@@ -268,17 +280,16 @@ public final class MainActivity extends Activity {
             }
         });
 
+        // The emulated LCD uses the ENTIRE usable display. Native controls
+        // float above the bottom edge only when explicitly expanded.
         FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        pageParams.bottomMargin = dp(82);
         root.addView(web, pageParams);
 
-        // Persistent Android toolbar. It is independent of the HTML and cannot
-        // disappear when the emulator is in LCD-only mode or fails to initialize.
         LinearLayout controls = new LinearLayout(this);
         controls.setOrientation(LinearLayout.VERTICAL);
-        controls.setBackgroundColor(0xff171b22);
-        controls.setPadding(dp(8), dp(2), dp(8), dp(2));
+        controls.setBackgroundColor(0xe6171b22);
+        controls.setPadding(dp(7), dp(3), dp(7), dp(3));
         LinearLayout buttons = new LinearLayout(this);
         buttons.setOrientation(LinearLayout.HORIZONTAL);
         buttons.setGravity(Gravity.CENTER_VERTICAL);
@@ -293,18 +304,52 @@ public final class MainActivity extends Activity {
         buttons.addView(midiButton, new LinearLayout.LayoutParams(0, dp(46), 0.8f));
         buttons.addView(audioButton, new LinearLayout.LayoutParams(0, dp(46), 0.9f));
         controls.addView(buttons);
+        controls.setVisibility(View.GONE);
+        FrameLayout.LayoutParams controlsParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM);
+        controlsParams.bottomMargin = dp(45);
+        root.addView(controls, controlsParams);
 
+        // Keep diagnostics in memory without taking LCD space.
         liveStatus = new TextView(this);
         liveStatus.setText("Preparando emulador local…");
-        liveStatus.setTextColor(0xffbdc5d3);
-        liveStatus.setTextSize(11);
-        liveStatus.setSingleLine(true);
-        liveStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        controls.addView(liveStatus, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(25)));
-        FrameLayout.LayoutParams controlsParams = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(76), Gravity.BOTTOM);
-        root.addView(controls, controlsParams);
+
+        // Two small, translucent, permanently reachable floating buttons.
+        LinearLayout quickActions = new LinearLayout(this);
+        quickActions.setOrientation(LinearLayout.HORIZONTAL);
+        quickActions.setGravity(Gravity.CENTER);
+        quickActions.setPadding(dp(3), 0, dp(3), 0);
+        toggleControlsButton = toolbarButton("▲", 17);
+        toggleControlsButton.setContentDescription("Mostrar controles");
+        toggleControlsButton.setBackgroundTintList(
+                android.content.res.ColorStateList.valueOf(0x99343e4a));
+        infoButton = toolbarButton("ⓘ", 19);
+        infoButton.setContentDescription("Datos de sonido");
+        infoButton.setBackgroundTintList(
+                android.content.res.ColorStateList.valueOf(0x99343e4a));
+        LinearLayout.LayoutParams quickButtonParams =
+                new LinearLayout.LayoutParams(dp(42), dp(38));
+        quickButtonParams.setMargins(dp(2), 0, dp(2), 0);
+        quickActions.addView(toggleControlsButton, quickButtonParams);
+        LinearLayout.LayoutParams infoParams =
+                new LinearLayout.LayoutParams(dp(42), dp(38));
+        infoParams.setMargins(dp(2), 0, dp(2), 0);
+        quickActions.addView(infoButton, infoParams);
+        FrameLayout.LayoutParams quickParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(40),
+                Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        quickParams.bottomMargin = dp(4);
+        root.addView(quickActions, quickParams);
+
+        toggleControlsButton.setOnClickListener(v -> {
+            boolean expand = controls.getVisibility() != View.VISIBLE;
+            controls.setVisibility(expand ? View.VISIBLE : View.GONE);
+            toggleControlsButton.setText(expand ? "▼" : "▲");
+            toggleControlsButton.setContentDescription(
+                    expand ? "Ocultar controles" : "Mostrar controles");
+        });
+        infoButton.setOnClickListener(v -> showSoundDiagnostics());
 
         startButton.setOnClickListener(v -> invokeInWeb(
                 "window.fm1StartFirmware ? (window.fm1StartFirmware(), 'ok') : 'notready'",
@@ -361,6 +406,44 @@ public final class MainActivity extends Activity {
 
     private void updateStatus(String message) {
         if (liveStatus != null && !shuttingDown) liveStatus.setText(message);
+    }
+
+    private void showSoundDiagnostics() {
+        StringBuilder details = new StringBuilder();
+        details.append(liveStatus != null ? liveStatus.getText() : "Sin datos")
+                .append("\n\nMotor: ")
+                .append(NativeSynth.AVAILABLE ? "Rust / AAudio nativo" : "WebAssembly");
+        if (NativeSynth.AVAILABLE) {
+            try {
+                details.append("\nEstado nativo: ").append(NativeSynth.stats());
+                details.append("\nDiagnóstico PCM: ").append(NativeSynth.diagnostics());
+            } catch (Exception | UnsatisfiedLinkError e) {
+                details.append("\nNo se pudo consultar AAudio: ").append(e.getMessage());
+            }
+        }
+        if (web == null) {
+            new AlertDialog.Builder(this).setTitle("Información y datos de sonido")
+                    .setMessage(details.toString())
+                    .setPositiveButton("Cerrar", null).show();
+            return;
+        }
+        web.evaluateJavascript("(function(){var s=document.getElementById('status');"
+                + "return s ? (s.textContent || '') : '';})()", result -> {
+            if (shuttingDown || isFinishing()) return;
+            String webStatus = "";
+            try {
+                Object parsed = new JSONTokener(result).nextValue();
+                if (parsed instanceof String) webStatus = (String) parsed;
+            } catch (Exception ignored) {
+                // The native diagnostic remains useful even without the page.
+            }
+            if (!webStatus.trim().isEmpty()) {
+                details.append("\n\nEmulador: ").append(webStatus);
+            }
+            new AlertDialog.Builder(this).setTitle("Información y datos de sonido")
+                    .setMessage(details.toString())
+                    .setPositiveButton("Cerrar", null).show();
+        });
     }
 
     private void checkWebReady() {
