@@ -192,7 +192,7 @@ final class FirmwareUpdater {
     private static boolean eligible(JSONObject f) {
         String license = f.optString("license");
         return !f.optBoolean("byo") && !f.optString("repo").isEmpty()
-                && license.matches("(?i)^(GPL(?:-|\\\\b)|MIT(?:\\\\b|-)|MPL(?:-|\\\\b)|Apache(?:-|\\\\b)|BSD(?:-|\\\\b)|ISC(?:-|\\\\b)|CC0(?:-|\\\\b)|Unlicense(?:\\\\b)).*")
+                && license.matches("(?i)^(GPL|MIT|MPL|Apache|BSD|ISC|CC0|Unlicense)(?:$|[^A-Za-z].*)")
                 && !license.toLowerCase(java.util.Locale.ROOT).contains("source is not published");
     }
 
