@@ -1,0 +1,79 @@
+name: Android offline APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "android/**"
+      - "tools/package_offline_android.mjs"
+      - "web/**"
+      - "crates/**"
+      - ".github/workflows/android-offline.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-offline
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build installable offline APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Checkout emulator source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Android SDK platform 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Compile WebAssembly emulator for offline packaging
+        run: |
+          rustup target add wasm32-unknown-unknown
+          web/build.sh _offline_web
+
+      - name: Bundle open-source firmware packages and all web assets
+        run: node tools/package_offline_android.mjs _offline_web android/app/src/main/assets/site
+
+      - name: Validate local package references and offline manifest
+        run: node tools/check_offline_android.mjs android/app/src/main/assets/site
+
+      - name: Test bundled FM-1 boot and audio using its packaged firmware
+        run: |
+          node web/smoke.mjs _offline_web android/app/src/main/assets/site/offline-fw/$(node -p "require('./android/app/src/main/assets/site/firmwares.json').default").fwsc
+
+      - name: Build Android APK
+        run: gradle -p android :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FM1-Mobile-Offline-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload offline firmware provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: FM1-Offline-Firmware-Manifest
+          path: |
+            android/app/src/main/assets/site/offline-bundle-report.json
+            android/app/src/main/assets/site/OFFLINE-FIRMWARES.md
+          retention-days: 30
