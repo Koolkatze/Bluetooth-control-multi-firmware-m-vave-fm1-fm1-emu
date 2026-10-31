@@ -37,7 +37,7 @@ function storage() {
       return revision;
     } };
 }
-async function page(disk = storage(), initialSearch = '', selected = '', manualBootTimeout = false) {
+async function page(disk = storage(), initialSearch = '', selected = '', manualBootTimeout = false, nativeAndroid = false) {
   let bootTimer;
   const elements = new Map();
   const document = { documentElement: new Element(),
@@ -45,9 +45,9 @@ async function page(disk = storage(), initialSearch = '', selected = '', manualB
     createElement() { return new Element(); }, querySelector() { return new Element(); }, addEventListener() {} };
   const cat = { default: 'a', firmwares: ['a', 'b'].map(id => ({ id, name: id, version: '1',
     package: `https://example.test/${id}.fwsc`, author: 'test', license: 'MIT', about: '' })) };
-  let audio;
+  let audio, audioContext;
   class AudioContext {
-    constructor() { this.state = 'running'; this.audioWorklet = { addModule: async () => {} }; }
+    constructor(options = {}) { audioContext = this; this.latencyHint = options.latencyHint; this.state = 'running'; this.audioWorklet = { addModule: async () => {} }; }
     async resume() { this.state = 'running'; } async close() { this.state = 'closed'; }
   }
   class AudioWorkletNode {
@@ -78,7 +78,8 @@ async function page(disk = storage(), initialSearch = '', selected = '', manualB
   const environment = {
     setTimeout(fn, ms) { if (manualBootTimeout && ms === 30000) { bootTimer = fn; return 'boot-timer'; } return setTimeout(fn, ms); },
     clearTimeout(id) { if (id !== 'boot-timer') clearTimeout(id); },
-    document, location, history: { replaceState(_a, _b, url) { location.search = url; } },
+    document, location, window: nativeAndroid ? { FM1Android: { ready() {} } } : undefined,
+    history: { replaceState(_a, _b, url) { location.search = url; } },
     localStorage: { getItem: key => local.get(key), setItem: (key, value) => local.set(key, value) },
     ResizeObserver: class { observe() {} }, scrollY: 0, Option: Element, navigator: {},
     fetch: async url => ({ json: async () => url === 'smk37/firmwares.json' ? { firmwares: [] } : cat,
@@ -95,7 +96,7 @@ async function page(disk = storage(), initialSearch = '', selected = '', manualB
     get fw() { return fw; }, perf, setMhz(c) { mhz = c; }, get bootSeq() { return bootSeq; }
   }; })()`);
   const api = await run(...Object.values(environment));
-  return { api, disk, elements, location, expireBoot: () => bootTimer(), get audio() { return audio; } };
+  return { api, disk, elements, location, expireBoot: () => bootTimer(), get audio() { return audio; }, get context() { return audioContext; } };
 }
 test('firmware switch, clock reboot and audio-context replacement retain the latest flash', async () => {
   const p = await page(); await p.api.startAudio(); await p.api.boot(); await settle();
@@ -265,4 +266,44 @@ test('page starts directly in LCD-only mode by default', async () => {
   assert.equal(p.elements.get('view-toggle').attributes.get('aria-pressed'), 'true');
   assert.equal(p.elements.get('panel').width, 960);
   assert.equal(p.elements.get('panel').height, 540);
+});
+
+test('Android receives native audio tuning, while browser defaults stay low latency', async () => {
+  const p = await page(storage(), '', '', false, true);
+  await p.api.startAudio(); await p.api.boot();
+  assert.equal(p.context.latencyHint, 'balanced', 'Android starts with a compromise between response and resilience');
+  assert.equal(p.audio.messages.find(m => m.type === 'boot').androidOptimized, true);
+  const browser = await page(); await browser.api.startAudio(); await browser.api.boot();
+  assert.equal(browser.context.latencyHint, 'interactive');
+  assert.equal(browser.audio.messages.find(m => m.type === 'boot').androidOptimized, false);
+});
+
+test('old performance warning disappears after sustained recovery without forcing an audio restart', async () => {
+  const p = await page(); await p.api.startAudio(); await p.api.boot();
+  const perf = p.api.perf, warn = p.elements.get('perfwarn');
+  const emitSecond = (busy, short = 0) => {
+    perf.busy = busy;
+    perf.span = 1000;
+    perf.emulated = 1000;
+    perf.second({ short, halted: false });
+  };
+  for (let i = 0; i < 7; i++) emitSecond(1150);
+  assert.equal(warn.hidden, false, 'sustained overload must warn');
+  const originalAudio = p.audio;
+  for (let i = 0; i < 6; i++) emitSecond(450);
+  assert.equal(warn.hidden, true, 'warnings from the boot JIT should clear after recovery');
+  assert.equal(p.audio, originalAudio, 'a recovered load never reboots the audio engine');
+  assert.equal(perf.good, 6);
+});
+
+test('performance report separates initial firmware silence from short audio after playback', async () => {
+  const p = await page(); await p.api.startAudio(); await p.api.boot();
+  p.audio.port.onmessage({ data: {
+    type: 'frame', seq: p.api.bootSeq, lcd: null, leds: new Float32Array(41), ms: 14000,
+    short: 2, shortStartup: 51, halted: false, playing: true,
+    jit: { regions: 1400, failed: 0, compileMs: 430, compileMaxMs: 5 },
+    busy: 510, worst: 5, emulated: 1000, idle: 3, quanta: 345, frames: 128,
+  } });
+  assert.match(p.api.perf.report(), /short audio quanta after playback began: 2/);
+  assert.match(p.api.perf.report(), /silent startup quanta: 51/);
 });
