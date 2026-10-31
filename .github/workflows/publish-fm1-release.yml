@@ -24,7 +24,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p dist
-          gh run download 41222496713 --repo "$GITHUB_REPOSITORY" \
+          gh run download 41225298660 --repo "$GITHUB_REPOSITORY" \
             --name FM1-Mobile-Offline-APK --dir dist
           test -s dist/app-debug.apk
 
@@ -46,34 +46,36 @@ jobs:
               assert len(packages) >= 1, 'No built-in FM-1 firmware packages'
               print('Included FM-1 firmware packages:', len(packages))
               print('APK SHA256:', hashlib.sha256(open(path, 'rb').read()).hexdigest())
-          os.rename(path, 'dist/M-VAVE-FM1-Firmware-bundle-v0.2.0.apk')
+          os.rename(path, 'dist/M-VAVE-FM1-Firmware-bundle-v0.2.1.apk')
           PY
 
       - name: Write versioned release notes
         run: |
           cat > dist/RELEASE-NOTES.md <<'EOF'
-          # M-VAVE FM1: Firmware bundle — v0.2.0 (experimental)
+          # M-VAVE FM1: Firmware bundle — v0.2.1 (experimental)
 
-          ## New FM-1 Native Audio Engine — Rust + AAudio
+          ## Fix: native AAudio PCM starvation in AMB-1 and other FM-1 firmwares
 
-          This is a fundamental audio engine change, not another WebAudio latency adjustment.
+          This release addresses reports of millions of samples missing from the v0.2.0 native audio engine. Large cumulative counts represented genuine failure to feed Android's audio callback, not normal latency.
 
-          ### v0.2.0 changes
-          - The FM-1 CPU, DSP and peripherals run as native ARM64/x86-64 Rust machine code.
-          - A dedicated Rust worker executes firmware and native JIT off the real-time audio thread.
-          - Android AAudio low-latency output reads stereo PCM from a lock-free SPSC ring. No JIT, allocation or JavaScript runs in the AAudio callback.
-          - 44.1 kHz firmware PCM is continuously resampled to the Android hardware output rate.
-          - USB and BLE MIDI go straight to Rust, without waiting for WebView painting.
-          - The familiar FM-1 panel, LCD, firmware browser and offline firmware collection remain.
-          - Flash settings are saved in Android private storage per firmware; switching the emulated firmware does not flash the physical M-VAVE FM-1.
-          - The previous WebAssembly engine remains available as a fallback if the native library cannot load.
+          ### Changes in v0.2.1
+          - The Rust FM-1 synth worker now generates PCM in **batches of up to 128 frames**, avoiding clock, MIDI, UI, and filesystem checks after every single audio sample.
+          - The native audio ring targets **1024 frames** (~21ms at 48k) instead of 512; this better absorbs the FM-1's bursty DMA output and intermittent JIT compilation.
+          - Before AAudio starts, the engine pre-fills at least 512 frames where the firmware produces audio in time (up to a bounded one-second boot interval).
+          - The AAudio callback accumulates missing samples and updates the atomic error counter once per callback, instead of thousands of atomics per second.
+          - The Android synth worker requests moderately elevated audio scheduling priority so drawing/WebView tasks are less likely to starve firmware synthesis.
+          - The UI now reports **recent missing samples per second**, total missing samples, native firmware emulation speed, PCM frames produced per second, and current audio ring depth.
+          - Added a real native firmware benchmark with a simulated 48kHz consumer. Under Linux CI, both **Felucca and AMB-1** each delivered 108,800 samples with **zero missing** across approximately 2.3 seconds. This is a software test, NOT a phone performance guarantee.
 
-          ### Experimental status and limitations
-          - The architecture is compiled and covered by automated tests, but **end-to-end latency on a real phone has not been measured**; audio quality cannot yet be guaranteed for every firmware.
-          - Bluetooth A2DP speakers add substantial latency outside the synth engine; use wired headphones or USB-C audio for playing live.
-          - Native flash saves are not yet compatible with the web .fm1save export format. Preserve the app data while testing.
-          - Some .syx import features and advanced menu actions still require parity testing with the web engine.
-          - This is an unofficial community project, not affiliated with M-VAVE. Proprietary stock firmware is not bundled.
+          ### Interpretation of the live diagnostics
+          - Native emulator speed should stay at least **1.0x** and PCM throughput should stay near the device sample rate (usually 48,000 per second).
+          - Missing samples / second should stay at **0** after startup, although the cumulative counter may retain historical values.
+          - If native emulated speed stays below 1x on a physical Android ARM64 phone, the bottleneck may be native JIT availability or device-specific CPU scheduling; more buffer alone cannot fix that.
+
+          ### Still experimental
+          - End-to-end physical Android audio quality and latency have not been validated by the CI test; test with a wired/USB-C audio output, not Bluetooth A2DP, for live musical response.
+          - Proprietary original firmware is not bundled. Native save data uses Android private storage, currently not exportable as browser .fm1save.
+          - The WebAssembly engine remains an optional fallback on devices where native libraries cannot load.
 
           ### Features
           - WebAssembly-based FM-1 firmware emulation and audio generation on Android.
@@ -85,7 +87,7 @@ jobs:
           - No Android Internet permission: bundled components and included firmwares function offline.
 
           ### Install
-          Download **M-VAVE-FM1-Firmware-bundle-v0.2.0.apk**, transfer it to Android and open it to install.
+          Download **M-VAVE-FM1-Firmware-bundle-v0.2.1.apk**, transfer it to Android and open it to install.
           If an older development build has a different signature, export saved presets and uninstall the older build first.
 
           ### Important limitations
@@ -105,8 +107,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v0.2.0 \
-            "dist/M-VAVE-FM1-Firmware-bundle-v0.2.0.apk" \
+          gh release create v0.2.1 \
+            "dist/M-VAVE-FM1-Firmware-bundle-v0.2.1.apk" \
             --repo "$GITHUB_REPOSITORY" \
             --target master \
             --title "M-VAVE FM1: Firmware bundle" \
@@ -117,7 +119,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view v0.2.0 --repo "$GITHUB_REPOSITORY" --json name,tagName,isDraft,isPrerelease,assets \
+          gh release view v0.2.1 --repo "$GITHUB_REPOSITORY" --json name,tagName,isDraft,isPrerelease,assets \
             --jq '{name,tag: .tagName,draft: .isDraft,prerelease: .isPrerelease,assets: [.assets[].name]}'
-          gh release view v0.2.0 --repo "$GITHUB_REPOSITORY" --json assets \
-            --jq '.assets[].name' | grep -Fx 'M-VAVE-FM1-Firmware-bundle-v0.2.0.apk'
+          gh release view v0.2.1 --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name' | grep -Fx 'M-VAVE-FM1-Firmware-bundle-v0.2.1.apk'
