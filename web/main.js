@@ -42,14 +42,15 @@ let fw = byId.get(params.get("fw")) || byId.get(stored(DEV.key + "fw")) || byId.
 let mhz = Number(params.get("mhz") || stored("fm1.mhz") || 100);
 // the audio buffer: "interactive" (small: keys answer quickly) unless this device needed a larger
 // one ("playback", offered when the sound drops out with time to spare; ?latency= overrides)
-// A musical instrument needs the FAST output path. The previous Android default
-// of 'balanced' caused perceptible key lag, so migrate that setting on upgrade.
-// 'playback' remains available ONLY when selected to work around real dropouts.
-const previousAudioHint = stored("fm1.latency");
-let latency = params.get("latency") ||
-  (nativeWindow.FM1Android && previousAudioHint === "balanced" ? "interactive" : previousAudioHint) ||
-  "interactive";
-if (nativeWindow.FM1Android && previousAudioHint === "balanced") store("fm1.latency", "interactive");
+// The v0.1.1 APK could persist 'balanced' or 'playback', causing very long
+// note-to-speaker delays. On first launch after this upgrade, reset the old
+// choice to 'interactive' exactly once. The Audio menu can still store another
+// choice and keep it on later launches. URL overrides remain explicit.
+if (nativeWindow.FM1Android && stored("fm1.audio-v012-migrated") !== "1") {
+  store("fm1.latency", "interactive");
+  store("fm1.audio-v012-migrated", "1");
+}
+let latency = params.get("latency") || stored("fm1.latency") || "interactive";
 
 const canvas = document.getElementById("panel");
 let layoutExportButton = null;
