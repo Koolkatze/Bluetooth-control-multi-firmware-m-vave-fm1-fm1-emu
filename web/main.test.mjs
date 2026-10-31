@@ -4,11 +4,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as persistence from './persistence.js';
 import * as screenAdapter from './screen-adapter.js';
+import { computeLCDSize } from './lcd-fit.js';
 const settle = () => new Promise(resolve => setImmediate(resolve));
 class Element {
   constructor(text = '', value = '') {
     this.text = this.textContent = text; this.value = String(value); this.options = []; this.listeners = {};
-    this.dataset = {}; this.style = { setProperty() {} }; this.classList = { add() {}, remove() {}, toggle() {} };
+    this.dataset = {}; this.style = { setProperty() {}, removeProperty() {} }; this.classList = { add() {}, remove() {}, toggle() {} };
     this.parentElement = this;
   }
   add(e, at = this.options.length) { this.options.splice(at, 0, e); }
@@ -78,7 +79,7 @@ async function page(disk = storage(), initialSearch = '', selected = '', manualB
   const environment = {
     setTimeout(fn, ms) { if (manualBootTimeout && ms === 30000) { bootTimer = fn; return 'boot-timer'; } return setTimeout(fn, ms); },
     clearTimeout(id) { if (id !== 'boot-timer') clearTimeout(id); },
-    document, location, window: nativeAndroid ? { FM1Android: { ready() {} } } : undefined,
+    document, location, window: nativeAndroid ? { FM1Android: { ready() {} }, innerWidth: 1000, innerHeight: 520, addEventListener() {} } : undefined,
     history: { replaceState(_a, _b, url) { location.search = url; } },
     localStorage: { getItem: key => local.get(key), setItem: (key, value) => local.set(key, value) },
     ResizeObserver: class { observe() {} }, scrollY: 0, Option: Element, navigator: {},
@@ -88,7 +89,7 @@ async function page(disk = storage(), initialSearch = '', selected = '', manualB
     requestAnimationFrame() {}, addEventListener() {}, AudioContext, AudioWorkletNode,
     matchMedia: () => ({ matches: false }), confirm: () => true,
     fetchPackage: async f => ({ bytes: new Uint8Array(960).fill(f.id === 'a' ? 1 : 2), url: f.package }),
-    ...screenAdapter, ...persistence, SaveStore: class { constructor() { return disk; } } };
+    ...screenAdapter, computeLCDSize, ...persistence, SaveStore: class { constructor() { return disk; } } };
   const source = readFileSync(new URL('./main.js', import.meta.url), 'utf8').replace(/^import .*;$/gm, '');
   const run = new Function(...Object.keys(environment), `return (async () => { ${source}\nreturn {
     startAudio, boot, flushRunning, setLatency, get running() { return running; },
@@ -252,6 +253,9 @@ test('LCD-only switch is immediate, preserves audio, and never displays the full
   await fit.listeners.click();
   assert.equal(fit.textContent, 'Horizontal');
   assert.match(p.location.search, /fit=0/);
+  assert.equal(canvas.width, 240, 'original display keeps square framebuffer');
+  assert.equal(canvas.height, 240, 'original display is never stretched to 16:9');
+  assert.equal(fit.textContent, 'Horizontal');
   await view.listeners.click();
   assert.equal(view.textContent, 'Solo LCD');
   assert.equal(canvas.width, 100);
