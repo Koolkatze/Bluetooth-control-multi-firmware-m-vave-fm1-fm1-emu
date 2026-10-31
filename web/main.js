@@ -1177,10 +1177,27 @@ nativeWindow.fm1StartFirmware = () => {
   else boot();
 };
 nativeWindow.fm1SetDisplayMode = (lcd) => setDisplayMode(Boolean(lcd));
+// Android native audio controls: the low-latency mode remains the recommended
+// default; larger buffers are optional rather than silently forced on users.
+nativeWindow.fm1SetAudioProfile = (profile) => {
+  if (!["interactive", "balanced", "playback"].includes(profile)) return false;
+  if (profile === latency) return true;
+  if (!node) {
+    latency = profile;
+    store("fm1.latency", profile);
+    return true;
+  }
+  status.textContent = "Cambiando audio a " + profile + " (reiniciando firmware)…";
+  setLatency(profile).catch(error => {
+    status.textContent = "Error al cambiar audio: " + String(error?.message || error);
+  });
+  return true;
+};
 nativeWindow.fm1NativeStatus = () => ({
   ready: true, playing: Boolean(running), lcd: Boolean(screenFrame),
   firmware: fw?.name || "", mode: SCREEN_ONLY ? "lcd" : "panel",
   booting: Boolean(booting), startVisible: !startBtn.hidden,
+  sampleRate: ac?.sampleRate || null, audioProfile: latency,
   status: status.textContent || ""
 });
 if (nativeWindow.FM1Android?.ready) nativeWindow.FM1Android.ready();
