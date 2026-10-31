@@ -1,0 +1,18 @@
+[package]
+name = "fm1-android"
+description = "FM-1 native Rust synthesizer and Android AAudio backend"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "fm1_android"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+fm1-core = { path = "../fm1-core" }
+fm1-soc = { path = "../fm1-soc" }
+jni = "0.21"
+
+[target.'cfg(target_os = "android")'.dependencies]
+# AAudio is linked from the Android NDK via Rust FFI; no network services needed.
