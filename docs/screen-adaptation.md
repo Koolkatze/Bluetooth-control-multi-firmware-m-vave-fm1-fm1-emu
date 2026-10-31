@@ -23,6 +23,29 @@ The output always has `safeToReflow: false` and `semanticConfidence: "insufficie
 regions are diagnostics, not a licence to rearrange pixels. A generic heuristic must never move a
 waveform, split a glyph, hide a value or change the meaning of a firmware screen.
 
+## Android MIDI validation notes
+
+The existing browser page uses the Web MIDI API for MIDI input. On Android, test it in Chrome over
+HTTPS and grant the site's MIDI permission. Google's Chrome help confirms that Chrome on Android
+can request access to connected MIDI devices; Android itself supports USB and BLE MIDI transports.
+These platform capabilities do not, by themselves, prove that a particular Chrome build exposes a
+paired BLE-MIDI peripheral to `navigator.requestMIDIAccess()`.
+
+Validate transports independently on the target phone:
+
+1. **USB-C / OTG:** connect a class-compliant USB-MIDI interface or controller, open the page's
+   Settings view, grant MIDI permission and confirm the device appears in the input selector.
+2. **Bluetooth LE MIDI:** pair the controller in Android Bluetooth settings, reopen MIDI access and
+   check whether it appears in the same selector. Do not assume ordinary Bluetooth audio pairing
+   makes it a MIDI endpoint.
+3. Send notes and controller messages and confirm the emulator receives them. Record the exact
+   Android build, Chrome version, controller firmware and transport for each successful test.
+
+If USB MIDI works but the paired BLE-MIDI device is absent, the next implementation should be a
+small native Android MIDI bridge using Android's MIDI APIs, rather than a browser-side BLE
+workaround. Keep this as a separate transport layer so the emulator's existing MIDI message path
+remains unchanged.
+
 ## Profile format (planned)
 
 A profile is keyed by firmware identity and version range. It describes semantic regions only when
