@@ -19,6 +19,7 @@ const DEV = DEVICE === "smk37"
       other: { name: "SMK-37", href: "smk37/" } };
 const params = new URLSearchParams(location.search);
 const SCREEN_ONLY = params.get("screen") !== "0";
+const ADAPTIVE_FIT = params.get("fit") !== "0";
 if (SCREEN_ONLY) document.documentElement.setAttribute("data-screen-only", "");
 const stored = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const store = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
@@ -46,6 +47,13 @@ const mhzSel = document.getElementById("mhz");
 const about = document.getElementById("about");
 const title = document.getElementById("title");
 document.getElementById("view-toggle").textContent = SCREEN_ONLY ? "Settings" : "Screen only";
+const fitToggle = document.getElementById("fit-toggle");
+fitToggle.textContent = ADAPTIVE_FIT ? "Original" : "Auto fit";
+fitToggle.addEventListener("click", () => {
+  const next = new URLSearchParams(location.search);
+  next.set("fit", ADAPTIVE_FIT ? "0" : "1");
+  location.search = next.toString();
+});
 document.getElementById("view-toggle").addEventListener("click", () => {
   const next = new URLSearchParams(location.search);
   next.set("screen", SCREEN_ONLY ? "0" : "1");
@@ -367,7 +375,7 @@ function draw() {
   if (SCREEN_ONLY) {
     if (screenDirty) {
       const lcd = new Uint16Array(mem(), ui.panel_lcd(), 240 * 240);
-      renderAdaptiveLCD(ctx, lcd, 240, 240);
+      renderAdaptiveLCD(ctx, lcd, 240, 240, ADAPTIVE_FIT);
       screenDirty = false;
     }
     requestAnimationFrame(draw);
