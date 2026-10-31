@@ -129,7 +129,8 @@ fitPanel();
 
 let node = null;
 let frame = null;            // the latest LCD + LEDs from the audio thread
-let screenDirty = true;
+let screenFrame = null;       // the latest LCD frame, kept directly from the audio thread
+let screenDirty = false;
 const down = new Uint8Array(64);           // keys and buttons held (FM-1: matrix ids 0..40; SMK-37: keys 0..36, buttons 37..54)
 const encClicks = new Int32Array(8);
 const turning = new Uint32Array(9);
@@ -402,6 +403,7 @@ function draw() {
   const mem = () => ui.memory.buffer;
   if (frame) {
     if (frame.lcd) {
+      screenFrame = frame.lcd;
       new Uint16Array(mem(), ui.panel_lcd(), 240 * 240).set(frame.lcd);
       screenDirty = true;
       frame.lcd = null;
@@ -418,8 +420,8 @@ function draw() {
   }
   if (board === 1) for (let i = 0; i < 23; i++) ui.panel_set(4, i, analog[i]);
   if (SCREEN_ONLY) {
-    if (screenDirty) {
-      const lcd = new Uint16Array(mem(), ui.panel_lcd(), 240 * 240);
+    if (screenDirty && screenFrame) {
+      const lcd = screenFrame;
       if (DEBUG_LAYOUT) {
         latestLcdFrame = lcd.slice();
         latestLayoutAnalysis = screenAnalyzer.analyze(lcd);
