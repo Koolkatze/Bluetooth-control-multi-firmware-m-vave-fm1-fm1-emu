@@ -10,6 +10,8 @@ on:
       - "tools/build_android_native.sh"
       - "web/**"
       - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
       - ".github/workflows/android-offline.yml"
 
 permissions:
