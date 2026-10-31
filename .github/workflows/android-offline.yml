@@ -79,6 +79,14 @@ jobs:
         run: |
           node web/smoke.mjs _offline_web android/app/src/main/assets/site/offline-fw/$(node -p "require('./android/app/src/main/assets/site/firmwares.json').default").fwsc
 
+      - name: Benchmark actual native FM-1 engine with offline AMB and default firmware
+        run: |
+          default_id=$(node -p "require('./android/app/src/main/assets/site/firmwares.json').default")
+          cargo run --release -p fm1-android --example native_bench --locked -- "android/app/src/main/assets/site/offline-fw/$default_id.fwsc"
+          if test -s android/app/src/main/assets/site/offline-fw/amb.fwsc; then
+            cargo run --release -p fm1-android --example native_bench --locked -- "android/app/src/main/assets/site/offline-fw/amb.fwsc"
+          fi
+
       - name: Build Android APK
         run: gradle -p android :app:assembleDebug --no-daemon --stacktrace
 
