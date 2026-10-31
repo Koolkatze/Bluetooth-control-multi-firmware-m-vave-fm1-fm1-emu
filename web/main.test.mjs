@@ -13,8 +13,10 @@ class Element {
   }
   add(e, at = this.options.length) { this.options.splice(at, 0, e); }
   addEventListener(type, fn) { this.listeners[type] = fn; }
-  append() {} replaceChildren() {} setAttribute() {} blur() {} click() {}
-  hasAttribute() { return false; }
+  append() {} replaceChildren() {} blur() {} click() {}
+  setAttribute(name, value) { (this.attributes ??= new Map()).set(name, String(value)); }
+  removeAttribute(name) { this.attributes?.delete(name); }
+  hasAttribute(name) { return this.attributes?.has(name) || false; }
   querySelector() { return new Element(); }
   getBoundingClientRect() { return { top: 0 }; }
   getContext() { return {}; }
@@ -227,4 +229,40 @@ test('the status line and the report give the emulation speed and the JIT; idle 
   assert.equal(p.api.perf.lowerClock(3), 60);
   p.api.setMhz(80);
   assert.equal(p.api.perf.lowerClock(1.2), null);    // (60 MHz would save only ~13%)
+});
+
+test('LCD-only switch is immediate, preserves audio, and never displays the full panel', async () => {
+  const p = await page(storage(), '?screen=0&fit=1');
+  const canvas = p.elements.get('panel');
+  const view = p.elements.get('view-toggle');
+  const fit = p.elements.get('fit-toggle');
+  assert.equal(view.textContent, 'Solo LCD');
+  assert.equal(canvas.width, 100);
+  assert.equal(canvas.height, 100);
+  await p.api.startAudio(); await p.api.boot();
+  const worklet = p.audio;
+  await view.listeners.click();
+  assert.equal(p.audio, worklet, 'no audio worklet reboot');
+  assert.equal(view.textContent, 'Mostrar panel');
+  assert.equal(view.attributes.get('aria-pressed'), 'true');
+  assert.equal(canvas.width, 960);
+  assert.equal(canvas.height, 540);
+  assert.match(p.location.search, /screen=1/);
+  await fit.listeners.click();
+  assert.equal(fit.textContent, 'Horizontal');
+  assert.match(p.location.search, /fit=0/);
+  await view.listeners.click();
+  assert.equal(view.textContent, 'Solo LCD');
+  assert.equal(canvas.width, 100);
+  assert.equal(canvas.height, 100);
+  assert.match(p.location.search, /screen=0/);
+  assert.equal(p.audio, worklet, 'switching back also keeps emulation running');
+});
+
+test('page starts directly in LCD-only mode by default', async () => {
+  const p = await page();
+  assert.equal(p.elements.get('view-toggle').textContent, 'Mostrar panel');
+  assert.equal(p.elements.get('view-toggle').attributes.get('aria-pressed'), 'true');
+  assert.equal(p.elements.get('panel').width, 960);
+  assert.equal(p.elements.get('panel').height, 540);
 });
