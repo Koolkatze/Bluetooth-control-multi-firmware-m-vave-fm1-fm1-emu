@@ -5,7 +5,7 @@
 //   node tools/readme_firmwares.mjs [--check]
 import { readFileSync, writeFileSync } from "node:fs";
 
-const SITE = "https://joakimeriksson.github.io/fm1-emu/";
+const SITE = "https://koolkatze.github.io/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/";
 const readme = new URL("../README.md", import.meta.url);
 const cell = (s) => s.replace(/\|/g, "\\|");
 // the first sentence of the page's text: a ". " ends it, a ":" inside it does not
