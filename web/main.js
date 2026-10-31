@@ -6,6 +6,7 @@
 import { fetchPackage } from "./fwsc.js";
 import { ScreenAnalyzer, renderAdaptiveLCD } from "./screen-adapter.js";
 import { drawMobileLCD } from "./mobile-lcd.js?v=lcd-live-20261031";
+import { computeLCDSize } from "./lcd-fit.js";
 import { SaveStore, packageHash, changedSectors, packSectors, exportSave, importSave } from "./persistence.js";
 
 const CLOCKS = [60, 80, 100, 120, 160, 200, 240];
@@ -107,6 +108,36 @@ const about = document.getElementById("about");
 const title = document.getElementById("title");
 const viewToggle = document.getElementById("view-toggle");
 const fitToggle = document.getElementById("fit-toggle");
+const lcdStage = document.querySelector(".stage");
+
+// Size in CSS pixels, not framebuffer pixels: the native Android root has
+// already reserved the status bar, cutout and bottom system navigation.
+// Measuring the actual WebView prevents the old width:100% rule from
+// clipping the firmware's top/bottom on landscape phones.
+function resizeAndroidLCD() {
+  if (!nativeWindow.FM1Android) return;
+  if (!SCREEN_ONLY) {
+    lcdStage.style.removeProperty("width");
+    lcdStage.style.removeProperty("height");
+    return;
+  }
+  const vv = window.visualViewport;
+  const viewportWidth = Math.min(
+    window.innerWidth, document.documentElement.clientWidth || window.innerWidth,
+    vv?.width || window.innerWidth
+  );
+  const viewportHeight = Math.min(
+    window.innerHeight, document.documentElement.clientHeight || window.innerHeight,
+    vv?.height || window.innerHeight
+  );
+  const size = computeLCDSize(viewportWidth, viewportHeight,
+    { original: !ADAPTIVE_FIT });
+  lcdStage.style.setProperty("width", size.width + "px", "important");
+  lcdStage.style.setProperty("height", size.height + "px", "important");
+}
+window.addEventListener("resize", resizeAndroidLCD);
+window.visualViewport?.addEventListener("resize", resizeAndroidLCD);
+window.addEventListener("orientationchange", resizeAndroidLCD);
 
 function showDisplayMode() {
   // Button text describes the next action, and aria-pressed exposes current mode.
@@ -122,12 +153,15 @@ function setDisplayMode(screenOnly, adaptiveFit = ADAPTIVE_FIT) {
   ADAPTIVE_FIT = adaptiveFit;
   if (SCREEN_ONLY) document.documentElement.setAttribute("data-screen-only", "");
   else document.documentElement.removeAttribute("data-screen-only");
+  document.documentElement.toggleAttribute("data-lcd-original",
+    SCREEN_ONLY && !ADAPTIVE_FIT);
+  resizeAndroidLCD();
 
   // Do not reboot the audio worklet or reload the page to change display mode.
   // The full panel is available only when explicitly requested.
   if (W > 0 && H > 0) {
-    canvas.width = SCREEN_ONLY ? 960 : W;
-    canvas.height = SCREEN_ONLY ? 540 : H;
+    canvas.width = SCREEN_ONLY ? (ADAPTIVE_FIT ? 960 : 240) : W;
+    canvas.height = SCREEN_ONLY ? (ADAPTIVE_FIT ? 540 : 240) : H;
   }
   screenDirty = true;
   showDisplayMode();
@@ -139,6 +173,9 @@ function setDisplayMode(screenOnly, adaptiveFit = ADAPTIVE_FIT) {
 }
 
 showDisplayMode();
+document.documentElement.toggleAttribute("data-lcd-original",
+  SCREEN_ONLY && !ADAPTIVE_FIT);
+resizeAndroidLCD();
 fitToggle.addEventListener("click", () => {
   setDisplayMode(SCREEN_ONLY, !ADAPTIVE_FIT);
 });
@@ -197,8 +234,8 @@ function setBoard(b) {
   ui.panel_board(b);
   W = ui.panel_width();
   H = ui.panel_height();
-  canvas.width = SCREEN_ONLY ? 960 : W;
-  canvas.height = SCREEN_ONLY ? 540 : H;
+  canvas.width = SCREEN_ONLY ? (ADAPTIVE_FIT ? 960 : 240) : W;
+  canvas.height = SCREEN_ONLY ? (ADAPTIVE_FIT ? 540 : 240) : H;
   // the synth's width follows the room left below the header and the bar (index.html's canvas rule)
   document.documentElement.style.setProperty("--aspect", String(W / H));
   document.documentElement.dataset.board = b ? "smk37" : "fm1";
