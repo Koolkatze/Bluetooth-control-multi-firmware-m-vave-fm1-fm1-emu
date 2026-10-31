@@ -33,7 +33,8 @@ const manifest = await readFile("android/app/src/main/AndroidManifest.xml", "utf
 assert(!manifest.includes("android.permission.INTERNET"),
   "Offline APK must not have Internet permission");
 const main = await readFile(join(root, "main.js"), "utf8");
-assert(main.includes("window.fm1NativeMidi"), "Native MIDI integration missing");
+assert(main.includes("nativeWindow.fm1NativeMidi") || main.includes("window.fm1NativeMidi"),
+  "Native MIDI integration missing");
 const smk = await readFile(join(root, "smk37/mobile-lcd.js"), "utf8");
 assert(smk.includes("drawMobileLCD"), "SMK-37 offline imports incomplete");
 console.log(`Offline verification passed: ${fm1Count} FM-1 firmware(s), ${total} total, 0 runtime network permissions`);
