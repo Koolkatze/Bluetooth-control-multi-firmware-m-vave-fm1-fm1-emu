@@ -7,6 +7,7 @@ on:
       - "android/**"
       - "tools/package_offline_android.mjs"
       - "tools/check_offline_android.mjs"
+      - "tools/build_android_native.sh"
       - "web/**"
       - "crates/**"
       - ".github/workflows/android-offline.yml"
@@ -50,6 +51,11 @@ jobs:
         with:
           gradle-version: "8.10.2"
 
+      - name: Build native Rust / AAudio synthesizer (ARM64 + x86-64)
+        run: |
+          cargo test -p fm1-android --lib --locked
+          bash tools/build_android_native.sh
+
       - name: Compile WebAssembly emulator for offline packaging
         run: |
           rustup target add wasm32-unknown-unknown
@@ -57,6 +63,12 @@ jobs:
 
       - name: Bundle open-source firmware packages and all web assets
         run: node tools/package_offline_android.mjs _offline_web android/app/src/main/assets/site
+
+      - name: Validate true native synthesizer libraries and package files
+        run: |
+          test -s android/app/src/main/jniLibs/arm64-v8a/libfm1_android.so
+          test -s android/app/src/main/jniLibs/x86_64/libfm1_android.so
+          node tools/check_offline_android.mjs android/app/src/main/assets/site
 
       - name: Validate local package references and offline manifest
         run: node tools/check_offline_android.mjs android/app/src/main/assets/site
