@@ -959,6 +959,7 @@ async function setLatency(l) {
 // ---------------------------------------------------------------- audio: start on a click
 let ac = null, last = null, bootSeq = 0, booting = 0;
 let nativeRunning = false, nativePoll = null;
+let nativeAudioLast = null;
 
 // Only once when switching a firmware. No base64 processing on the AAudio
 // callback: bytes are decoded before the Rust synth thread is started.
@@ -971,6 +972,7 @@ function encodeNativeFirmware(bytes) {
 
 function startNativeLCDPoll() {
   if (nativePoll !== null) clearInterval(nativePoll);
+  nativeAudioLast = null;
   const native = nativeWindow.FM1Android;
   nativePoll = setInterval(() => {
     if (!nativeRunning) return;
@@ -989,9 +991,27 @@ function startNativeLCDPoll() {
       const underruns = Math.floor(stats / 8);
       const halted = (stats & 4) !== 0;
       const playing = (stats & 2) !== 0;
+      const [emulatedMs, pcmFrames, ringFill] =
+        (native.nativeDiagnostics?.() || "0,0,0").split(",").map(Number);
+      const current = { t: performance.now(), underruns, emulatedMs, pcmFrames };
+      let rate = "?";
+      let speed = "?";
+      let produced = "?";
+      if (nativeAudioLast && current.t - nativeAudioLast.t >= 750) {
+        const seconds = (current.t - nativeAudioLast.t) / 1000;
+        rate = Math.round(Math.max(0, underruns - nativeAudioLast.underruns) / seconds);
+        speed = ((emulatedMs - nativeAudioLast.emulatedMs) / (seconds * 1000)).toFixed(2);
+        produced = Math.round((pcmFrames - nativeAudioLast.pcmFrames) / seconds);
+        nativeAudioLast = current;
+      } else if (!nativeAudioLast) {
+        nativeAudioLast = current;
+      }
+      // Show RECENT xruns and actual native synth progress instead of only an
+      // alarming ever-growing total. The full count remains visible too.
       status.textContent = halted ? `${fw.name}: CPU nativa detenida` :
         `${fw.name} · Rust + AAudio · ${playing ? "reproduciendo" : "iniciando"}` +
-        ` · muestras perdidas ${underruns}`;
+        ` · fallos recientes ${rate} muestras/s · total ${underruns}` +
+        ` · motor ${speed}× · PCM ${produced}/s · cola ${ringFill}`;
     } catch (error) {
       status.textContent = "Error LCD nativa: " + String(error?.message || error);
     }
