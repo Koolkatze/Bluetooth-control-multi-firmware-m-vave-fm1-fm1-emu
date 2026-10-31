@@ -19,6 +19,10 @@ const DEV = DEVICE === "smk37"
   : { product: "M-VAVE FM-1", board: 0, key: "fm1.", stock: "FM-1.fwsc", stockFile: /^FM-1( \(\d+\))?\.fwsc$/i,
       other: { name: "SMK-37", href: "smk37/" } };
 const nativeWindow = typeof window === "undefined" ? {} : window;
+// Android APK uses native ARM64/x86-64 Rust synthesis + AAudio when the library
+// is present. WebView only draws controls and the LCD. Browser mode and Android
+// without the native library retain their existing AudioWorklet fallback.
+const USE_NATIVE_SYNTH = Boolean(nativeWindow.FM1Android?.nativeAvailable?.());
 const params = new URLSearchParams(location.search);
 let SCREEN_ONLY = params.get("screen") !== "0";
 let ADAPTIVE_FIT = params.get("fit") !== "0";
@@ -384,7 +388,7 @@ fwSel.addEventListener("change", () => {
   if (!EMBED) store(DEV.key + "fw", fw.id);
   showFirmware();
   fwSel.blur();                 // back to playing from the keyboard
-  if (node) boot();
+  if (node || nativeRunning) boot();
 });
 mhzSel.addEventListener("change", () => {
   mhz = Number(mhzSel.value);
@@ -521,7 +525,19 @@ function draw(timestamp) {
 requestAnimationFrame(draw);
 
 // ---------------------------------------------------------------- input to the machine
-const send = (m) => node && node.port.postMessage(m);
+const send = (m) => {
+  if (USE_NATIVE_SYNTH && nativeRunning) {
+    const native = nativeWindow.FM1Android;
+    if (m.type === "key") native.nativeControl(0, m.id, Number(m.down));
+    else if (m.type === "enc") native.nativeControl(1, m.enc, m.clicks);
+    else if (m.type === "pot") native.nativeControl(2, 0, m.value);
+    else if (m.type === "analog") native.nativeControl(3, m.idx, m.value);
+    else if (m.type === "vel") native.nativeControl(4, 0, m.us);
+    else if (m.type === "midi") native.nativeMidi(m.bytes);
+    return;
+  }
+  if (node) node.port.postMessage(m);
+};
 function setKey(id, on) {
   if (down[id] === (on ? 1 : 0)) return;
   down[id] = on ? 1 : 0;
@@ -922,6 +938,10 @@ function setClock(c) {
   boot();
 }
 async function setLatency(l) {
+  if (USE_NATIVE_SYNTH) {
+    status.textContent = "AAudio nativo administra el búfer; no utiliza AudioContext.";
+    return;
+  }
   await bootQueue;
   await flushRunning(true);
   latency = l;
@@ -938,6 +958,45 @@ async function setLatency(l) {
 
 // ---------------------------------------------------------------- audio: start on a click
 let ac = null, last = null, bootSeq = 0, booting = 0;
+let nativeRunning = false, nativePoll = null;
+
+// Only once when switching a firmware. No base64 processing on the AAudio
+// callback: bytes are decoded before the Rust synth thread is started.
+function encodeNativeFirmware(bytes) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 8192)
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return btoa(binary);
+}
+
+function startNativeLCDPoll() {
+  if (nativePoll !== null) clearInterval(nativePoll);
+  const native = nativeWindow.FM1Android;
+  nativePoll = setInterval(() => {
+    if (!nativeRunning) return;
+    try {
+      const raw = native.nativeLcd();
+      if (!raw) return;
+      const binary = atob(raw);
+      if (binary.length !== 240 * 240 * 2) return;
+      const lcd = new Uint16Array(240 * 240);
+      for (let i = 0; i < lcd.length; i++) {
+        const p = i * 2;
+        lcd[i] = binary.charCodeAt(p) | (binary.charCodeAt(p + 1) << 8);
+      }
+      frame = { lcd, leds: new Float32Array(41), pads: null };
+      const stats = Number(native.nativeStats());
+      const underruns = Math.floor(stats / 8);
+      const halted = (stats & 4) !== 0;
+      const playing = (stats & 2) !== 0;
+      status.textContent = halted ? `${fw.name}: CPU nativa detenida` :
+        `${fw.name} · Rust + AAudio · ${playing ? "reproduciendo" : "iniciando"}` +
+        ` · muestras perdidas ${underruns}`;
+    } catch (error) {
+      status.textContent = "Error LCD nativa: " + String(error?.message || error);
+    }
+  }, 120);
+}
 
 let bootQueue = Promise.resolve(), running = null, requestId = 0;
 const sessions = new Map(), bootWaiters = new Map(), snapshotWaiters = new Map();
@@ -985,6 +1044,7 @@ function saveSnapshot(session, flash, flashRevision) {
 async function flushRunning(pause = false) {
   const session = running;
   if (!session) return;
+  if (USE_NATIVE_SYNTH) return; // native Rust stores flash in Android private storage
   if (ac.state === "suspended") await ac.resume();
   const request = ++requestId;
   const response = new Promise((resolve, reject) => {
@@ -1011,6 +1071,25 @@ function boot(options = {}) {
     let got;
     try {
       got = await packageOf(f);
+      if (USE_NATIVE_SYNTH) {
+        if (seq !== bootSeq) return false;
+        const hash = await packageHash(got.bytes);
+        // This runs in a Java bridge worker, outside both audio threads.
+        const result = nativeWindow.FM1Android.bootNative(
+          encodeNativeFirmware(got.bytes), clock, hash);
+        if (!result?.startsWith("OK:")) throw new Error(result || "Error del motor nativo");
+        nativeRunning = true;
+        running = { native: true, seq, entry: DEV.key + f.id };
+        screenFrame = frame = null; screenDirty = true;
+        setBoard(DEVICE === "SMK-37" ? 1 : 0);
+        loadedUrl = got.url;
+        startNativeLCDPoll();
+        status.textContent = `${f.name} · motor nativo Rust · AAudio ${result.slice(3)} Hz`;
+        if (bank) {
+          status.textContent += " · la importación .syx al motor nativo aún no está disponible";
+        }
+        return true;
+      }
       const hash = await packageHash(got.bytes);
       let record = memoryRecords.get(hash);
       if (!record) {
@@ -1057,7 +1136,7 @@ function boot(options = {}) {
     } catch (error) {
       if (bank === importedBank) bank = null;
       booting = 0;
-      node?.port.postMessage({ type: "resume" });
+      if (!USE_NATIVE_SYNTH) node?.port.postMessage({ type: "resume" });
       if (seq === bootSeq) status.textContent = error instanceof NeedFile
         ? `${f.name}: open your ${DEV.stock} to boot it` : `${f.name}: ${error.message}`;
       return false;
@@ -1160,12 +1239,12 @@ function onWorklet(e) {
 
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
-  status.textContent = "starting audio…";
-  if (!node) await startAudio();
+  status.textContent = USE_NATIVE_SYNTH ? "Iniciando motor Rust/AAudio…" : "starting audio…";
+  if (!USE_NATIVE_SYNTH && !node) await startAudio();
   const started = await boot();
   if (!started) { startBtn.disabled = false; return; }
-  if (midiSel.value) midiOpen();                  // (an input picked on an earlier visit)
-  await ac.resume();
+  if (midiSel.value && !USE_NATIVE_SYNTH) midiOpen();
+  if (!USE_NATIVE_SYNTH) await ac.resume();
   startBtn.hidden = true;
   // a phone on its side: the synth fills the screen, so bring all of it into view
   if (matchMedia("(orientation: landscape) and (max-height: 560px)").matches) canvas.scrollIntoView({ block: "center" });
@@ -1174,7 +1253,7 @@ startBtn.addEventListener("click", async () => {
 // Native offline Android controls live outside WebView: they remain usable even
 // when the page is in fullscreen LCD-only mode.
 nativeWindow.fm1StartFirmware = () => {
-  if (!node || !startBtn.hidden) startBtn.click();
+  if ((!node && !nativeRunning) || !startBtn.hidden) startBtn.click();
   else boot();
 };
 nativeWindow.fm1SetDisplayMode = (lcd) => setDisplayMode(Boolean(lcd));
@@ -1196,9 +1275,11 @@ nativeWindow.fm1SetAudioProfile = (profile) => {
 };
 nativeWindow.fm1NativeStatus = () => ({
   ready: true, playing: Boolean(running), lcd: Boolean(screenFrame),
+  engine: USE_NATIVE_SYNTH ? "Rust + AAudio" : "WebAssembly + AudioWorklet",
   firmware: fw?.name || "", mode: SCREEN_ONLY ? "lcd" : "panel",
   booting: Boolean(booting), startVisible: !startBtn.hidden,
-  sampleRate: ac?.sampleRate || null, audioProfile: latency,
+  sampleRate: ac?.sampleRate || null,
+  audioProfile: USE_NATIVE_SYNTH ? "native-low-latency" : latency,
   status: status.textContent || ""
 });
 if (nativeWindow.FM1Android?.ready) nativeWindow.FM1Android.ready();
@@ -1207,10 +1288,12 @@ if (nativeWindow.FM1Android?.ready) nativeWindow.FM1Android.ready();
 const action = fn => async () => { try { await fn(); } catch (error) { saveFailure(error); } };
 document.getElementById("save-now").addEventListener("click", action(async () => {
   if (!running) throw new Error("start a firmware first");
+  if (USE_NATIVE_SYNTH) throw new Error("El motor nativo guarda automáticamente sus ajustes en Android. Exportación .fm1save en desarrollo.");
   await flushRunning();
 }));
 document.getElementById("export-save").addEventListener("click", action(async () => {
   if (!running) throw new Error("start a firmware first");
+  if (USE_NATIVE_SYNTH) throw new Error("El motor nativo guarda automáticamente sus ajustes en Android. Exportación .fm1save en desarrollo.");
   await flushRunning();
   const record = running.record;
   const url = URL.createObjectURL(new Blob([exportSave(record)], { type: "application/json" }));
