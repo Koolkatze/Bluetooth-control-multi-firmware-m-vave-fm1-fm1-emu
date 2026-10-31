@@ -98,7 +98,7 @@ jobs:
           gh release create v0.1.1 \
             "dist/M-VAVE-FM1-Firmware-bundle-v0.1.1.apk" \
             --repo "$GITHUB_REPOSITORY" \
-            --target be523c1e727a7dea008c8600ecb8c3af52a5cf02 \
+            --target master \
             --title "M-VAVE FM1: Firmware bundle" \
             --notes-file dist/RELEASE-NOTES.md \
             --prerelease
