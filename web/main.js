@@ -22,6 +22,8 @@ const SCREEN_ONLY = params.get("screen") !== "0";
 const ADAPTIVE_FIT = params.get("fit") !== "0";
 const DEBUG_LAYOUT = params.get("layout") === "1";
 const screenAnalyzer = new ScreenAnalyzer();
+let latestLayoutAnalysis = null;
+let latestLcdFrame = null;
 if (SCREEN_ONLY) document.documentElement.setAttribute("data-screen-only", "");
 const stored = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const store = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
@@ -41,6 +43,42 @@ let mhz = Number(params.get("mhz") || stored("fm1.mhz") || 100);
 let latency = params.get("latency") || stored("fm1.latency") || "interactive";
 
 const canvas = document.getElementById("panel");
+let layoutExportButton = null;
+if (DEBUG_LAYOUT) {
+  layoutExportButton = document.createElement("button");
+  layoutExportButton.type = "button";
+  layoutExportButton.textContent = "Export frame";
+  layoutExportButton.disabled = true;
+  layoutExportButton.setAttribute("aria-label", "Export current firmware screen and layout analysis");
+  layoutExportButton.style.cssText = "position:fixed;z-index:6;left:max(12px,env(safe-area-inset-left));bottom:max(12px,env(safe-area-inset-bottom));padding:8px 12px;border:1px solid #46505e;border-radius:999px;background:#171b22;color:#e3e7ed;font:12px system-ui,sans-serif";
+  layoutExportButton.addEventListener("click", async () => {
+    if (!latestLcdFrame || !latestLayoutAnalysis) return;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const base = `fm1-${fw.id}-${stamp}`;
+    const download = (blob, name) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    };
+    const report = {
+      capturedAt: new Date().toISOString(),
+      device: DEV.product,
+      firmware: { id: fw.id, name: fw.name, version: fw.version || null },
+      board,
+      source: { width: 240, height: 240, format: "RGB565 framebuffer rendered as PNG" },
+      options: { adaptiveFit: ADAPTIVE_FIT, screenOnly: SCREEN_ONLY },
+      analysis: latestLayoutAnalysis,
+    };
+    download(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }), `${base}.json`);
+    canvas.toBlob((blob) => {
+      if (blob) download(blob, `${base}.png`);
+    }, "image/png");
+  });
+  document.body.append(layoutExportButton);
+}
 const ctx = canvas.getContext("2d");
 const status = document.getElementById("status");
 const startBtn = document.getElementById("start");
@@ -377,7 +415,12 @@ function draw() {
   if (SCREEN_ONLY) {
     if (screenDirty) {
       const lcd = new Uint16Array(mem(), ui.panel_lcd(), 240 * 240);
-      if (DEBUG_LAYOUT) canvas.dataset.layoutAnalysis = JSON.stringify(screenAnalyzer.analyze(lcd));
+      if (DEBUG_LAYOUT) {
+        latestLcdFrame = lcd.slice();
+        latestLayoutAnalysis = screenAnalyzer.analyze(lcd);
+        canvas.dataset.layoutAnalysis = JSON.stringify(latestLayoutAnalysis);
+        if (layoutExportButton) layoutExportButton.disabled = false;
+      }
       renderAdaptiveLCD(ctx, lcd, 240, 240, ADAPTIVE_FIT);
       screenDirty = false;
     }
