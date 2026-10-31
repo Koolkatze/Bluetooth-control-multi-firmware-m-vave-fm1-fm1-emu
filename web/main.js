@@ -117,27 +117,25 @@ const lcdStage = document.querySelector(".stage");
 function resizeAndroidLCD() {
   if (!nativeWindow.FM1Android) return;
   if (!SCREEN_ONLY) {
-    lcdStage.style.removeProperty("width");
-    lcdStage.style.removeProperty("height");
+    lcdStage.style.removeProperty?.("width");
+    lcdStage.style.removeProperty?.("height");
     return;
   }
-  const vv = window.visualViewport;
-  const viewportWidth = Math.min(
-    window.innerWidth, document.documentElement.clientWidth || window.innerWidth,
-    vv?.width || window.innerWidth
-  );
-  const viewportHeight = Math.min(
-    window.innerHeight, document.documentElement.clientHeight || window.innerHeight,
-    vv?.height || window.innerHeight
-  );
+  const vv = nativeWindow.visualViewport;
+  const vw = nativeWindow.innerWidth || 1;
+  const vh = nativeWindow.innerHeight || 1;
+  const viewportWidth = Math.min(vw, document.documentElement.clientWidth || vw,
+    vv?.width || vw);
+  const viewportHeight = Math.min(vh, document.documentElement.clientHeight || vh,
+    vv?.height || vh);
   const size = computeLCDSize(viewportWidth, viewportHeight,
     { original: !ADAPTIVE_FIT });
   lcdStage.style.setProperty("width", size.width + "px", "important");
   lcdStage.style.setProperty("height", size.height + "px", "important");
 }
-window.addEventListener("resize", resizeAndroidLCD);
-window.visualViewport?.addEventListener("resize", resizeAndroidLCD);
-window.addEventListener("orientationchange", resizeAndroidLCD);
+nativeWindow.addEventListener?.("resize", resizeAndroidLCD);
+nativeWindow.visualViewport?.addEventListener?.("resize", resizeAndroidLCD);
+nativeWindow.addEventListener?.("orientationchange", resizeAndroidLCD);
 
 function showDisplayMode() {
   // Button text describes the next action, and aria-pressed exposes current mode.
@@ -153,8 +151,10 @@ function setDisplayMode(screenOnly, adaptiveFit = ADAPTIVE_FIT) {
   ADAPTIVE_FIT = adaptiveFit;
   if (SCREEN_ONLY) document.documentElement.setAttribute("data-screen-only", "");
   else document.documentElement.removeAttribute("data-screen-only");
-  document.documentElement.toggleAttribute("data-lcd-original",
-    SCREEN_ONLY && !ADAPTIVE_FIT);
+  if (SCREEN_ONLY && !ADAPTIVE_FIT)
+    document.documentElement.setAttribute("data-lcd-original", "");
+  else
+    document.documentElement.removeAttribute("data-lcd-original");
   resizeAndroidLCD();
 
   // Do not reboot the audio worklet or reload the page to change display mode.
@@ -173,8 +173,10 @@ function setDisplayMode(screenOnly, adaptiveFit = ADAPTIVE_FIT) {
 }
 
 showDisplayMode();
-document.documentElement.toggleAttribute("data-lcd-original",
-  SCREEN_ONLY && !ADAPTIVE_FIT);
+if (SCREEN_ONLY && !ADAPTIVE_FIT)
+  document.documentElement.setAttribute("data-lcd-original", "");
+else
+  document.documentElement.removeAttribute("data-lcd-original");
 resizeAndroidLCD();
 fitToggle.addEventListener("click", () => {
   setDisplayMode(SCREEN_ONLY, !ADAPTIVE_FIT);
