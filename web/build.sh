@@ -31,5 +31,5 @@ cp web/index.html web/style.css web/main.js web/screen-adapter.js web/mobile-lcd
 # the SMK-37's page: its own index, catalog and preview, the same code and wasm beside them
 mkdir -p "$OUT/smk37"
 cp web/smk37/index.html web/smk37/firmwares.json web/smk37/og.png "$OUT/smk37/"
-cp web/style.css web/main.js web/screen-adapter.js web/persistence.js web/worklet.js web/jit.js web/fwsc.js "$OUT/fm1_web.wasm" "$OUT/smk37/"
+cp web/style.css web/main.js web/screen-adapter.js web/mobile-lcd.js web/persistence.js web/worklet.js web/jit.js web/fwsc.js "$OUT/fm1_web.wasm" "$OUT/smk37/"
 ls -la "$OUT" | grep -v "^total"
