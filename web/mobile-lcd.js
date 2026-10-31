@@ -17,10 +17,12 @@ export function findSafeSplit(lcd) {
     Math.abs((a & 31) - (b & 31)) * 255 / 31
   );
   const empty = [];
+  const activity = [];
   for (let y = 0; y < SIDE; y++) {
     let n = 0;
     for (let x = 0; x < SIDE; x++) if (dist(lcd[y * SIDE + x], bg) > 24) n++;
     empty.push(n === 0);
+    activity.push(n);
   }
   // Require a 4-row blank band; do not cut text, knobs or waveforms.
   let best = null, nearest = Infinity;
@@ -29,6 +31,8 @@ export function findSafeSplit(lcd) {
     const delta = Math.abs(y - 120);
     if (delta < nearest) { nearest = delta; best = y; }
   }
+  // Both halves must contain real content; empty boot frames are not a layout.
+  if (best === null || !activity.slice(0, best).some(Boolean) || !activity.slice(best).some(Boolean)) return null;
   return best;
 }
 
