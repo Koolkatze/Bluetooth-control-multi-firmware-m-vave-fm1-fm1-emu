@@ -41,7 +41,10 @@ function jitImports(exports, stats) {
 // when it may run a whole DMA half buffer ahead; fm1_render raises the cap by the rest of the half
 // buffer when ahead is less (?ahead=256 with 512-frame halves). Without the pace (?ahead=0) a
 // quantum may have to run a whole half buffer's time, so it keeps 20 ms.
+// One DMA half-buffer is enough for Android to keep an even synth pace
+// without adding the full ~23 ms of ahead-queue latency used on desktop.
 const AHEAD_FRAMES = 1024;
+const ANDROID_AHEAD_FRAMES = 512;
 function budgets(mhz, frames) {
   return { boot: mhz * 1e6 * 0.02, play: mhz * 1e6 * 1.5 * frames / sampleRate };
 }
@@ -165,7 +168,7 @@ class Fm1 extends AudioWorkletProcessor {
       ? new FirmwareRateBridge(sampleRate) : null;
     this.jitEnabled = m.jit !== false;
     x.fm1_jit(this.jitEnabled ? 1 : 0, this.androidOptimized ? 4 : 16);
-    const ahead = x.fm1_ahead ? m.ahead ?? AHEAD_FRAMES : 0;
+    const ahead = x.fm1_ahead ? m.ahead ?? (this.androidOptimized ? ANDROID_AHEAD_FRAMES : AHEAD_FRAMES) : 0;
     x.fm1_ahead?.(ahead);               // (?ahead=0: each quantum runs for its own frames only)
     // the whole update package (.fwsc): the machine unpacks it, gets the flash chip and the
     // boot parameters from it (what M-VAVE's own firmware needs; the others boot the same)
@@ -291,7 +294,7 @@ class Fm1 extends AudioWorkletProcessor {
     if (this.resampler) this.resampler.output(out[0], out[1]);
     if (have > 0 && !this.playing) {
       this.playing = true;
-      if (this.ahead > 0) this.budget = budgets(this.mhz, n).play;
+      if (this.ahead > 0) this.budget = budgets(this.mhz, sourceFrames).play;
       // Compiling 16 hot regions at once can stall Android's 2.9 ms audio callback.
       if (this.androidOptimized && this.jitEnabled) x.fm1_jit(1, 2);
     }
