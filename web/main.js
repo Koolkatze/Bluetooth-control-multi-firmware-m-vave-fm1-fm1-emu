@@ -445,7 +445,20 @@ stage.addEventListener("drop", (e) => {
 });
 
 // ---------------------------------------------------------------- drawing
-function draw() {
+// Android's panel is large: a full WASM render + ImageData allocation every
+// requestAnimationFrame can block input handling and MIDI delivery. The audio
+// still runs at full rate in AudioWorklet; only the *visual* rendering is capped.
+let previousPaintAt = -Infinity;
+let panelCache = null, panelBytes = null, panelWasmBuffer = null, panelPointer = -1;
+function draw(timestamp) {
+  if (nativeWindow.FM1Android && Number.isFinite(timestamp)) {
+    const interval = SCREEN_ONLY ? 45 : 34; // LCD ~22 fps, panel ~29 fps
+    if (timestamp - previousPaintAt < interval) {
+      requestAnimationFrame(draw);
+      return;
+    }
+    previousPaintAt = timestamp;
+  }
   const mem = () => ui.memory.buffer;
   if (frame) {
     if (frame.lcd) {
@@ -490,8 +503,18 @@ function draw() {
     return;
   }
   const p = ui.panel_draw();
-  const img = new ImageData(new Uint8ClampedArray(mem(), p, W * H * 4), W, H);
-  ctx.putImageData(img, 0, 0);
+  const memory = mem(), length = W * H * 4;
+  if (!panelCache || panelCache.width !== W || panelCache.height !== H) {
+    panelCache = new ImageData(W, H);
+    panelBytes = null;
+  }
+  if (!panelBytes || memory !== panelWasmBuffer || p !== panelPointer || panelBytes.length !== length) {
+    panelBytes = new Uint8ClampedArray(memory, p, length);
+    panelWasmBuffer = memory;
+    panelPointer = p;
+  }
+  panelCache.data.set(panelBytes); // stable backing store; avoid huge GC per frame
+  ctx.putImageData(panelCache, 0, 0);
   requestAnimationFrame(draw);
 }
 requestAnimationFrame(draw);
