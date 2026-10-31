@@ -30,6 +30,13 @@ controles «Iniciar firmware», «Panel», «Pantalla», «MIDI» y «Audio», y
 el estado del emulador y las estadísticas de audio sin ocupar espacio permanente.
 La zona superior continúa reservada para la barra de estado de Android.
 
+**Ajuste de pantalla v0.2.4:** en la vista «Solo LCD», tanto
+«Original» (imagen 1:1) como «Horizontal» (imagen 16:9) calculan
+su tamaño a partir del área útil real del WebView. La altura nunca
+sobrepasa el área comprendida entre la barra superior del sistema
+y los botones flotantes inferiores. Al girar el teléfono o cambiar
+las dimensiones de la pantalla, se recalcula sin deformar el firmware.
+
 Las notas del MIDI USB-C/BLE entran directamente desde `MidiManager` en la
 cola del motor Rust, **sin esperar a que la pantalla termine de redibujarse**.
 Los controles del panel táctil también llegan a Rust. La LCD sigue apareciendo
