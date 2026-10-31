@@ -298,7 +298,7 @@ public final class MainActivity extends Activity {
             return;
         }
         web.evaluateJavascript(js, value -> {
-            if ("\\"ok\\"".equals(value)) {
+            if ("\"ok\"".equals(value)) {
                 updateStatus(message);
                 ui.postDelayed(this::reportRunningStatus, 1300);
             } else {
