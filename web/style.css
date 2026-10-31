@@ -108,6 +108,14 @@ canvas { display: block; width: 100%; height: auto; touch-action: none; user-sel
 .box > label { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--dim); font-size: 14px; }
 .box > label select { min-width: 0; max-width: 62%; }
 .box .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Firmware actions stay inside the Firmware section, not over the LCD. */
+.firmware-updates { gap: 6px !important; }
+.firmware-updates button { flex: 1 1 155px; min-width: 0; font-size: 12px !important;
+  padding: 8px 9px !important; white-space: normal; }
+.firmware-updates button:disabled { opacity: .45; cursor: not-allowed; }
+#firmware-update-status { display: block; min-height: 1em; color: var(--dim);
+  font-size: 12px; overflow-wrap: anywhere; }
+
 .sel { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 62%; }
 .sel select { max-width: 100%; }
 #about { margin: 0; color: var(--text); font-size: 14px; overflow-wrap: anywhere; }
