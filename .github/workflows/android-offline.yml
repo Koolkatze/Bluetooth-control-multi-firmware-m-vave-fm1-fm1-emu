@@ -83,3 +83,64 @@ jobs:
             android/app/src/main/assets/site/offline-bundle-report.json
             android/app/src/main/assets/site/OFFLINE-FIRMWARES.md
           retention-days: 30
+
+  emulator-smoke:
+    name: Test actual APK on Android emulator
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Download built offline APK
+        uses: actions/download-artifact@v4
+        with:
+          name: FM1-Mobile-Offline-APK
+          path: apk
+
+      - name: Boot virtual Android and inspect visible controls
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_4
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: |
+            adb install -r apk/app-debug.apk
+            adb shell am start -n com.koolkatze.fm1offline/.MainActivity
+            sleep 14
+            adb exec-out screencap -p > android-before-start.png
+            adb shell uiautomator dump /sdcard/fm1-view.xml
+            adb pull /sdcard/fm1-view.xml android-ui.xml
+            cat android-ui.xml | sed 's/></>\\n</g' | grep -E 'Iniciar firmware|Panel|Pantalla|Preparado|Error' | head -35
+            grep -q 'Iniciar firmware' android-ui.xml
+            grep -q 'Pantalla' android-ui.xml
+            # The module-ready callback proves that the WebAssembly/local
+            # assets loaded. A plain native toolbar alone is not enough.
+            grep -q 'Preparado' android-ui.xml
+            adb logcat -d -s FM1Mobile:E > android-errors.log
+            if grep -E 'WebView:.*(Uncaught|Failed to fetch|404|SyntaxError)' android-errors.log; then
+              echo "WebView reported a fatal resource/JS error"
+              exit 1
+            fi
+
+      - name: Upload Android emulator screenshot and diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FM1-Android-UI-Test
+          path: |
+            android-before-start.png
+            android-ui.xml
+            android-errors.log
+          if-no-files-found: warn
+          retention-days: 30
