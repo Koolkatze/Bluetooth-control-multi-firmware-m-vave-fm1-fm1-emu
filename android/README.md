@@ -1,12 +1,50 @@
 # FM-1 Mobile — APK Android 100 % sin Internet durante su uso
 
-Esta aplicación contiene el **emulador FM-1 completo compilado a WebAssembly**, la
-interfaz web y los firmwares comunitarios que pudieron empaquetarse legal y
-técnicamente durante la compilación. **No es una página web remota ni necesita
+Esta aplicación contiene **dos implementaciones del emulador FM-1**:
+el **motor nativo Rust/AAudio** de baja latencia para Android, y el
+motor WebAssembly/AudioWorklet como reserva y para el modo web. También
+incluye la interfaz móvil y los firmwares comunitarios que pudieron
+empaquetarse legal y técnicamente durante la compilación. **No es una página web remota ni necesita
 GitHub Pages.** Android carga todo desde el APK con
 `WebViewAssetLoader` bajo la dirección HTTPS local reservada
 `appassets.androidplatform.net`. El manifiesto no solicita el permiso
 `android.permission.INTERNET`.
+
+## Motor nativo nuevo (v0.2.0 experimental)
+
+**La app Android ya no depende de WebAudio para producir el sonido cuando hay
+una biblioteca nativa compatible.** Ahora contiene un segundo motor construido
+a partir del **núcleo Rust real** (`fm1-core` + `fm1-soc`), que ejecuta el
+firmware del FM-1 en un hilo de trabajo independiente. Utiliza **AAudio** de
+Android para entregar PCM con una cola **SPSC sin bloqueos**: el callback solo
+copia muestras y nunca ejecuta código del firmware, compila JIT, toca la LCD o
+llama a JavaScript. El worker hace una conversión continua desde 44,1 kHz hacia
+la frecuencia de salida nativa del teléfono (normalmente 48 kHz).
+
+La app empaqueta bibliotecas Android para **arm64-v8a y x86_64**. Si la
+biblioteca no se carga, utiliza el motor WebAssembly/AudioWorklet de reserva.
+La barra inferior muestra qué motor está disponible; cuando arranca el nativo
+indica `Rust + AAudio` y muestra un contador de **muestras de audio perdidas**.
+
+Las notas del MIDI USB-C/BLE entran directamente desde `MidiManager` en la
+cola del motor Rust, **sin esperar a que la pantalla termine de redibujarse**.
+Los controles del panel táctil también llegan a Rust. La LCD sigue apareciendo
+en la interfaz del móvil, pero ahora procede de la CPU nativa; no se captura
+ninguna pantalla del FM-1 físico.
+
+**Guardado y advertencias:** el motor Rust almacena periódicamente los sectores
+de flash modificados por cada firmware en el almacenamiento privado Android
+(`fm1-native-<hash>.bin`). Este formato todavía **no es compatible con el
+botón Exportar .fm1save de la web**; no desinstales la app sin una copia de
+seguridad externa de los datos que necesites conservar. Las importaciones
+`.syx` y la correspondencia completa de todas las funciones del motor web
+siguen pendientes de validación en la ruta nativa.
+
+**No está verificada todavía una latencia equivalente a la del FM-1 físico en
+un teléfono real.** AAudio puede reducir mucho el retraso del motor, pero
+Bluetooth A2DP añade su propia latencia; para interpretación en directo utiliza
+USB-C/cable. La latencia final requiere medición física con MIDI, DAC y
+firmwares concretos.
 
 ## Instalar un APK
 
