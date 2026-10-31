@@ -202,3 +202,58 @@ test('once audio plays a quantum may run 1.5 quanta; the worst quantum counts on
   off.render(); off.render();
   assert.deepEqual(seen, [240e6 * 0.02, 240e6 * 0.02]);
 });
+
+test('Android limits JIT compilation to four regions during boot and two per audio quantum', async () => {
+  const h = harness(), x = h.p.x;
+  const settings = [];
+  Object.assign(x, {
+    fm1_alloc: () => 1000, fm1_jit(on, count) { settings.push([on, count]); },
+    fm1_ahead() {}, fm1_boot_fwsc: () => 0, fm1_board: () => 0, fm1_flash_base: () => 140000,
+  });
+  h.p.module = {};
+  h.context.WebAssembly = { instantiate: async () => ({ exports: x }) };
+  await h.p.port.onmessage({ data: {
+    type: 'boot', seq: 2, mhz: 60, jit: true, androidOptimized: true,
+    package: new Uint8Array(960).buffer,
+  } });
+  assert.deepEqual(settings[0], [1, 4], 'smaller Android compilation burst during firmware boot');
+  assert.equal(h.p.uiRate, 20, 'reduce display transfers while preserving full audio rate');
+  h.render();
+  assert.deepEqual(settings[1], [1, 2], 'limit synchronous JIT after audio begins');
+  h.render();
+  assert.equal(settings.length, 2, 'do not repeatedly change the JIT budget');
+});
+
+test('startup silent quanta are not incorrectly reported as playback underruns', () => {
+  const h = harness();
+  let played = false;
+  h.p.playing = false;
+  h.p.short = 0;
+  h.p.startupShort = 0;
+  h.p.x.fm1_render = (n) => played ? n : 0;
+  for (let i = 0; i < 3; i++) h.render();
+  assert.equal(h.p.startupShort, 3);
+  assert.equal(h.p.short, 0);
+  played = true;
+  h.render();
+  h.p.x.fm1_render = () => 0;
+  h.render();
+  assert.equal(h.p.startupShort, 3);
+  assert.equal(h.p.short, 1, 'only underruns after playback starts are counted');
+});
+
+test('no JIT budget is re-enabled on Android when JIT is explicitly disabled', async () => {
+  const h = harness(), x = h.p.x, settings = [];
+  Object.assign(x, {
+    fm1_alloc: () => 1000, fm1_jit(on, count) { settings.push([on, count]); },
+    fm1_ahead() {}, fm1_boot_fwsc: () => 0, fm1_board: () => 0, fm1_flash_base: () => 140000,
+  });
+  h.p.module = {};
+  h.context.WebAssembly = { instantiate: async () => ({ exports: x }) };
+  await h.p.port.onmessage({ data: {
+    type: 'boot', seq: 3, mhz: 60, jit: false, androidOptimized: true,
+    package: new Uint8Array(960).buffer,
+  } });
+  h.render();
+  assert.deepEqual(settings, [[0, 4]]);
+});
