@@ -138,7 +138,10 @@ public final class MainActivity extends Activity {
                 left = safe.left;
                 top = safe.top;
                 right = safe.right;
-                bottom = safe.bottom;
+                // Keep text fields visible when the Android keyboard appears.
+                // Root consumes insets, so it must handle the IME as well.
+                bottom = Math.max(safe.bottom,
+                        insets.getInsets(WindowInsets.Type.ime()).bottom);
             } else {
                 left = insets.getSystemWindowInsetLeft();
                 top = insets.getSystemWindowInsetTop();
