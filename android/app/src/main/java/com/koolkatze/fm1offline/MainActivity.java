@@ -13,6 +13,8 @@ import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.graphics.Insets;
 import android.media.AudioManager;
 import android.media.AudioDeviceInfo;
 import android.media.midi.MidiDevice;
@@ -31,6 +33,7 @@ import android.util.Base64;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -77,6 +80,7 @@ public final class MainActivity extends Activity {
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private WebView web;
+    private FrameLayout safeAreaRoot;
     private ValueCallback<Uri[]> fileCallback;
     private MidiManager midiManager;
     private MidiDevice midiDevice;
@@ -102,12 +106,65 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(0xff08090b);
         getWindow().setNavigationBarColor(0xff08090b);
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        // Android 15+/17 draws targetSdk 35 apps edge-to-edge, so the system
+        // clock/battery/notch can cover the HTML header unless the *native*
+        // root handles WindowInsets. Make the behavior consistent on older
+        // Android versions, too: reserve the system-bar area in our root.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getWindow().setDecorFitsSystemWindows(false);
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
+                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        }
         midiManager = (MidiManager) getSystemService(MIDI_SERVICE);
         Log.i(TAG, "Rust AAudio native library loaded: " + NativeSynth.AVAILABLE);
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
 
         FrameLayout root = new FrameLayout(this);
+        safeAreaRoot = root;
         root.setBackgroundColor(0xff08090b);
+        // A single safe-area inset on the outermost Android view protects
+        // *every* embedded page (FM-1, SMK-37, firmware browser, settings,
+        // panel and LCD-only) and the permanent native control bar.
+        // The upper band is intentionally empty and matches the background.
+        root.setPadding(0, dp(36), 0, 0); // safe fallback until insets arrive
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            int left, top, right, bottom;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Insets safe = insets.getInsets(WindowInsets.Type.systemBars()
+                        | WindowInsets.Type.displayCutout());
+                left = safe.left;
+                top = safe.top;
+                right = safe.right;
+                bottom = safe.bottom;
+            } else {
+                left = insets.getSystemWindowInsetLeft();
+                top = insets.getSystemWindowInsetTop();
+                right = insets.getSystemWindowInsetRight();
+                bottom = insets.getSystemWindowInsetBottom();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+                        insets.getDisplayCutout() != null) {
+                    android.view.DisplayCutout cutout = insets.getDisplayCutout();
+                    left = Math.max(left, cutout.getSafeInsetLeft());
+                    top = Math.max(top, cutout.getSafeInsetTop());
+                    right = Math.max(right, cutout.getSafeInsetRight());
+                    bottom = Math.max(bottom, cutout.getSafeInsetBottom());
+                }
+            }
+            // A little more breathing space below the status bar; on devices
+            // that report zero insets, reserve at least 24dp for the clock.
+            view.setPadding(left, Math.max(top, dp(24)) + dp(10), right, bottom);
+            // We've applied these insets to the parent: don't apply them
+            // again inside WebView via CSS env(safe-area-inset-top).
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+                return WindowInsets.CONSUMED;
+            WindowInsets consumed = insets.consumeSystemWindowInsets();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                consumed = consumed.consumeDisplayCutout();
+            return consumed;
+        });
         web = new WebView(this);
         web.setBackgroundColor(0xff08090b);
         WebSettings settings = web.getSettings();
@@ -268,9 +325,17 @@ public final class MainActivity extends Activity {
             }
         });
         setContentView(root);
+        root.requestApplyInsets();
 
         // Browser location is local HTTPS backed by packaged assets; no network is used.
         web.loadUrl(HOME);
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration configuration) {
+        super.onConfigurationChanged(configuration);
+        // Status and navigation bars can change sides in landscape/rotation.
+        if (safeAreaRoot != null) safeAreaRoot.requestApplyInsets();
     }
 
     private boolean isLocal(Uri uri) {
