@@ -7,9 +7,9 @@
 
 **Sin instalar nada:** elige un firmware compatible, pulsa **Start** y utiliza la LCD ampliada desde tu navegador. Esta edición online necesita conexión para cargar los archivos y algunos firmwares.
 
-### **[⬇ Descargar la aplicación Android sin Internet — M-VAVE FM1: Firmware bundle](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/v0.2.0)**
+### **[⬇ Descargar la aplicación Android sin Internet — M-VAVE FM1: Firmware bundle](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/v0.2.1)**
 
-Versión **0.2.0 (motor nativo experimental)**: APK con el nuevo icono FM-1, emulador y paquetes compatibles integrados. Tras instalarlo, los firmwares incluidos funcionan sin conexión. La integración con el FM-1 físico por MIDI sigue en fase de pruebas. Esta versión incluye **un motor nuevo en Rust nativo con salida AAudio**, independiente del AudioWorklet: la CPU/JIT y los periféricos del FM-1 se ejecutan fuera del callback de audio, mientras MIDI USB/BLE llega directamente a Rust. Conserva la pantalla y los firmwares offline. **Es experimental: la latencia real aún no está medida. Para tocar en directo, utiliza audio USB-C o cableado; Bluetooth añade retardo propio.**
+Versión **0.2.1 (motor nativo experimental)**: APK con el nuevo icono FM-1, emulador y paquetes compatibles integrados. Tras instalarlo, los firmwares incluidos funcionan sin conexión. La integración con el FM-1 físico por MIDI sigue en fase de pruebas. Versión **v0.2.1**: corrige la falta de muestras PCM detectada en **AMB-1** y otros firmwares del motor Rust/AAudio: el hilo de síntesis genera 128 muestras por ciclo, mantiene una reserva de 1.024 muestras, prepara audio antes de iniciar AAudio y tiene prioridad sobre el dibujo. El informe ahora distingue **muestras perdidas por segundo**, velocidad de CPU emulada, PCM producido y nivel de la cola. **Experimental:** el banco de pruebas Linux pasó sin pérdidas, pero todavía no hay medición equivalente en un Android real. Utiliza USB-C o cable, no altavoz Bluetooth, para interpretar en directo.
 
 
 **Objetivo del proyecto:** convertir un teléfono Android en la **pantalla principal y el motor de síntesis** del M-VAVE FM-1, para tocar y alternar entre firmwares compatibles **sin tener que flashear el FM-1 físico cada vez que se cambia de sintetizador**. El teléfono puede funcionar también de forma independiente. En el modo combinado, el FM-1 físico lleva un **firmware controlador MIDI como CTL-1**, que muestra su propia interfaz en la pantalla integrada: esa pantalla queda como **pantalla secundaria de control**, mientras el móvil muestra la pantalla del sintetizador emulado y genera el sonido. **No buscamos capturar ni duplicar la LCD física.**
@@ -46,7 +46,7 @@ de la página web, el APK **incluye los archivos HTML/JS, el motor WebAssembly
 y los paquetes de firmware admitidos**, de forma que no necesita conectarse a
 Internet en el teléfono. La aplicación **no solicita permiso de Internet**.
 
-**[Descargar APK de la release v0.1.0](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/v0.2.0)** ·
+**[Descargar APK de la release v0.1.0](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/v0.2.1)** ·
 **[Código Android, instrucciones y limitaciones](android/README.md)**
 
 La primera compilación offline ha empaquetado **92 firmwares FM-1 más 9 de
