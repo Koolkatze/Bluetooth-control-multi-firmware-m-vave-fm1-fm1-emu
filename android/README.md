@@ -5,10 +5,11 @@ el **motor nativo Rust/AAudio** de baja latencia para Android, y el
 motor WebAssembly/AudioWorklet como reserva y para el modo web. También
 incluye la interfaz móvil y los firmwares comunitarios que pudieron
 empaquetarse legal y técnicamente durante la compilación. **No es una página web remota ni necesita
-GitHub Pages.** Android carga todo desde el APK con
+GitHub Pages.** Android carga todos los componentes del emulador desde el APK con
 `WebViewAssetLoader` bajo la dirección HTTPS local reservada
-`appassets.androidplatform.net`. El manifiesto no solicita el permiso
-`android.permission.INTERNET`.
+`appassets.androidplatform.net`. La síntesis, las pantallas y los firmwares
+instalados siguen funcionando sin conexión. **Solo los botones de
+actualización solicitan acceso a Internet** para consultar versiones nuevas.
 
 ## Motor nativo nuevo (v0.2.0 experimental)
 
@@ -99,7 +100,24 @@ en el almacenamiento interno de la app; exporta `.fm1save` para hacer copia.
 
 Si quieres **empaquetar firmwares adicionales en tu propia compilación**, deben
 estar disponibles en la carpeta de assets o importarse mediante el selector.
-La app no tiene descarga de firmware en segundo plano ni hace peticiones web.
+Desde la versión **v0.2.5**, el panel **Firmware** ofrece:
+- **Actualizar seleccionado:** comprueba en el catálogo público la versión del
+  firmware elegido y descarga solo ese paquete si hay una versión distinta.
+- **Actualizar todos:** revisa los firmwares libres instalados en el catálogo
+  y descarga únicamente los que hayan cambiado.
+- Ambos botones muestran el progreso y los errores en la pestaña Firmware.
+  Requieren Internet solo cuando se pulsan; sin conexión el emulador funciona igual.
+
+La APK consulta el catálogo del repositorio en GitHub por HTTPS. Descarga
+firmwares de sus fuentes públicas autorizadas, comprueba el formato de
+los paquetes y conserva las descargas en el almacenamiento privado de Android.
+**No modifica ni flashea el FM-1 físico**. Tampoco descarga automáticamente
+el firmware oficial propietario de M-VAVE ni sustituye los presets antiguos,
+que siguen asociados al identificador criptográfico de su versión.
+**Para aplicar una descarga hay que volver a seleccionar o iniciar ese firmware**:
+no se interrumpe el audio mientras se actualiza. El selector muestra la versión
+local disponible al cargarla. Los firmwares nuevos que no figuran en el catálogo
+de la APK requieren una aplicación actualizada o importación manual.
 
 ## M-VAVE físico: MIDI y dos pantallas
 
