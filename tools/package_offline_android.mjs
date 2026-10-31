@@ -149,7 +149,16 @@ await writeFile(join(out, "offline-bundle-report.json"),
 for (const htmlFile of ["index.html", "smk37/index.html"]) {
   const page = join(out, htmlFile);
   let html = await readFile(page, "utf8");
-  html = html.replace("<head>", "<head>\n<script>document.documentElement.setAttribute('data-offline-app','');</script>");
+  html = html.replace("<head>", `<head>
+<script>
+  document.documentElement.setAttribute('data-offline-app','');
+  window.addEventListener('error', function (event) {
+    try { window.FM1Android?.error?.('JS ' + (event.message || event.target?.src || 'resource error')); } catch {}
+  }, true);
+  window.addEventListener('unhandledrejection', function (event) {
+    try { window.FM1Android?.error?.('Promise ' + String(event.reason)); } catch {}
+  });
+</script>`);
   html = html.replace(/<title>[^<]+<\/title>/, "<title>FM-1 Mobile Offline</title>");
   await writeFile(page, html);
 }
