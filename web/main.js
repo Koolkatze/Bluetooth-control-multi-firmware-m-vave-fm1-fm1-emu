@@ -17,6 +17,8 @@ const DEV = DEVICE === "smk37"
   : { product: "M-VAVE FM-1", board: 0, key: "fm1.", stock: "FM-1.fwsc", stockFile: /^FM-1( \(\d+\))?\.fwsc$/i,
       other: { name: "SMK-37", href: "smk37/" } };
 const params = new URLSearchParams(location.search);
+const SCREEN_ONLY = params.get("screen") !== "0";
+if (SCREEN_ONLY) document.documentElement.setAttribute("data-screen-only", "");
 const stored = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const store = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
 
@@ -67,6 +69,7 @@ fitPanel();
 
 let node = null;
 let frame = null;            // the latest LCD + LEDs from the audio thread
+let screenDirty = true;
 const down = new Uint8Array(64);           // keys and buttons held (FM-1: matrix ids 0..40; SMK-37: keys 0..36, buttons 37..54)
 const encClicks = new Int32Array(8);
 const turning = new Uint32Array(9);
@@ -82,8 +85,8 @@ function setBoard(b) {
   ui.panel_board(b);
   W = ui.panel_width();
   H = ui.panel_height();
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = SCREEN_ONLY ? 240 : W;
+  canvas.height = SCREEN_ONLY ? 240 : H;
   // the synth's width follows the room left below the header and the bar (index.html's canvas rule)
   document.documentElement.style.setProperty("--aspect", String(W / H));
   document.documentElement.dataset.board = b ? "smk37" : "fm1";
@@ -340,6 +343,7 @@ function draw() {
   if (frame) {
     if (frame.lcd) {
       new Uint16Array(mem(), ui.panel_lcd(), 240 * 240).set(frame.lcd);
+      screenDirty = true;
       frame.lcd = null;
     }
     new Float32Array(mem(), ui.panel_leds(), 41).set(frame.leds);
@@ -353,6 +357,24 @@ function draw() {
     if (turning[i]) turning[i]--;
   }
   if (board === 1) for (let i = 0; i < 23; i++) ui.panel_set(4, i, analog[i]);
+  if (SCREEN_ONLY) {
+    if (screenDirty) {
+      const lcd = new Uint16Array(mem(), ui.panel_lcd(), 240 * 240);
+      const pixels = new Uint8ClampedArray(240 * 240 * 4);
+      for (let i = 0; i < lcd.length; i++) {
+        const p = lcd[i];
+        const o = i * 4;
+        pixels[o] = ((p >> 11) & 31) * 255 / 31;
+        pixels[o + 1] = ((p >> 5) & 63) * 255 / 63;
+        pixels[o + 2] = (p & 31) * 255 / 31;
+        pixels[o + 3] = 255;
+      }
+      ctx.putImageData(new ImageData(pixels, 240, 240), 0, 0);
+      screenDirty = false;
+    }
+    requestAnimationFrame(draw);
+    return;
+  }
   const p = ui.panel_draw();
   const img = new ImageData(new Uint8ClampedArray(mem(), p, W * H * 4), W, H);
   ctx.putImageData(img, 0, 0);
