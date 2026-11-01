@@ -71,6 +71,17 @@ def main() -> None:
     replace_once(root / "host/amb_host.c",
         '            ui_input_only();',
         '            urban_port_input();')
+    # Expose the actual URBAN-1 song transport to host regression scripts.
+    replace_once(root / "host/amb_host.c",
+        '    else if (!strcmp(what, "sixteenths"))',
+        '    else if (!strcmp(what, "urbanmode")) got = urban_port.rt.ui.song.song_mode;\n'
+        '    else if (!strcmp(what, "urbanbar")) got = urban_port.rt.ui.song.arrangement_pos;\n'
+        '    else if (!strcmp(what, "urbancurrent")) got = urban_port.rt.ui.song.current;\n'
+        '    else if (!strcmp(what, "urbannext")) got = urban_port.rt.ui.song.queued;\n'
+        '    else if (!strcmp(what, "urbanpage")) got = urban_port.rt.ui.page;\n'
+        '    else if (!strcmp(what, "urbantrack")) got = urban_port.rt.ui.selected_track;\n'
+        '    else if (!strcmp(what, "urbanlength")) got = urban_port.rt.ui.song.arrangement_len;\n'
+        '    else if (!strcmp(what, "sixteenths"))')
     print("URBAN-1 overlay applied to:", root)
     print("Host: sh host/build_host.sh")
     print("Physical firmware: ./build.sh (requires JieLi toolchain + AC79 SDK)")
