@@ -18,6 +18,16 @@ Versión **0.2.1 (motor nativo experimental)**: APK con el nuevo icono FM-1, emu
 
 > **Estado:** prototipo basado en el emulador de código abierto [joakimeriksson/fm1-emu](https://github.com/joakimeriksson/fm1-emu). La ejecución virtual de firmwares, la LCD del sintetizador emulado, la salida de audio del navegador y la entrada Web MIDI están implementadas en la web. El firmware [CTL-1](https://github.com/charlesvestal/fm1-ctl) **sí permite convertir el FM-1 físico en un controlador MIDI USB y Bluetooth con pantalla propia**, según su autor. **Todavía falta verificar e integrar el enlace CTL-1 físico → Android/Web MIDI → sintetizador emulado**, incluida la compatibilidad con el navegador, los controles y la latencia. Nunca se requiere capturar la LCD del FM-1.
 
+## Reloj emulado: por qué 160 MHz es el valor predeterminado
+
+El selector **Clock** controla la frecuencia de la CPU **emulada** del FM-1 (en MHz), no la frecuencia de muestreo de audio en Hz ni el reloj físico del procesador Android. Desde esta configuración, el valor inicial es **160 MHz**, aunque una preferencia guardada o el parámetro de URL `mhz` pueden sobrescribirlo. Se conserva el ajuste manual.
+
+**Motivo práctico:** en pruebas de usuario con la aplicación Android, a 60 MHz aparecían crujidos frecuentes en firmwares generativos; al aumentar el reloj disminuyeron y a **160 MHz** los firmwares probados funcionaron correctamente, sin cambios perceptibles de tempo o tonalidad. Se trata de una observación en un dispositivo, **no** de una validación universal ni de la identificación definitiva de la causa.
+
+Una frecuencia virtual demasiado baja puede limitar los ciclos disponibles para que un firmware termine sus cálculos antes de los plazos de audio. Sin embargo, los crujidos también pueden deberse a pérdidas de muestras PCM (*underruns*), a la sincronización entre la CPU emulada y AAudio o a clipping digital. Subir los MHz no garantiza corregir estos otros problemas; tampoco significa que el hardware original funcione necesariamente a 160 MHz. El motor debe respetar la temporización de los periféricos y de la salida de audio.
+
+Para diagnosticar problemas, compare el mismo firmware a 60, 160 y 240 MHz y revise las métricas de velocidad emulada, muestras perdidas por segundo, PCM generado y profundidad de cola. Compruebe también el tempo y la tonalidad frente a una referencia. Si un firmware presenta fallos a 160 MHz, pruebe otros valores con el selector **Clock** y conserve un informe del emulador.
+
 ## Nuevo motor Android nativo — v0.2.0 experimental
 
 La versión Android tiene ahora un motor de síntesis **Rust compilado para el
