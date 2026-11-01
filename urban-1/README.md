@@ -1,38 +1,79 @@
-# URBAN-1 — firmware development (prototype)
+# URBAN-1 — experimental generative groovebox for M-VAVE FM-1
 
-Status: **architecture / initial implementation**, not a flashable FM-1 firmware.
+**Current source:** HYP-1 GPL-3.0 synthesis integrated with the URBAN-1
+composition engine. Builds as an experimental `.fwsc` and ships in a
+separate Android emulator APK. **Not a finished commercial music generator.**
 
-URBAN-1 is a separate multigenre generative groovebox project. JIANT Genre Engine is deferred.
+## Song Mode (automatic)
 
-## Pages
+- **56-bar arrangement:** A Intro (4), B Verse 1 (8), C Hook (8), D Verse 2 (8),
+  C Hook reprise (8), E Bridge (4), F Drop (8), G Breakdown (4), H Outro (4).
+  Loops at the end; the hook's motif remains recognizable on the reprise.
+- Tracks share one four-bar harmonic timeline, key, tempo and modal scale.
+- Arrangement progress is visible on the LCD as `BAR 01/56` and progress bar.
+- **HOME**: Song page; **ARP**: toggle Song Mode / Sequence Mode.
+- **SAVE**: generate a new song in selected genre; **REC**: restart at bar 1.
+- **KNOB 1**: tempo; **KNOB 2**: one of 14 genres; **KNOB 3**: key.
+- **ALGORITHM** (left): one of four named substyles for the song genre.
+- **PRESETS** (left): complexity 0–3 (melodic ornaments, drum fills).
+- New genre, key and substyle are reflected in the engine; press SAVE to
+  regenerate a fresh arrangement in the selected style.
 
-### SONG
-- Generate Song creates one shared musical identity (tempo, key, harmonic plan) and 8 related sequences A–H.
-- Each sequence contains parts for all tracks. Song arrangement is an ordered list of sequence references with repeats.
-- Sequence performance mode: turn **NEXT** knob to queue A–H; while playing, the queued sequence begins **only at the end of the current sequence**. When stopped, selection takes effect immediately.
-- Editing the arrangement does not regenerate any track.
+## Sequence Mode (manual)
 
-### TRACKS
-- Shows every track and its genre/subgenre.
-- Select a track and generate **all eight sequence parts for that track only**.
-- Every other track, its settings, patterns and seeds remain byte-for-byte unchanged; song arrangement and global harmony remain unchanged.
-- Track regeneration follows global tempo/key/harmony; a later optional Free mode may relax harmonic constraints.
-- Each track supports lock, mute, solo, and per-track regeneration seed.
-- Regeneration supports undo (one snapshot minimum).
+- **ARP** on Song page switches to manual A–H performance.
+- **KNOB 4** clockwise / anticlockwise queues the next/previous section.
+  The queued section starts only on the NEXT bar boundary (not mid-bar).
+- **PLAY** starts/stops, **SAVE** regenerates the selected song.
 
-## Initial track roles
-Drums, hats, bass, melody, chords, atmosphere. Up to 8 logical tracks, with active synthesis voices constrained by CPU/RAM measurements.
+## Tracks page
 
-## Genre families
-Trap, Goth trap, Sad trap, Hip-hop, Trip-hop, Underground hip-hop, Horrorcore, Reggaeton, Drum and bass, Dubstep, Techno, Hardcore techno, Trance, Liquid jungle.
+- **SEQ**: Tracks page; **HOME**: Song page.
+- **KNOB 1**: select any of 8 logical tracks. **KNOB 2**: track genre.
+- **KNOB 3**: one of four named track substyles.
+- **SAVE**: regenerate A–H **only for that track**.
+- **FX**: mute, **GLO**: solo, **EDIT**: lock track against regeneration.
+- Song harmonic progression and all other track-generation seeds remain
+  unchanged during a one-track regeneration.
+- Current FM-1/HYP DSP voices: 6 drum lanes, bass/drone, lead/acid,
+  chord/pad. Tracks 5–7 are logical tracks but **not independent audible
+  synth voices**. Independent voice count is a hardware/audio-engine task.
 
-Genre and subgenre are selected separately at song and track levels. A song genre establishes overall musical constraints; track genre selects rhythmic vocabulary and instrument palette.
+## Genre implementation (14 genre families, four named substyles each)
 
-## Engineering milestones
-1. Deterministic shared song state and isolated track regeneration.
-2. Pattern/song playback and NEXT knob bar/sequence boundary queue.
-3. Import/fork HYP-1 GPL-3.0 source with attribution and licensing intact; adapt its platform, renderer, sequencer and simulator.
-4. Implement distinct genre grammars, sound banks, bass/808 synthesis and section-aware motif development.
-5. Host simulator tests, CPU/audio profiling, then firmware toolchain build and physical FM-1 validation.
+Trap, Goth Trap, Sad Trap, Hip-hop, Trip-hop, Underground Hip-hop,
+Horrorcore, Reggaeton, Drum and Bass, Dubstep, Techno, Hardcore Techno,
+Trance, Liquid Jungle. Every genre has a specific:
+- BPM suggestion, minor / Phrygian / Dorian / harmonic minor palette
+- four-bar chord progression, 16-step drum rhythm and six drum lane mapping
+- lead rhythmic grammar, articulation and section-specific variations
+- bass grammar (808 sustain/slide, dembow bass, DnB syncopation,
+  techno/trance offbeats, etc.)
+- real HYP-1 drum kit and named bass/lead/pad sound patches, filters,
+  drive, reverb, echo and swing
+- repeated hook and song-form transitions, controlled four-bar drum fills.
 
-Source inspiration: https://github.com/RustyPawz/fm1-HYP1 (GPL-3.0-only). **No HYP-1 source has yet been copied into this directory.**
+This is a **genre-aware rule-based prototype**, not sample-based genre
+reconstruction or a trained music model. More accurate per-substyle
+programming, richer chord voicings and multi-voice instrument synthesis
+remain ongoing tasks.
+
+## Build and verification
+
+```sh
+make -C urban-1 test
+git clone https://github.com/RustyPawz/fm1-HYP1 hyp1
+git -C hyp1 checkout 57c456db61826331d356458c9c1a136517da7cbf
+python3 urban-1/tools/apply_hyp1.py --hyp-root hyp1
+(cd hyp1 && sh host/build_host.sh)
+(cd hyp1 && ./build.sh --release 0.1.0)
+```
+
+The source tree's GitHub Actions builds and tests HYP-1 host synthesis and
+Android offline APK. The Android package uses a **different application ID**
+from the existing FM-1 Mobile v0.2.6 so the experimental music version can
+be installed *alongside* your working emulator without deleting its
+settings. Real-device audio and latency still require hands-on testing.
+
+GPL-3.0 base: [RustyPawz/fm1-HYP1](https://github.com/RustyPawz/fm1-HYP1).
+URBAN-1 source: [feature/urban-1](../tree/feature/urban-1).
