@@ -31,6 +31,7 @@ jobs:
         run: |
           mkdir -p hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_smoke.amb hyp1/build/urban
+          hyp1/build/host/amb_host urban-1/tests/hyp1_controls.amb hyp1/build/urban
           python3 - <<'PY'
           import wave
           from pathlib import Path
