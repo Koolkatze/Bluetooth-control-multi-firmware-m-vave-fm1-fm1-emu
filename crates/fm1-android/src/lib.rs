@@ -241,7 +241,10 @@ mod android {
             4 => Cmd::Velocity(value.max(1) as u32),
             _ => return,
         };
-        if let Ok(state) = state().try_lock() {
+        // UI control events may not be dropped: a missed PLAY/SAVE press
+        // makes the firmware look frozen. The mutex is NOT used by AAudio's
+        // callback or the synth worker; blocking here only races boot/stop.
+        if let Ok(state) = state().lock() {
             if let Some(active) = state.as_ref() { let _ = active.commands.send(cmd); }
         }
     }
