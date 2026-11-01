@@ -88,7 +88,7 @@ static void urban_port_sound_profile(void) {
     uint8_t lead=s->tracks[3].genre%URBAN_GENRES;
     uint8_t pad=s->tracks[4].genre%URBAN_GENRES;
     static const uint8_t drive[URBAN_GENRES]={36,49,22,28,18,33,50,28,48,62,44,78,31,24};
-    static const uint8_t reverb[URBAN_GENRES]={27,68,63,29,64,32,49,23,42,23,17,69,58};
+    static const uint8_t reverb[URBAN_GENRES]={27,68,63,29,64,32,49,24,23,42,23,17,69,58};
     static const uint8_t bass_cut[URBAN_GENRES]={23,18,20,48,32,43,25,55,61,40,64,75,63,54};
     static const uint8_t acid_cut[URBAN_GENRES]={40,26,34,51,34,46,35,52,62,47,77,83,73,60};
     static const uint8_t pad_bright[URBAN_GENRES]={37,15,21,46,24,34,18,51,54,39,50,76,69,48};
@@ -268,20 +268,31 @@ static void urban_port_init(uint32_t seed) {
 }
 static void urban_port_input(void) {
     UrbanHypPort *p=&urban_port;
+    UrbanSong *s=&p->rt.ui.song;
     uint32_t b=plat_buttons(),down=b&~p->held_buttons;
     int32_t d;
     p->held_buttons=b;
-    if(down&(1u<<B_HOME)) urban_ui_page(&p->rt.ui,URBAN_PAGE_SONG);
-    if(down&(1u<<B_SEQ)) urban_ui_page(&p->rt.ui,URBAN_PAGE_TRACKS);
-    if(down&(1u<<B_PLAY)) urban_port_play();
-    if(down&(1u<<B_SAVE)) urban_port_generate();
+    if(down&(1u<<B_HOME))urban_ui_page(&p->rt.ui,URBAN_PAGE_SONG);
+    if(down&(1u<<B_SEQ))urban_ui_page(&p->rt.ui,URBAN_PAGE_TRACKS);
+    if(down&(1u<<B_PLAY))urban_port_play();
+    if(down&(1u<<B_SAVE))urban_port_generate();
+    if(p->rt.ui.page==URBAN_PAGE_SONG) {
+        if(down&(1u<<B_ARP))urban_port_set_mode(!s->song_mode);
+        if(down&(1u<<B_REC))urban_port_restart();
+    } else {
+        UrbanTrack *t=&s->tracks[p->rt.ui.selected_track];
+        if(down&(1u<<B_EDIT))t->locked=(uint8_t)!t->locked;
+        if(down&(1u<<B_FX))t->muted=(uint8_t)!t->muted;
+        if(down&(1u<<B_GLO))t->solo=(uint8_t)!t->solo;
+        if(down&((1u<<B_FX)|(1u<<B_GLO)))urban_port_stage_pattern();
+    }
     d=plat_enc(EN_K1);
     if(d) {
         if(p->rt.ui.page==URBAN_PAGE_SONG) {
-            int v=(int)p->rt.ui.song.tempo+(int)d;
+            int v=(int)s->tempo+(int)d;
             if(v<70)v=70;
             if(v>190)v=190;
-            p->rt.ui.song.tempo=(uint8_t)v;
+            s->tempo=(uint8_t)v;
             en_set(P_TEMPO,v);
         } else {
             int v=(int)p->rt.ui.selected_track+(int)d;
@@ -292,68 +303,97 @@ static void urban_port_input(void) {
     d=plat_enc(EN_K2);
     if(d) {
         int v=(int)(p->rt.ui.page==URBAN_PAGE_SONG?p->rt.ui.genre:
-                   p->rt.ui.song.tracks[p->rt.ui.selected_track].genre)+(int)d;
+                   s->tracks[p->rt.ui.selected_track].genre)+(int)d;
         v=(v%URBAN_GENRES+URBAN_GENRES)%URBAN_GENRES;
         if(p->rt.ui.page==URBAN_PAGE_SONG) {
-            unsigned i;
             p->rt.ui.genre=(uint8_t)v;
-            for(i=0;i<URBAN_TRACKS;i++) if(!p->overridden[i] && !p->rt.ui.song.tracks[i].locked)
-                p->rt.ui.song.tracks[i].genre=(uint8_t)v;
+            urban_song_set_genre(s,(uint8_t)v);
+            s->tempo=urban_genre_bpm[v];
+            en_set(P_TEMPO,s->tempo);
+            for(unsigned i=0;i<URBAN_TRACKS;i++)
+                if(!p->overridden[i] && !s->tracks[i].locked)
+                    s->tracks[i].genre=(uint8_t)v;
+            /* Press SAVE to recompose the notes in the new style. */
         } else {
             urban_ui_set_genre(&p->rt.ui,(uint8_t)v,
-                              p->rt.ui.song.tracks[p->rt.ui.selected_track].subgenre);
+                              s->tracks[p->rt.ui.selected_track].subgenre);
             p->overridden[p->rt.ui.selected_track]=1u;
         }
     }
     d=plat_enc(EN_K3);
     if(d) {
         if(p->rt.ui.page==URBAN_PAGE_SONG) {
-            int v=(int)p->rt.ui.song.key+(int)d;
+            int v=(int)s->key+(int)d;
             v=(v%12+12)%12;
-            p->rt.ui.song.key=(uint8_t)v;
+            s->key=(uint8_t)v;
             en_set(P_ROOT,v);
+            /* Key modulation revoices the existing rhythms, not the song. */
+            for(unsigned i=0;i<URBAN_TRACKS;i++)
+                if(!s->tracks[i].locked)urban_runtime_refresh_track(&p->rt,i);
         } else {
-            UrbanTrack *t=&p->rt.ui.song.tracks[p->rt.ui.selected_track];
+            UrbanTrack *t=&s->tracks[p->rt.ui.selected_track];
             int v=(int)t->subgenre+(int)d;
             t->subgenre=(uint8_t)((v%16+16)%16);
             p->overridden[p->rt.ui.selected_track]=1u;
         }
     }
     d=plat_enc(EN_K4);
-    if(d && p->rt.ui.page==URBAN_PAGE_SONG)
+    if(d && p->rt.ui.page==URBAN_PAGE_SONG && !s->song_mode)
         urban_port_queue((int)d);
     urban_port_poll();
 }
+static const char *const urban_section_name[URBAN_SEQUENCES] = {
+    "INTRO","VERSE 1","HOOK","VERSE 2","BRIDGE","DROP","BREAK","OUTRO"
+};
 static void urban_port_frame(void) {
     UrbanHypPort *p=&urban_port;
+    UrbanSong *s=&p->rt.ui.song;
     char seq[20]="NOW A   NEXT A";
-    char info[25]="TRACK 1";
-    uint8_t curr=p->rt.ui.song.current,queued=p->rt.ui.song.queued;
-    unsigned tr=p->rt.ui.selected_track;
+    char bar[12]="BAR 01/56";
+    char trnum[14]="TRACK 1/8";
+    unsigned tr;
     urban_port_input();
-    curr=p->rt.ui.song.current;
-    queued=p->rt.ui.song.queued;
-    seq[4]=(char)('A'+curr);
-    seq[13]=(char)('A'+queued);
-    info[6]=(char)('1'+tr);
+    tr=p->rt.ui.selected_track;
+    seq[4]=(char)('A'+s->current);
+    seq[13]=(char)('A'+s->queued);
+    unsigned n=(unsigned)s->arrangement_pos+1u;
+    bar[4]=(char)('0'+n/10u); bar[5]=(char)('0'+n%10u);
+    trnum[6]=(char)('1'+tr);
     lcd_fill(0,0,240,240,RGB(14,17,25));
-    draw_text_box(0,12,240,&FONT_B,"URBAN-1",RGB(255,165,110),1);
-    draw_text_box(0,52,240,&FONT_S,
-                  p->rt.ui.page==URBAN_PAGE_SONG?"SONG PAGE":"TRACKS PAGE",C_WHITE,1);
-    draw_text_box(0,77,240,&FONT_S,seq,RGB(255,165,110),1);
-    draw_text_box(0,104,240,&FONT_S,
-                  p->rt.ui.page==URBAN_PAGE_SONG?
-                  urban_genre_name[p->rt.ui.genre]:
-                  urban_track_name[tr],C_WHITE,1);
-    draw_text_box(0,127,240,&FONT_S,
-                  p->rt.ui.page==URBAN_PAGE_SONG?
-                  (p->rt.ui.song.playing?"PLAYING":"STOPPED"):
-                  urban_genre_name[p->rt.ui.song.tracks[tr].genre],C_WHITE,1);
-    if(p->rt.ui.page==URBAN_PAGE_TRACKS)
-        draw_text_box(0,150,240,&FONT_S,info,RGB(255,165,110),1);
-    draw_text_box(0,183,240,&FONT_S,"SAVE: GENERATE",C_WHITE,1);
-    draw_text_box(0,205,240,&FONT_S,"HOME: SONG  SEQ: TRACKS",C_WHITE,1);
-    plat_leds((p->rt.ui.song.playing?1u<<B_PLAY:0u)|
-              (p->rt.ui.page==URBAN_PAGE_SONG?1u<<B_HOME:1u<<B_SEQ),0u);
+    draw_text_box(0,9,240,&FONT_B,"URBAN-1",RGB(255,165,110),1);
+    if(p->rt.ui.page==URBAN_PAGE_SONG) {
+        draw_text_box(0,42,240,&FONT_S,
+              s->song_mode?"SONG MODE / AUTO":"SEQUENCE MODE / MANUAL",C_WHITE,1);
+        draw_text_box(0,66,240,&FONT_S,
+              s->song_mode?bar:seq,RGB(255,165,110),1);
+        draw_text_box(0,89,240,&FONT_S,urban_section_name[s->current],C_WHITE,1);
+        draw_text_box(0,112,240,&FONT_S,
+              urban_genre_name[p->rt.ui.genre],C_WHITE,1);
+        draw_text_box(0,135,240,&FONT_S,
+              s->playing?"PLAYING":"STOPPED",RGB(255,165,110),1);
+        lcd_fill(15,159,210,5,RGB(49,55,70));
+        if(s->song_mode)
+            lcd_fill(15,159,(int)(210u*n/s->arrangement_len),5,RGB(255,165,110));
+        draw_text_box(0,175,240,&FONT_S,"SAVE: GENERATE SONG",C_WHITE,1);
+        draw_text_box(0,195,240,&FONT_S,"ARP: SONG / SEQUENCE",C_WHITE,1);
+        draw_text_box(0,216,240,&FONT_S,"SEQ: TRACKS  REC: RESTART",C_WHITE,1);
+    } else {
+        draw_text_box(0,41,240,&FONT_S,trnum,RGB(255,165,110),1);
+        draw_text_box(0,65,240,&FONT_S,urban_track_name[tr],C_WHITE,1);
+        draw_text_box(0,89,240,&FONT_S,
+                      urban_genre_name[s->tracks[tr].genre],C_WHITE,1);
+        draw_text_box(0,114,240,&FONT_S,
+                 s->tracks[tr].locked?"LOCKED - EDIT":
+                 s->tracks[tr].muted?"MUTED - FX":
+                 s->tracks[tr].solo?"SOLO - GLO":"READY",RGB(255,165,110),1);
+        draw_text_box(0,139,240,&FONT_S,"A-H INDEPENDENT",C_WHITE,1);
+        draw_text_box(0,165,240,&FONT_S,"SAVE: REGENERATE TRACK",C_WHITE,1);
+        draw_text_box(0,188,240,&FONT_S,"K1 TRACK  K2 GENRE",C_WHITE,1);
+        draw_text_box(0,210,240,&FONT_S,"HOME: SONG   EDIT: LOCK",C_WHITE,1);
+    }
+    plat_leds((s->playing?1u<<B_PLAY:0u)|
+              (p->rt.ui.page==URBAN_PAGE_SONG?
+               (1u<<B_HOME)|(s->song_mode?1u<<B_ARP:0u):
+               (1u<<B_SEQ)),0u);
 }
 #endif
