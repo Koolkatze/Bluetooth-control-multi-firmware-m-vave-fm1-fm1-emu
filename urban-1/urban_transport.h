@@ -4,7 +4,7 @@
  */
 #ifndef URBAN_TRANSPORT_H
 #define URBAN_TRANSPORT_H
-#include "urban_panel.h"
+#include "urban_ui.h"
 #define URBAN_PPQN 96u
 #define URBAN_TICKS_PER_STEP 24u
 #define URBAN_STEPS_PER_SEQUENCE 16u
