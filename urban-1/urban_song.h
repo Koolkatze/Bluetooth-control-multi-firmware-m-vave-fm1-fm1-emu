@@ -4,7 +4,9 @@
 #ifndef URBAN_SONG_H
 #define URBAN_SONG_H
 #include <stdint.h>
+#if !defined(URBAN_EMBEDDED)
 #include <string.h>
+#endif
 #define URBAN_TRACKS 8
 #define URBAN_SEQUENCES 8
 #define URBAN_STEPS 16
