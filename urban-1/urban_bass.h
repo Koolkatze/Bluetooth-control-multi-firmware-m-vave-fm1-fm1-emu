@@ -1,5 +1,7 @@
-/* URBAN-1: section-aware bassline sketches, including 808 glide flags.
- * Glide is metadata for the future synth adapter, not rendered audio.
+/* SPDX-License-Identifier: GPL-3.0-only
+ * 14 genre bass archetypes. The four-bar chord timeline is applied by
+ * urban_runtime_tick, so every bar advances harmony without re-rolling the
+ * underlying motif. 808 slide is retained as synthesis metadata.
  */
 #ifndef URBAN_BASS_H
 #define URBAN_BASS_H
@@ -7,35 +9,64 @@
 typedef struct { uint8_t note,velocity,gate,glide; } UrbanBassStep;
 typedef struct { UrbanBassStep steps[URBAN_STEPS]; } UrbanBassPhrase;
 typedef struct { UrbanBassPhrase seq[URBAN_SEQUENCES]; } UrbanBassSong;
+typedef struct { uint16_t mask; uint8_t gate,octave,accent,slide; } UrbanBassGrammar;
+static const UrbanBassGrammar urban_bass_grammars[URBAN_GENRES]={
+    {0x0429,8,0,100,42}, /* Trap long 808s and end-of-bar slides */
+    {0x0821,9,0, 93,40}, /* Goth trap: sparse sub */
+    {0x0109,12,0,88,34}, /* Sad trap: long 808s */
+    {0x1249,4,1, 85, 0}, /* Hip-hop: syncopated electric bass */
+    {0x0441,7,0, 78, 0}, /* Trip-hop: pulsing low end */
+    {0x1289,4,1, 83, 0}, /* Underground: busy live-style */
+    {0x0481,9,0, 93,31}, /* Horrorcore: sub and low slide */
+    {0x1119,3,1, 93, 0}, /* Reggaeton: kick/dembow sync */
+    {0x4a41,2,1, 95, 0}, /* DnB: syncopated sub/reese accents */
+    {0x0401,11,0,104,36},/* Dubstep: long sub, drop movement */
+    {0x2222,3,1, 85, 0}, /* Techno: offbeat bass after kick */
+    {0x5555,2,1,104, 0}, /* Hardcore techno: driving eighths */
+    {0x2222,4,1, 92, 0}, /* Trance: rolling offbeats */
+    {0x2a49,5,1, 81, 0}  /* Liquid jungle: smooth syncopation */
+};
+static uint16_t urban_bass_section_mask(uint16_t mask,unsigned sec) {
+    if(sec==URBAN_INTRO || sec==URBAN_OUTRO) return (uint16_t)(mask&0x1111u);
+    if(sec==URBAN_BRIDGE || sec==URBAN_BREAK)return (uint16_t)(mask&0x0101u);
+    if(sec==URBAN_DROP)return (uint16_t)(mask|0x0404u);
+    if(sec==URBAN_HOOK)return (uint16_t)(mask|0x1000u);
+    if(sec==URBAN_VERSE_B)return (uint16_t)(mask|0x0800u);
+    return mask;
+}
 static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSong *out) {
-    static const uint8_t roots[4]={0u,8u,3u,10u}; /* i-VI-iv-VII, natural minor */
-    uint8_t genre=song->tracks[2].genre;
-    uint8_t sub=song->tracks[2].subgenre;
-    uint32_t r=seed ^ 0x5f356495u;
-    for(unsigned section=0;section<URBAN_SEQUENCES;section++){
-        for(unsigned step=0;step<URBAN_STEPS;step++){
-            UrbanBassStep *n=&out->seq[section].steps[step];
+    const UrbanTrack *track=&song->tracks[2];
+    const UrbanBassGrammar *style=&urban_bass_grammars[track->genre%URBAN_GENRES];
+    uint32_t root=seed ^ 0x5f356495u;
+    uint8_t mode=song->scale%4u;
+    static const uint8_t passing[4][3]={
+        {0,3,7},{0,1,7},{0,3,7},{0,3,7}
+    };
+    uint8_t phrase_note[4];
+    for(unsigned i=0;i<4u;i++)
+        phrase_note[i]=passing[mode][urban_rng(&root)%3u];
+    for(unsigned sec=0;sec<URBAN_SEQUENCES;sec++) {
+        uint32_t r=root ^ ((sec+1u)*0x85ebca6bu) ^
+                 ((uint32_t)track->subgenre*0xc2b2ae35u);
+        uint16_t mask=urban_bass_section_mask(style->mask,sec);
+        for(unsigned step=0;step<URBAN_STEPS;step++) {
+            UrbanBassStep *n=&out->seq[sec].steps[step];
             uint32_t v=urban_rng(&r);
-            unsigned chord=(section/2u+step/8u)%4u;
-            uint8_t root=(uint8_t)(36u+(song->key%12u)+roots[chord]);
-            uint8_t hit;
-            switch(genre){
-                case 0: case 1: case 2: case 6: /* trap */
-                    hit=(uint8_t)(step==0u||step==6u||step==10u||(step==14u&&(v%3u==0u))); break;
-                case 7: /* reggaeton */
-                    hit=(uint8_t)(step==0u||step==3u||step==8u||step==11u); break;
-                case 8: case 13: /* dnb/jungle */
-                    hit=(uint8_t)(step==0u||step==4u||step==7u||step==10u||step==14u); break;
-                case 10: case 11: case 12: /* four-on-floor */
-                    hit=(uint8_t)(step%4u==0u); break;
-                default:
-                    hit=(uint8_t)(step==0u||step==7u||step==10u); break;
-            }
-            if((section==0u||section==7u)&&step>8u) hit=0u;
-            n->note=(uint8_t)(root+((v%11u==0u)?12u:0u));
-            n->velocity=hit?(uint8_t)(83u+(v%35u)):0u;
-            n->gate=(uint8_t)(genre<=2u?5u+(v%5u):2u+(v%4u));
-            n->glide=(uint8_t)(hit&&genre<=2u&&sub%2u==0u&&step>=10u&&(v%4u==0u));
+            uint8_t hit=(uint8_t)((mask>>step)&1u);
+            unsigned root_note=36u+(song->key%12u);
+            /* Strong beats take tonic. Offbeats use notes established in the
+             * SONG'S modal palette; all tracks share the chord transposition. */
+            unsigned interval=step%4u==0u?0u:phrase_note[(step/4u)%4u];
+            if(style->octave && (v%5u==0u))interval+=12u;
+            if(track->subgenre%4u==3u && step==15u &&
+               (sec==URBAN_HOOK || sec==URBAN_DROP))hit=1u;
+            n->note=(uint8_t)(root_note+interval);
+            n->velocity=hit?(uint8_t)(style->accent+(v%15u)):0u;
+            n->gate=(uint8_t)(style->gate+(v%4u));
+            n->glide=(uint8_t)(hit&&style->slide&&step>=8u &&
+                               v%100u<style->slide);
+            /* Slides need a target pitch other than the sustained tonic. */
+            if(n->glide && interval==0u)n->note=(uint8_t)(root_note+7u);
         }
     }
 }
