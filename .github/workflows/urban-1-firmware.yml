@@ -52,13 +52,13 @@ jobs:
           python3 urban-1/tools/apply_hyp1.py --hyp-root hyp1
           cd hyp1
           ./build.sh --release 0.1.0
-          test -s build/amb.fwsc
-          cp build/amb.fwsc build/URBAN-1-0.1.0-EXPERIMENTAL.fwsc
+          test -s build/amb-0.1.0.fwsc
+          cp build/amb-0.1.0.fwsc build/URBAN-1-0.1.0-EXPERIMENTAL.fwsc
       - name: Verify package with HYP-1 updater tests
         run: |
           cd hyp1
           cc -o build/ota_test tests/ota_test.c
-          build/ota_test build/amb.fwsc
+          build/ota_test build/amb-0.1.0.fwsc
           python3 tests/install_test.py
       - name: Publish untested experimental firmware as artifact
         if: success()
