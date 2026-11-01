@@ -165,6 +165,9 @@ static void urban_port_init(uint32_t seed) {
     UrbanHypPort *p=&urban_port;
     memset(p,0,sizeof(*p));
     urban_runtime_init(&p->rt,seed);
+    // HYP-1 ui_init() starts its engine by default. Stop it explicitly so
+    // URBAN-1's STOPPED display agrees with the actual audio transport.
+    en_play(0);
     /* First playable prototype: deliberately suppress HYP's auto voices
      * and drift; URBAN supplies notes and drum patterns instead. */
     en_set(P_PAD_MAN,1);
