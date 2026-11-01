@@ -18,6 +18,8 @@ jobs:
           repository: RustyPawz/fm1-HYP1
           ref: 57c456db61826331d356458c9c1a136517da7cbf
           path: hyp1
+      - name: Install HYP-1 host font generator dependency
+        run: python3 -m pip install Pillow
       - name: Run URBAN-1 native unit tests
         run: make -C urban-1 test
       - name: Apply integration patch and build real HYP-1 DSP host
