@@ -9,6 +9,7 @@
 #define URBAN_HYP_PORT_H
 #define URBAN_EMBEDDED 1
 #include "urban/urban_runtime.h"
+#include "urban/urban_style.h"
 
 typedef struct {
     UrbanRuntime rt;
@@ -82,35 +83,35 @@ static void urban_port_stage_pattern(void) {
 static void urban_port_sound_profile(void) {
     UrbanHypPort *p=&urban_port;
     UrbanSong *s=&p->rt.ui.song;
-    uint8_t g=s->genre%URBAN_GENRES;
+    unsigned g=s->genre%URBAN_GENRES, bass=s->tracks[2].genre%URBAN_GENRES;
+    unsigned lead=s->tracks[3].genre%URBAN_GENRES, pad=s->tracks[4].genre%URBAN_GENRES;
+    const UrbanGenreTimbre *overall=&urban_timbre[g];
+    const UrbanGenreTimbre *b=&urban_timbre[bass];
+    const UrbanGenreTimbre *l=&urban_timbre[lead];
+    const UrbanGenreTimbre *v=&urban_timbre[pad];
     UrbanGroove drums=urban_groove(s->tracks[0].genre,s->tracks[0].subgenre);
-    uint8_t bass=s->tracks[2].genre%URBAN_GENRES;
-    uint8_t lead=s->tracks[3].genre%URBAN_GENRES;
-    uint8_t pad=s->tracks[4].genre%URBAN_GENRES;
-    static const uint8_t drive[URBAN_GENRES]={36,49,22,28,18,33,50,28,48,62,44,78,31,24};
-    static const uint8_t reverb[URBAN_GENRES]={27,68,63,29,64,32,49,24,23,42,23,17,69,58};
-    static const uint8_t bass_cut[URBAN_GENRES]={23,18,20,48,32,43,25,55,61,40,64,75,63,54};
-    static const uint8_t acid_cut[URBAN_GENRES]={40,26,34,51,34,46,35,52,62,47,77,83,73,60};
-    static const uint8_t pad_bright[URBAN_GENRES]={37,15,21,46,24,34,18,51,54,39,50,76,69,48};
     en_set(P_KIT_KICK,drums.kit);
     en_set(P_KIT_SNARE,drums.kit);
-    en_set(P_KIT_HAT,urban_groove(s->tracks[1].genre,s->tracks[1].subgenre).kit);
+    en_set(P_KIT_HAT,urban_groove(s->tracks[1].genre,
+                                 s->tracks[1].subgenre).kit);
     en_set(P_KIT_PERC,drums.kit);
-    en_set(P_SWING,urban_groove(g,0).swing);
-    en_set(P_DRIVE,drive[g]); en_set(P_REVERB,reverb[g]);
-    en_set(P_ECHO,g==4u||g==13u||g==12u?47:22);
-    en_set(P_BASS,bass<=2u||bass==9u?90:74);
-    en_set(P_DR_CUT,bass_cut[bass]);
-    en_set(P_DR_RES,bass<=2u?24:55);
-    en_set(P_BASSOCT,bass<=2u||bass==9u?-1:0);
-    en_set(P_DR_INST,bass<=2u||bass==9u?2:bass>=10u?5:1);
-    en_set(P_AC_CUT,acid_cut[lead]);
-    en_set(P_AC_RES,lead>=10u?67:38);
-    en_set(P_AC_WAVE,lead>=10u?3:lead<=2u?7:1);
-    en_set(P_BRIGHT,pad_bright[pad]);
-    en_set(P_PADTONE,pad<=2u?4:pad>=12u?10:2);
-    en_set(P_PE_ATK,pad<=2u?38:pad==12u?47:15);
-    en_set(P_PE_REL,pad<=2u||pad==13u?75:45);
+    en_set(P_SWING,urban_groove(g,s->subgenre).swing);
+    en_set(P_DRIVE,overall->drive);
+    en_set(P_REVERB,overall->reverb);
+    en_set(P_ECHO,overall->echo);
+    en_set(P_PULSE,80);
+    en_set(P_BASS,b->sub_octave?90:75);
+    en_set(P_DR_CUT,b->bass_cut);
+    en_set(P_DR_RES,b->sub_octave?22:55);
+    en_set(P_BASSOCT,b->sub_octave?-1:0);
+    en_set(P_DR_INST,b->bass_sound);
+    en_set(P_AC_CUT,l->lead_cut);
+    en_set(P_AC_RES,lead>=10u?65:38);
+    en_set(P_AC_WAVE,l->lead_sound);
+    en_set(P_BRIGHT,v->pad_bright);
+    en_set(P_PADTONE,v->pad_sound);
+    en_set(P_PE_ATK,pad<=2u?35:pad==12u?45:15);
+    en_set(P_PE_REL,pad<=2u||pad==13u?73:44);
 }
 static void urban_port_generate(void) {
     UrbanHypPort *p=&urban_port;
@@ -320,6 +321,27 @@ static void urban_port_input(void) {
             p->overridden[p->rt.ui.selected_track]=1u;
         }
     }
+    /* The left ALGORITHM encoder selects the genre's four named
+     * substyles; PRESETS controls ornament/fill complexity (0..3).
+     * KNOB3 remains the musical key in SONG and substyle in TRACKS.
+     */
+    d=plat_enc(EN_ALGO);
+    if(d && p->rt.ui.page==URBAN_PAGE_SONG) {
+        int v=(int)s->subgenre+(int)d;
+        v=(v%4+4)%4;
+        s->subgenre=(uint8_t)v;
+        p->rt.ui.subgenre=(uint8_t)v;
+        for(unsigned i=0;i<URBAN_TRACKS;i++)
+            if(!p->overridden[i] && !s->tracks[i].locked)
+                s->tracks[i].subgenre=(uint8_t)v;
+    }
+    d=plat_enc(EN_PRESET);
+    if(d && p->rt.ui.page==URBAN_PAGE_SONG) {
+        int v=(int)s->complexity+(int)d;
+        if(v<0)v=0;
+        if(v>3)v=3;
+        s->complexity=(uint8_t)v;
+    }
     d=plat_enc(EN_K3);
     if(d) {
         if(p->rt.ui.page==URBAN_PAGE_SONG) {
@@ -333,7 +355,7 @@ static void urban_port_input(void) {
         } else {
             UrbanTrack *t=&s->tracks[p->rt.ui.selected_track];
             int v=(int)t->subgenre+(int)d;
-            t->subgenre=(uint8_t)((v%16+16)%16);
+            t->subgenre=(uint8_t)((v%4+4)%4);
             p->overridden[p->rt.ui.selected_track]=1u;
         }
     }
@@ -367,29 +389,34 @@ static void urban_port_frame(void) {
         draw_text_box(0,66,240,&FONT_S,
               s->song_mode?bar:seq,RGB(255,165,110),1);
         draw_text_box(0,89,240,&FONT_S,urban_section_name[s->current],C_WHITE,1);
-        draw_text_box(0,112,240,&FONT_S,
+        draw_text_box(0,107,240,&FONT_S,
               urban_genre_name[p->rt.ui.genre],C_WHITE,1);
-        draw_text_box(0,135,240,&FONT_S,
+        draw_text_box(0,128,240,&FONT_S,
+              urban_style_name(s->genre,s->subgenre),C_WHITE,1);
+        draw_text_box(0,148,240,&FONT_S,
               s->playing?"PLAYING":"STOPPED",RGB(255,165,110),1);
-        lcd_fill(15,159,210,5,RGB(49,55,70));
+        lcd_fill(15,168,210,5,RGB(49,55,70));
         if(s->song_mode)
-            lcd_fill(15,159,(int)(210u*n/s->arrangement_len),5,RGB(255,165,110));
-        draw_text_box(0,175,240,&FONT_S,"SAVE: GENERATE SONG",C_WHITE,1);
-        draw_text_box(0,195,240,&FONT_S,"ARP: SONG / SEQUENCE",C_WHITE,1);
-        draw_text_box(0,216,240,&FONT_S,"SEQ: TRACKS  REC: RESTART",C_WHITE,1);
+            lcd_fill(15,168,(int)(210u*n/s->arrangement_len),5,RGB(255,165,110));
+        draw_text_box(0,182,240,&FONT_S,"SAVE: GENERATE SONG",C_WHITE,1);
+        draw_text_box(0,202,240,&FONT_S,"ARP: SONG / SEQUENCE",C_WHITE,1);
+        draw_text_box(0,221,240,&FONT_S,"SEQ: TRACKS",C_WHITE,1);
     } else {
         draw_text_box(0,41,240,&FONT_S,trnum,RGB(255,165,110),1);
         draw_text_box(0,65,240,&FONT_S,urban_track_name[tr],C_WHITE,1);
         draw_text_box(0,89,240,&FONT_S,
                       urban_genre_name[s->tracks[tr].genre],C_WHITE,1);
-        draw_text_box(0,114,240,&FONT_S,
+        draw_text_box(0,110,240,&FONT_S,
+                 urban_style_name(s->tracks[tr].genre,
+                                  s->tracks[tr].subgenre),C_WHITE,1);
+        draw_text_box(0,136,240,&FONT_S,
                  s->tracks[tr].locked?"LOCKED - EDIT":
                  s->tracks[tr].muted?"MUTED - FX":
                  s->tracks[tr].solo?"SOLO - GLO":"READY",RGB(255,165,110),1);
-        draw_text_box(0,139,240,&FONT_S,"A-H INDEPENDENT",C_WHITE,1);
-        draw_text_box(0,165,240,&FONT_S,"SAVE: REGENERATE TRACK",C_WHITE,1);
-        draw_text_box(0,188,240,&FONT_S,"K1 TRACK  K2 GENRE",C_WHITE,1);
-        draw_text_box(0,210,240,&FONT_S,"HOME: SONG   EDIT: LOCK",C_WHITE,1);
+        draw_text_box(0,158,240,&FONT_S,"A-H INDEPENDENT",C_WHITE,1);
+        draw_text_box(0,180,240,&FONT_S,"SAVE: REGENERATE TRACK",C_WHITE,1);
+        draw_text_box(0,201,240,&FONT_S,"K1 TRACK  K2 GENRE",C_WHITE,1);
+        draw_text_box(0,223,240,&FONT_S,"HOME: SONG   EDIT: LOCK",C_WHITE,1);
     }
     plat_leds((s->playing?1u<<B_PLAY:0u)|
               (p->rt.ui.page==URBAN_PAGE_SONG?
