@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Real HYP-1 host callback integration: verify controls change the engine.
+# A screen drawing without an interactive PLAY/STOP is NOT a passing test.
+wait 200
+expect playing 0
+shot stopped.png
+tap PLAY
+wait 1200
+expect playing 1
+expect sixteenths >0
+shot playing.png
+tap SEQ
+wait 150
+shot tracks.png
+tap HOME
+wait 150
+shot song.png
+tap SAVE
+wait 200
+expect playing 1
+tap PLAY
+wait 250
+expect playing 0
+shot stopped-again.png
