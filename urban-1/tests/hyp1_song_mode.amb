@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Full Song Mode vs Sequence Mode integration against real HYP-1 UI/DSP.
+expect urbanmode 1
+expect urbanlength 56
+expect urbanbar 0
+expect playing 0
+tap PLAY
+wait 2300
+expect playing 1
+expect urbanbar >0
+expect urbancurrent 0
+tap ARP
+expect urbanmode 0
+expect urbancurrent 0
+spin K4 2
+expect urbannext 2
+wait 1900
+expect urbancurrent 2
+tap SEQ
+expect urbanpage 1
+spin K1 2
+expect urbantrack 2
+spin K2 8
+tap SAVE
+tap HOME
+expect urbanpage 0
+tap ARP
+expect urbanmode 1
+expect urbanbar 0
+tap REC
+expect urbanbar 0
+tap PLAY
+expect playing 0
+shot song-mode.png
