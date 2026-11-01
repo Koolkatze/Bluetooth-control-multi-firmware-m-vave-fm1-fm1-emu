@@ -9,6 +9,7 @@ on:
       - "tools/check_offline_android.mjs"
       - "tools/build_android_native.sh"
       - "web/**"
+      - "urban-1/**"
       - "crates/**"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -63,7 +64,51 @@ jobs:
           rustup target add wasm32-unknown-unknown
           web/build.sh _offline_web
 
-      - name: Bundle open-source firmware packages and all web assets
+      # URBAN-1 must be a real FM-1 .fwsc built from the same source as its
+      # device firmware. Bundle it locally: Android never fetches a remote
+      # firmware or an expiring CI artifact to boot it.
+      - name: Checkout pinned HYP-1 synthesis/firmware source for URBAN-1
+        uses: actions/checkout@v4
+        with:
+          repository: RustyPawz/fm1-HYP1
+          ref: 57c456db61826331d356458c9c1a136517da7cbf
+          path: hyp1
+
+      - name: Install HYP-1 firmware build prerequisites
+        run: python3 -m pip install Pillow
+
+      - name: Restore JieLi toolchain and AC79 SDK
+        id: urban-jieli
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.jieli
+            ~/fw-AC79_AIoT_SDK
+          key: urban1-jieli-ac79-v1.2.1
+
+      - name: Fetch device compiler when not cached
+        if: steps.urban-jieli.outputs.cache-hit != 'true'
+        run: |
+          try() { for i in 1 2 3; do "$@" && return 0; echo "retry $i"; sleep $((i * 15)); done; return 1; }
+          [ -x ~/.jieli/toolchain/pi32v2/bin/clang ] || (cd hyp1 && try tools/get_toolchain.sh)
+          fetch_sdk() {
+            rm -rf ~/fw-AC79_AIoT_SDK
+            git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+              https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git ~/fw-AC79_AIoT_SDK
+          }
+          [ -f ~/fw-AC79_AIoT_SDK/cpu/wl82/tools/uboot.boot ] || try fetch_sdk
+
+      - name: Build and verify actual URBAN-1 FM-1 firmware
+        run: |
+          make -C urban-1 test
+          python3 urban-1/tools/apply_hyp1.py --hyp-root hyp1
+          (cd hyp1 && ./build.sh --release 0.1.0)
+          test -s hyp1/build/amb-0.1.0.fwsc
+          (cd hyp1 && cc -o build/ota_test tests/ota_test.c && build/ota_test build/amb-0.1.0.fwsc)
+
+      - name: Bundle open-source firmwares, URBAN-1 and all web assets
+        env:
+          URBAN1_FWSC: hyp1/build/amb-0.1.0.fwsc
         run: node tools/package_offline_android.mjs _offline_web android/app/src/main/assets/site
 
       - name: Validate true native synthesizer libraries and package files
@@ -79,6 +124,11 @@ jobs:
         run: |
           node web/smoke.mjs _offline_web android/app/src/main/assets/site/offline-fw/$(node -p "require('./android/app/src/main/assets/site/firmwares.json').default").fwsc
 
+      - name: Test URBAN-1 boot and LCD in the actual WebAssembly emulator
+        run: |
+          node web/smoke.mjs _offline_web android/app/src/main/assets/site/offline-fw/urban1.fwsc
+          node -e "const c=require('./android/app/src/main/assets/site/firmwares.json');if(!c.firmwares.some(f=>f.id==='urban1'&&f.package==='offline-fw/urban1.fwsc'))process.exit(1)"
+
       - name: Benchmark actual native FM-1 engine with offline AMB and default firmware
         run: |
           default_id=$(node -p "require('./android/app/src/main/assets/site/firmwares.json').default")
@@ -86,6 +136,7 @@ jobs:
           if test -s android/app/src/main/assets/site/offline-fw/amb.fwsc; then
             cargo run --release -p fm1-android --example native_bench --locked -- "android/app/src/main/assets/site/offline-fw/amb.fwsc"
           fi
+          cargo run --release -p fm1-android --example native_bench --locked -- "android/app/src/main/assets/site/offline-fw/urban1.fwsc"
 
       - name: Build Android APK
         run: gradle -p android :app:assembleDebug --no-daemon --stacktrace
