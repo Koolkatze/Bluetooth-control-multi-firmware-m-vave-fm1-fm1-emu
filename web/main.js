@@ -44,7 +44,7 @@ for (const f of catalog.firmwares) if (f.hub && !byId.has(f.hub)) byId.set(f.hub
 // firmware this browser starts with on the full page.
 const EMBED = document.documentElement.hasAttribute("data-embed");
 let fw = byId.get(params.get("fw")) || byId.get(stored(DEV.key + "fw")) || byId.get(catalog.default) || catalog.firmwares[0];
-let mhz = Number(params.get("mhz") || stored("fm1.mhz") || 100);
+let mhz = Number(params.get("mhz") || stored("fm1.mhz") || 160);
 // the audio buffer: "interactive" (small: keys answer quickly) unless this device needed a larger
 // one ("playback", offered when the sound drops out with time to spare; ?latency= overrides)
 // The v0.1.1 APK could persist 'balanced' or 'playback', causing very long
