@@ -58,13 +58,13 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
              * SONG'S modal palette; all tracks share the chord transposition. */
             unsigned interval=step%4u==0u?0u:phrase_note[(step/4u)%4u];
             if(style->octave && (v%5u==0u))interval+=12u;
-            if(track->subgenre%4u==3u && step==15u &&
+            if(song->complexity>=2u && track->subgenre%4u==3u && step==15u &&
                (sec==URBAN_HOOK || sec==URBAN_DROP))hit=1u;
             n->note=(uint8_t)(root_note+interval);
             n->velocity=hit?(uint8_t)(style->accent+(v%15u)):0u;
             n->gate=(uint8_t)(style->gate+(v%4u));
             n->glide=(uint8_t)(hit&&style->slide&&step>=8u &&
-                               v%100u<style->slide);
+                               v%100u<(unsigned)style->slide+(track->subgenre%4u)*3u);
             /* Slides need a target pitch other than the sustained tonic. */
             if(n->glide && interval==0u)n->note=(uint8_t)(root_note+7u);
         }
