@@ -92,7 +92,7 @@ static void urban_generate_voice(const UrbanSong *song,unsigned track,
              * are deterministic and bounded by subgenre and section energy. */
             uint8_t on=(uint8_t)((mask>>step)&1u);
             if(!on && (s==URBAN_HOOK || s==URBAN_DROP) &&
-               step>8u && v%100u < (density/5u + cfg->subgenre%4u))
+               step>8u && v%100u < (density/10u*song->complexity + cfg->subgenre%4u))
                 on=1u;
             n->velocity=on?(uint8_t)(g->accent+(v%24u)):0u;
             n->gate=(uint8_t)(track==4u?10u:track==5u?12u:
