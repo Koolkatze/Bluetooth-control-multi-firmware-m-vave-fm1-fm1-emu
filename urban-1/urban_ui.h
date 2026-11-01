@@ -27,10 +27,14 @@ static void urban_ui_set_genre(UrbanUI *ui, uint8_t genre, uint8_t subgenre) {
 static void urban_ui_generate(UrbanUI *ui) {
     uint32_t seed=ui->song.seed ^ (++ui->generation_serial * 0x9e3779b9u);
     if(ui->page==URBAN_PAGE_SONG) {
+        urban_song_set_genre(&ui->song,ui->genre);
         urban_generate_song(&ui->song,seed);
     } else {
         urban_generate_track(&ui->song,ui->selected_track,seed);
     }
+}
+static void urban_ui_song_mode(UrbanUI *ui,int automatic) {
+    urban_song_set_mode(&ui->song,automatic);
 }
 static void urban_ui_next_knob(UrbanUI *ui,int direction) {
     if(ui->page==URBAN_PAGE_SONG) urban_queue_next(&ui->song,direction);
