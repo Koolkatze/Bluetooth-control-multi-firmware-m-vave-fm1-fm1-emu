@@ -1,5 +1,5 @@
 CC ?= cc
-CFLAGS ?= -std=c99 -O2 -Wall -Wextra -Werror -pedantic
+CFLAGS ?= -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function -pedantic
 .PHONY: test clean
 test: urban_test urban_ui_test urban_panel_test urban_transport_test urban_music_test urban_runtime_test urban_rhythm_test urban_bass_test urban_audio_test
 	./urban_test
