@@ -4,7 +4,7 @@
 int main(void) {
     UrbanSong s, old;
     urban_init(&s, 12345u);
-    assert(s.tempo==140 && s.arrangement_len==8);
+    assert(s.tempo==142 && s.arrangement_len==56);
     urban_generate_song(&s, 0x1234u);
     old=s;
     urban_generate_track(&s, 2, 0x5678u);
