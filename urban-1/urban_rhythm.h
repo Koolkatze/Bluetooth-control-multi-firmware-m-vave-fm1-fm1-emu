@@ -80,11 +80,12 @@ static void urban_drum_lanes(const UrbanSong *s,unsigned section,unsigned sectio
         out[2]|=g.snare;
         if(section==URBAN_DROP)out[0]|=0x0101u;
     }
-    if(section_bar%4u==3u && section!=URBAN_INTRO && section!=URBAN_OUTRO) {
+    if(s->complexity>0u && section_bar%4u==3u &&
+       section!=URBAN_INTRO && section!=URBAN_OUTRO) {
         /* fill one bar in four, with genre-specific probabilities */
         for(unsigned step=12u;step<16u;step++) {
-            if((urban_rng(&r)%100u)<g.extras) out[1]|=(uint16_t)(1u<<step);
-            if((urban_rng(&r)%100u)<hg.extras*2u)out[3]|=(uint16_t)(1u<<step);
+            if((urban_rng(&r)%100u)<g.extras*s->complexity/2u) out[1]|=(uint16_t)(1u<<step);
+            if((urban_rng(&r)%100u)<hg.extras*s->complexity)out[3]|=(uint16_t)(1u<<step);
         }
     }
     uint8_t solo=0;
