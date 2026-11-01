@@ -32,7 +32,7 @@ typedef struct {
     uint8_t arrangement[URBAN_ARRANGEMENT];
     uint8_t arrangement_len, key, tempo, current, queued, playing;
     uint32_t seed;
-    uint8_t genre, scale, progression[4];
+    uint8_t genre, subgenre, scale, complexity, progression[4];
     uint8_t song_mode, arrangement_pos, section_bar;
 } UrbanSong;
 
@@ -97,6 +97,7 @@ static void urban_init(UrbanSong *s, uint32_t seed) {
     memset(s, 0, sizeof(*s));
     s->seed=seed;
     s->tempo=urban_genre_bpm[0];
+    s->complexity=2;
     urban_song_harmony(s);
     urban_song_arrange(s);
 }
