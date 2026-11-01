@@ -64,6 +64,17 @@ static void urban_runtime_tick(UrbanRuntime *rt, UrbanMidiFrame *frame) {
             frame->event[2].gate=bass.gate;
             frame->glide[2]=bass.glide;
         }
+        /* A 4-bar harmonic cycle advances under every 1-bar motif,
+         * including repeated hooks. One shared transposition guarantees
+         * that regenerated per-track genres cannot clash in key.
+         * Note zero-velocity events remain silent. */
+        uint8_t bar=s->song_mode?s->arrangement_pos:s->section_bar;
+        uint8_t semitones=s->progression[bar%4u];
+        for(unsigned i=2u;i<URBAN_TRACKS;i++) {
+            UrbanNote *n=&frame->event[i];
+            if(n->velocity && (unsigned)n->note+semitones<=127u)
+                n->note=(uint8_t)(n->note+semitones);
+        }
     }
     t->tick++;
     if(t->tick%URBAN_TICKS_PER_STEP==0u) {
