@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# URBAN-1 smoke test on the HYP-1 host audio simulator.
+wav urban.wav
+tap PLAY
+wait 2500
+spin K4 1
+wait 2500
+tap SEQ
+spin K1 2
+tap SAVE
+wait 1500
+tap HOME
+spin K4 -1
+wait 2500
+shot urban.png
+tap PLAY
+wavstop
