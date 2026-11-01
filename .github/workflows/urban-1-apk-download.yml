@@ -22,26 +22,26 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           mkdir -p dist
-          gh run download 41361720263 --repo "$GH_REPO" --name FM1-Mobile-Offline-APK --dir dist
+          gh run download 41364355866 --repo "$GH_REPO" --name FM1-Mobile-Offline-APK --dir dist
           test -s dist/app-debug.apk
           unzip -t dist/app-debug.apk | tail -n 2
           unzip -Z1 dist/app-debug.apk | grep -qx 'assets/site/offline-fw/urban1.fwsc'
-          mv dist/app-debug.apk dist/FM1-Mobile-URBAN1-v0.2.6-controles-corregidos.apk
-          (cd dist && sha256sum FM1-Mobile-URBAN1-v0.2.6-controles-corregidos.apk > SHA256SUMS.txt)
+          mv dist/app-debug.apk dist/FM1-Mobile-URBAN1-v0.2.7-Song-Mode.apk
+          (cd dist && sha256sum FM1-Mobile-URBAN1-v0.2.7-Song-Mode.apk > SHA256SUMS.txt)
           cat dist/SHA256SUMS.txt
       - name: Publish public direct download on GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          tag="urban1-android-v0.2.6-controls-fixed"
+          tag="urban1-android-v0.2.7-song-mode"
           if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
-            gh release upload "$tag" dist/FM1-Mobile-URBAN1-v0.2.6-controles-corregidos.apk dist/SHA256SUMS.txt --repo "$GH_REPO" --clobber
+            gh release upload "$tag" dist/FM1-Mobile-URBAN1-v0.2.7-Song-Mode.apk dist/SHA256SUMS.txt --repo "$GH_REPO" --clobber
           else
-            gh release create "$tag" dist/FM1-Mobile-URBAN1-v0.2.6-controles-corregidos.apk dist/SHA256SUMS.txt \
+            gh release create "$tag" dist/FM1-Mobile-URBAN1-v0.2.7-Song-Mode.apk dist/SHA256SUMS.txt \
               --repo "$GH_REPO" --target "$GITHUB_SHA" \
-              --title "URBAN-1 Android v0.2.6 – botones corregidos" \
-              --notes "APK experimental para Android. Corrige la pérdida de pulsaciones rápidas (PLAY, HOME, SEQ, SAVE) en el emulador nativo y sincroniza el estado del motor HYP-1. Incluye URBAN-1 sin conexión. No instala firmware en el FM-1 físico. APK firmada con clave de desarrollo; guarda tus datos antes de reinstalar." \
+              --title "URBAN-1 Android v0.2.7 – Song Mode y generador multigénero" \
+              --notes "URBAN-1 v0.2.7: Song Mode automático de 56 compases, Sequence Mode manual con cambios al compás, 14 géneros y 56 subestilos, progresiones de 4 compases, drums de 6 lanes, sonidos HYP-1 por género, complejidad ajustable, mute/solo/lock de pistas. Controles: HOME Song, SEQ Tracks, ARP alterna Song/Sequence, SAVE genera, REC reinicia Song, KNOB4 cambia sección en modo manual, ALGORITHM selecciona subestilo. App independiente (com.koolkatze.fm1offline.urban1): se instala junto a la v0.2.6 previa sin eliminar sus datos. Prototipo GPL-3.0, todavía no son 8 voces reales y no se garantiza calidad comercial. Compilado y validado en emulador nativo Rust y simulador HYP-1. No flashea hardware." \
               --prerelease
           fi
           gh release view "$tag" --repo "$GH_REPO" --json url,assets --jq '.url, (.assets[] | .name + " " + .url)'
