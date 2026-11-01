@@ -264,10 +264,10 @@ static void urban_port_frame(void) {
     seq[13]=(char)('A'+queued);
     info[6]=(char)('1'+tr);
     lcd_fill(0,0,240,240,RGB(14,17,25));
-    draw_text_box(0,12,240,&FONT_B,"URBAN-1",C_HI,1);
+    draw_text_box(0,12,240,&FONT_B,"URBAN-1",RGB(255,165,110),1);
     draw_text_box(0,52,240,&FONT_S,
                   p->rt.ui.page==URBAN_PAGE_SONG?"SONG PAGE":"TRACKS PAGE",C_WHITE,1);
-    draw_text_box(0,77,240,&FONT_S,seq,C_HI,1);
+    draw_text_box(0,77,240,&FONT_S,seq,RGB(255,165,110),1);
     draw_text_box(0,104,240,&FONT_S,
                   p->rt.ui.page==URBAN_PAGE_SONG?
                   urban_genre_name[p->rt.ui.genre]:
@@ -277,7 +277,7 @@ static void urban_port_frame(void) {
                   (p->rt.ui.song.playing?"PLAYING":"STOPPED"):
                   urban_genre_name[p->rt.ui.song.tracks[tr].genre],C_WHITE,1);
     if(p->rt.ui.page==URBAN_PAGE_TRACKS)
-        draw_text_box(0,150,240,&FONT_S,info,C_HI,1);
+        draw_text_box(0,150,240,&FONT_S,info,RGB(255,165,110),1);
     draw_text_box(0,183,240,&FONT_S,"SAVE: GENERATE",C_WHITE,1);
     draw_text_box(0,205,240,&FONT_S,"HOME: SONG  SEQ: TRACKS",C_WHITE,1);
     plat_leds((p->rt.ui.song.playing?1u<<B_PLAY:0u)|
