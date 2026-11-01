@@ -13,7 +13,7 @@
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
-    <application android:label="FM-1 Mobile"
+    <application android:label="URBAN-1 FM-1 Mobile"
         android:icon="@drawable/fm1_launcher"
         android:roundIcon="@drawable/fm1_launcher"
         android:theme="@style/Fm1Theme"
