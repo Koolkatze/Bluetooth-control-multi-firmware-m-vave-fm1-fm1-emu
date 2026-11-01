@@ -29,7 +29,66 @@ static UrbanGroove urban_groove(uint8_t genre,uint8_t subgenre) {
       /*13 liquid jung */ {0x0241,0x1010,0xaaaa,0x1000,0x2020,0x0440,15,19,5}
     };
     UrbanGroove g=grooves[genre%URBAN_GENRES];
-    /* Subgenre controls decoration rather than replacing genre's identity. */
+    /* Each named substyle alters its parent genre's groove, not just
+     * a label or random probability. Strong genre anchors survive. */
+    switch(subgenre%4u) {
+    case 1u:
+        switch(genre%URBAN_GENRES) {
+        case 0: g.kick|=0x0880u; g.hat|=0xaaaau; break; /* drill */
+        case 1: g.kick|=0x1010u; g.perc|=0x2222u; break; /* industrial */
+        case 2: g.hat&=0x1111u; g.clap=0; break; /* piano */
+        case 3: g.perc|=0x4444u; g.swing=38; break; /* jazz rap */
+        case 4: g.hat&=0x4444u; g.kick&=0x0111u; break; /* slow trip */
+        case 5: g.perc|=0x4444u; g.swing=36; break; /* jazz underground */
+        case 6: g.perc|=0x2222u; g.kick|=0x0080u; break; /* cinema */
+        case 7: g.kick|=0x0088u; g.clap|=0x1000u; break; /* perreo */
+        case 8: g.kick|=0x0c00u; g.hat|=0xaaaau; break; /* jump-up */
+        case 9: g.kick&=0x0101u; g.hat&=0x5555u; break; /* deep */
+        case 10: g.hat&=0x5555u; g.perc|=0x2222u; break; /* hypnotic */
+        case 11: g.perc|=0xaaaau; g.hat=0xffffu; break; /* industrial hc */
+        case 12: g.open|=0xaaaau; g.clap|=0x1010u; break; /* uplifting */
+        case 13: g.hat&=0x5555u; g.open|=0x2020u; break; /* atmospheric */
+        }
+        break;
+    case 2u:
+        switch(genre%URBAN_GENRES) {
+        case 0: g.hat&=0x1111u; g.kick&=0x0111u; break; /* ambient */
+        case 1: g.kick|=0x1111u; g.hat&=0x5555u; break; /* darkwave */
+        case 2: g.hat&=0x4444u; g.kick|=0x1000u; break; /* lofi */
+        case 3: g.kick|=0x2040u; g.hat|=0xaaaau; break; /* g-funk */
+        case 4: g.kick|=0x0820u; g.hat|=0x2222u; break; /* abstract */
+        case 5: g.hat|=0xaaaau; g.perc|=0x0011u; break; /* experimental */
+        case 6: g.hat|=0xaaaau; g.clap|=0x1010u; break; /* industrial horror */
+        case 7: g.hat&=0x5555u; g.open=0u; break; /* romantic */
+        case 8: g.hat&=0xaaaau; g.perc|=0x4444u; break; /* darkstep */
+        case 9: g.kick|=0x2020u; g.snare|=0x0800u; break; /* riddim */
+        case 10: g.clap&=0x0101u; g.hat&=0x5555u; break; /* dub techno */
+        case 11: g.kick|=0x0202u; g.perc|=0xaaaau; break; /* frenchcore */
+        case 12: g.hat|=0x5555u; g.perc|=0x4444u; break; /* psytrance */
+        case 13: g.perc|=0x4444u; g.swing=29; break; /* jazzy liquid */
+        }
+        break;
+    case 3u:
+        switch(genre%URBAN_GENRES) {
+        case 0: g.hat=0xffffu; g.kick|=0x2200u; break; /* rolls */
+        case 1: g.hat&=0x4444u; g.open|=0x2000u; break; /* cloud */
+        case 2: g.hat&=0x4444u; g.open=0u; break; /* guitar */
+        case 3: g.hat&=0x4444u; g.clap&=0x1010u; break; /* lofi */
+        case 4: g.perc|=0x2222u; g.open|=0x0200u; break; /* dub */
+        case 5: g.kick|=0x2200u; g.hat|=0xaaaau; break; /* breaks */
+        case 6: g.kick|=0x0888u; g.perc|=0xaaaau; break; /* dark */
+        case 7: g.hat|=0xaaaau; g.perc|=0x2222u; break; /* futuristic */
+        case 8: g.kick|=0x0200u; g.hat|=0xaaaau; break; /* techstep */
+        case 9: g.kick|=0x0880u; g.hat=0xffffu; break; /* brostep */
+        case 10: g.hat&=0x4444u; g.open=0; break; /* minimal */
+        case 11: g.kick|=0x2222u; g.hat=0xffffu; break; /* uptempo */
+        case 12: g.clap|=0x8888u; g.hat|=0x5555u; break; /* tech trance */
+        case 13: g.kick&=0x0101u; g.hat&=0xaaaau; break; /* deep */
+        }
+        break;
+    default: break;
+    }
+    /* Probability-based detail only comes AFTER named rhythmic changes. */
     g.extras=(uint8_t)(g.extras+(subgenre%5u)*2u);
     g.swing=(uint8_t)(g.swing+(subgenre%3u)*2u);
     return g;
