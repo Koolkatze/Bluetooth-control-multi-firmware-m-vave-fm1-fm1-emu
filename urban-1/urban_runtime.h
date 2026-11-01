@@ -5,20 +5,25 @@
 #ifndef URBAN_RUNTIME_H
 #define URBAN_RUNTIME_H
 #include "urban_music.h"
+#include "urban_bass.h"
 #include "urban_transport.h"
 typedef struct {
     UrbanUI ui;
     UrbanTransport transport;
     UrbanVoice voices[URBAN_TRACKS];
+    UrbanBassSong bass;
 } UrbanRuntime;
 typedef struct {
     uint8_t sequence, step;
     UrbanNote event[URBAN_TRACKS];
+    uint8_t glide[URBAN_TRACKS];
 } UrbanMidiFrame;
 static void urban_runtime_refresh_track(UrbanRuntime *rt, unsigned track) {
     if(track>=URBAN_TRACKS) return;
     urban_generate_voice(&rt->ui.song,track,
         rt->ui.song.tracks[track].seq[0].seed,&rt->voices[track]);
+    if(track==2u) urban_generate_bass(&rt->ui.song,
+        rt->ui.song.tracks[track].seq[0].seed,&rt->bass);
 }
 static void urban_runtime_init(UrbanRuntime *rt,uint32_t seed) {
     memset(rt,0,sizeof(*rt));
@@ -52,6 +57,13 @@ static void urban_runtime_tick(UrbanRuntime *rt, UrbanMidiFrame *frame) {
         for(unsigned i=0;i<URBAN_TRACKS;i++)
             if(!s->tracks[i].muted && (!any_solo || s->tracks[i].solo))
                 frame->event[i]=rt->voices[i].sequence[s->current].steps[t->step];
+        if(!s->tracks[2].muted && (!any_solo || s->tracks[2].solo)) {
+            UrbanBassStep bass=rt->bass.seq[s->current].steps[t->step];
+            frame->event[2].note=bass.note;
+            frame->event[2].velocity=bass.velocity;
+            frame->event[2].gate=bass.gate;
+            frame->glide[2]=bass.glide;
+        }
     }
     t->tick++;
     if(t->tick%URBAN_TICKS_PER_STEP==0u) {
