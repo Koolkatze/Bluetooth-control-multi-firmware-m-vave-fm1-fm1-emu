@@ -49,6 +49,27 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
         uint32_t r=root ^ ((sec+1u)*0x85ebca6bu) ^
                  ((uint32_t)track->subgenre*0xc2b2ae35u);
         uint16_t mask=urban_bass_section_mask(style->mask,sec);
+        /* Subgenre bass arrangement: preserve the parent genre's bass
+         * identity, but alter its syncopation and phrasing audibly. */
+        switch(track->subgenre%4u) {
+        case 1u:
+            if(track->genre==0u||track->genre==7u||track->genre==8u)
+                mask|=0x0808u; /* drill/perreo/jump-up */
+            else if(track->genre>=10u)mask|=0x4444u;
+            else mask|=0x0404u;
+            break;
+        case 2u:
+            if(track->genre==9u||track->genre<=2u||track->genre==13u)
+                mask&=0x1111u; /* deep/ambient, leave harmonic space */
+            else mask|=0x0101u;
+            break;
+        case 3u:
+            if(track->genre==0u||track->genre==9u||track->genre==11u)
+                mask|=0x2222u;
+            else mask|=0x1010u;
+            break;
+        default: break;
+        }
         for(unsigned step=0;step<URBAN_STEPS;step++) {
             UrbanBassStep *n=&out->seq[sec].steps[step];
             uint32_t v=urban_rng(&r);
