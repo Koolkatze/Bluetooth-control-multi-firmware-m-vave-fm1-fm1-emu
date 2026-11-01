@@ -1,0 +1,50 @@
+name: URBAN-1 host synthesis smoke test
+on:
+  push:
+    branches: [feature/urban-1]
+    paths:
+      - 'urban-1/**'
+      - '.github/workflows/urban-1.yml'
+  workflow_dispatch:
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout URBAN-1 sources
+        uses: actions/checkout@v4
+      - name: Checkout pinned HYP-1 source (GPL-3.0)
+        uses: actions/checkout@v4
+        with:
+          repository: RustyPawz/fm1-HYP1
+          ref: 57c456db61826331d356458c9c1a136517da7cbf
+          path: hyp1
+      - name: Run URBAN-1 native unit tests
+        run: make -C urban-1 test
+      - name: Apply integration patch and build real HYP-1 DSP host
+        run: |
+          python3 urban-1/tools/apply_hyp1.py --hyp-root hyp1
+          cd hyp1
+          sh host/build_host.sh
+      - name: Simulate panel input and record synthesized audio
+        run: |
+          mkdir -p hyp1/build/urban
+          hyp1/build/host/amb_host urban-1/tests/hyp1_smoke.amb hyp1/build/urban
+          python3 - <<'PY'
+          import wave
+          from pathlib import Path
+          path=Path('hyp1/build/urban/urban.wav')
+          with wave.open(str(path),'rb') as audio:
+              frames=audio.readframes(audio.getnframes())
+              assert audio.getnframes()>44100, 'recording too short'
+              assert any(b!=0 for b in frames), 'audio is silent'
+              print('URBAN-1 HYP-1 host audio frames:', audio.getnframes())
+          PY
+      - name: Archive host recording and UI screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: urban1-host-smoke
+          path: |
+            hyp1/build/urban/
+            hyp1/build/host/amb_host
+          if-no-files-found: ignore
