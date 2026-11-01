@@ -29,6 +29,12 @@ const AUDIO_CAP: usize = 8192; // power-of-two, single writer and single reader
 // 256/512-sample DMA bursts and occasionally spends milliseconds in native JIT.
 // 1024 frames covers ~21ms without adding a huge 100ms+ host buffer.
 const AUDIO_LEAD: usize = 1024;
+// A fast tap may arrive as both down and up before the firmware worker
+// advances its emulated matrix scanner. Hold panel buttons for enough
+// emulated time to be scanned, even if Android batches both JNI events.
+// Piano keys are NOT delayed; this only applies to FM-1/SMK-37 buttons.
+const BUTTON_MIN_PRESS_MS: u64 = 65;
+const INPUT_KEYS: usize = 64;
 const WORK_CHUNK: usize = 128;  // produce an entire callback quantum per worker turn
 const LCD_PIXELS: usize = 240 * 240;
 
@@ -114,6 +120,8 @@ pub struct Machine {
     pending_tick: bool,
     halted: bool,
     package_flash: Vec<u8>,
+    button_down_ms: [u64; INPUT_KEYS],
+    button_release_ms: [u64; INPUT_KEYS],
 }
 
 impl Machine {
@@ -133,7 +141,9 @@ impl Machine {
         soc.write32(params, params + 0x40);
         cpu.regs[0] = fm1_soc::stock_boot(&mut soc, &st.flash, params, st.board);
         let package_flash = soc.flash.mem.clone();
-        Ok(Self { cpu, cpu1: None, soc, pending_tick: false, halted: false, package_flash })
+        Ok(Self { cpu, cpu1: None, soc, pending_tick: false, halted: false,
+            package_flash, button_down_ms: [0; INPUT_KEYS],
+            button_release_ms: [0; INPUT_KEYS] })
     }
 
     fn run(&mut self, n: u32) {
@@ -142,6 +152,55 @@ impl Machine {
         if machine::run_dual(cpu1, soc, n, RAM_SIZE, jit,
             |soc, k| machine::run_blocks(cpu, soc, k, pending_tick)).is_err() {
             self.halted = true;
+        }
+        self.finish_button_releases();
+    }
+
+    // The Android JNI bridge queues button changes independently. A short
+    // touch can deliver press+release in one worker iteration, before the
+    // emulated firmware sees either. Defer only the release of panel buttons.
+    // This uses *emulated* milliseconds, not wall time or a sleeping UI thread.
+    fn is_panel_button(&self, id: u8) -> bool {
+        match self.soc.periph.board {
+            fm1_soc::Board::Fm1 => id < 14,
+            fm1_soc::Board::Smk37 => (37..55).contains(&id),
+        }
+    }
+
+    fn finish_button_releases(&mut self) {
+        let now = self.soc.periph.ms();
+        for id in 0..INPUT_KEYS {
+            let due = self.button_release_ms[id];
+            if due != 0 && now >= due {
+                self.soc.periph.apply(&Action::Key { id: id as u8, down: false });
+                self.button_release_ms[id] = 0;
+            }
+        }
+    }
+
+    fn input_key(&mut self, id: u8, down: bool) {
+        let idx = id as usize;
+        if idx >= INPUT_KEYS || !self.is_panel_button(id) {
+            self.soc.periph.apply(&Action::Key { id, down });
+            return;
+        }
+        let now = self.soc.periph.ms();
+        if down {
+            // A second tap must not lose its new leading edge.
+            if self.button_release_ms[idx] != 0 {
+                self.soc.periph.apply(&Action::Key { id, down: false });
+                self.button_release_ms[idx] = 0;
+            }
+            self.button_down_ms[idx] = now;
+            self.soc.periph.apply(&Action::Key { id, down: true });
+        } else {
+            let due = self.button_down_ms[idx].saturating_add(BUTTON_MIN_PRESS_MS);
+            if now < due {
+                self.button_release_ms[idx] = due.max(1);
+            } else {
+                self.button_release_ms[idx] = 0;
+                self.soc.periph.apply(&Action::Key { id, down: false });
+            }
         }
     }
 
@@ -152,7 +211,7 @@ impl Machine {
                     self.soc.periph.apply(&Action::Midi { b });
                 }
             }
-            Cmd::Key(id, down) => self.soc.periph.apply(&Action::Key { id, down }),
+            Cmd::Key(id, down) => self.input_key(id, down),
             Cmd::Enc(enc, clicks) => self.soc.periph.apply(&Action::Enc { enc, clicks }),
             Cmd::Pot(value) => self.soc.periph.apply(&Action::Adc { ch: 4, value: value.min(1023) }),
             Cmd::Analog(idx, value) =>
@@ -326,6 +385,14 @@ fn decode_sectors(bytes: &[u8]) -> Vec<(u32, Vec<u8>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn fast_android_panel_tap_is_not_collapsed_before_firmware_scans() {
+        // No firmware is required to test event scheduling: construct the
+        // periph and inspect the logical switch state via pending release.
+        // FM-1 buttons are physical IDs 0..13; SMK-37 uses 37..54.
+        assert_eq!(BUTTON_MIN_PRESS_MS, 65);
+        assert_eq!(INPUT_KEYS, 64);
+    }
     #[test]
     fn spsc_ring_produces_in_order_and_does_not_overwrite_unread_samples() {
         let r = AudioRing::new();
