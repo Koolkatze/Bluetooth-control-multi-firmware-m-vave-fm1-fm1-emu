@@ -3,7 +3,7 @@
  */
 #ifndef URBAN_MUSIC_H
 #define URBAN_MUSIC_H
-#include "urban_song.h"
+#include "urban_rhythm.h"
 #define URBAN_GENRES 14u
 typedef struct { uint8_t note, velocity, gate; } UrbanNote;
 typedef struct { UrbanNote steps[URBAN_STEPS]; uint32_t seed; } UrbanPhrase;
@@ -27,7 +27,7 @@ static void urban_generate_voice(const UrbanSong *song, unsigned track, uint32_t
     for(unsigned i=0;i<4;i++) motif[i]=urban_minor_scale[urban_rng(&root)%7u];
     for(unsigned s=0;s<URBAN_SEQUENCES;s++){
         UrbanPhrase *phrase=&out->sequence[s];
-        uint32_t r=root ^ ((s+1u)*0x85ebca6bu);
+        uint32_t r=root ^ ((s+1u)*0x85ebca6bu) ^ ((uint32_t)cfg->subgenre*0xc2b2ae35u);
         phrase->seed=r;
         unsigned density=urban_density(cfg->genre,track);
         /* Intro/outro sparse; hook/drop denser. */
@@ -41,10 +41,10 @@ static void urban_generate_voice(const UrbanSong *song, unsigned track, uint32_t
             /* Non-drum voices remain in a common natural-minor pitch collection. */
             n->note=(uint8_t)(48u+song->key%12u+degree+(track==2?0u:12u)+(s==2?12u:0u));
             n->velocity=(uint8_t)(hit<density?72u+urban_rng(&r)%40u:0u);
+            if(track<=1u) n->velocity=(uint8_t)(urban_drum_hit(cfg->genre,cfg->subgenre,track,step,s,&r)?85u+urban_rng(&r)%30u:0u);
             n->gate=(uint8_t)(track==0 || track==1?1u:2u+urban_rng(&r)%6u);
             /* Drum tracks use conventional MIDI percussion note numbers. */
-            if(track==0) n->note=(uint8_t)((step%4u==0u)?36u:38u);
-            if(track==1) n->note=42u;
+            if(track<=1u) n->note=urban_drum_note(cfg->genre,track,step);
         }
     }
 }
