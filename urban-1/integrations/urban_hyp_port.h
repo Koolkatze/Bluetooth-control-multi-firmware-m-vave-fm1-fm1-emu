@@ -7,6 +7,7 @@
  */
 #ifndef URBAN_HYP_PORT_H
 #define URBAN_HYP_PORT_H
+#define URBAN_EMBEDDED 1
 #include "urban/urban_runtime.h"
 
 typedef struct {
