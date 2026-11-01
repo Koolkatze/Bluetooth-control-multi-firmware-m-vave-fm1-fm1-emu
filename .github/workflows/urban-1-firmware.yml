@@ -1,0 +1,69 @@
+name: URBAN-1 experimental FM-1 firmware
+on:
+  push:
+    branches: [feature/urban-1]
+    paths:
+      - 'urban-1/**'
+      - '.github/workflows/urban-1-firmware.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: RustyPawz/fm1-HYP1
+          ref: 57c456db61826331d356458c9c1a136517da7cbf
+          path: hyp1
+      - name: Install firmware build dependencies
+        run: python3 -m pip install Pillow
+      - name: Restore JieLi cross-toolchain and SDK
+        id: tools
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.jieli
+            ~/fw-AC79_AIoT_SDK
+          key: urban1-jieli-ac79-v1.2.1
+      - name: Fetch device build tools
+        if: steps.tools.outputs.cache-hit != 'true'
+        run: |
+          try() { for i in 1 2 3; do "$@" && return 0; echo "Retry $i"; sleep $((i * 15)); done; return 1; }
+          [ -x ~/.jieli/toolchain/pi32v2/bin/clang ] || (cd hyp1 && try tools/get_toolchain.sh)
+          fetch_sdk() {
+            rm -rf ~/fw-AC79_AIoT_SDK
+            git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git ~/fw-AC79_AIoT_SDK
+          }
+          [ -f ~/fw-AC79_AIoT_SDK/cpu/wl82/tools/uboot.boot ] || try fetch_sdk
+      - name: Save device build tools
+        if: steps.tools.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.jieli
+            ~/fw-AC79_AIoT_SDK
+          key: urban1-jieli-ac79-v1.2.1
+      - name: Apply URBAN-1 and compile actual FM-1 package
+        run: |
+          python3 urban-1/tools/apply_hyp1.py --hyp-root hyp1
+          cd hyp1
+          ./build.sh --release 0.1.0
+          test -s build/amb.fwsc
+          cp build/amb.fwsc build/URBAN-1-0.1.0-EXPERIMENTAL.fwsc
+      - name: Verify package with HYP-1 updater tests
+        run: |
+          cd hyp1
+          cc -o build/ota_test tests/ota_test.c
+          build/ota_test build/amb.fwsc
+          python3 tests/install_test.py
+      - name: Publish untested experimental firmware as artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: URBAN-1-experimental-fm1-not-hardware-tested
+          path: hyp1/build/URBAN-1-0.1.0-EXPERIMENTAL.fwsc
+          if-no-files-found: error
