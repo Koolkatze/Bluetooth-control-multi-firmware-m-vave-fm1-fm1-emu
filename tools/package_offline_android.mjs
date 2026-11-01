@@ -109,6 +109,34 @@ async function prepareCatalog(spec) {
     }
   }));
 
+  // URBAN-1 is compiled from this branch's C source and a pinned GPL-3.0
+  // HYP-1 checkout during the Android APK build. Never download a transient
+  // Actions artifact in the app, and never present a missing build as installed.
+  if (spec.namespace === "FM-1" && process.env.URBAN1_FWSC) {
+    const source = resolve(process.env.URBAN1_FWSC);
+    const bytes = new Uint8Array(await readFile(source));
+    if (bytes.length < 1024 || bytes.length > 15 * 1024 * 1024 ||
+        appFromPackage(bytes).length < 512) {
+      throw new Error("URBAN-1 local build is not a valid FM-1 firmware package");
+    }
+    await writeFile(join(firmwareDir, "urban1.fwsc"), bytes);
+    const firmware = {
+      id: "urban1",
+      name: "URBAN-1",
+      version: "0.1.0 experimental",
+      author: "Glitch AR / URBAN-1 contributors (HYP-1-based)",
+      license: "GPL-3.0",
+      about: "Experimental generative urban-music firmware. Song and Tracks pages; eight song sections, genre-aware drums and bass. Current HYP-1 DSP integration has fewer simultaneous sound engines than the eight logical tracks. Audio/performance on Android depends on the emulator.",
+      repo: "https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/tree/feature/urban-1/urban-1",
+      package: "offline-fw/urban1.fwsc"
+    };
+    results.push(firmware);
+    logs.push({ device: spec.namespace, id: "urban1", bundled: true,
+      bytes: bytes.length, source: firmware.repo, license: firmware.license,
+      originalUrl: "compiled locally from HYP-1 GPL-3.0 and urban-1/ source" });
+    console.log("[offline] FM-1 urban1: bundled locally built", bytes.length, "bytes");
+  }
+
   catalog.firmwares = results.filter(Boolean);
   if (!catalog.firmwares.length) throw new Error(spec.namespace + ": no offline firmware was obtained");
   const prior = catalog.default;
