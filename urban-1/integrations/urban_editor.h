@@ -9,6 +9,8 @@
 #define URBAN_EDITOR_H
 #define URBAN_EDITOR_FX 1u
 #define URBAN_EDITOR_EDIT 2u
+#define URBAN_EDITOR_ENV 3u
+#define URBAN_EDITOR_LFO 4u
 #define URBAN_EDITOR_PAGE_COUNT (URBAN_TRACKS + 1u)
 #define URBAN_EDITOR_NO_PARAM (-1)
 enum {
@@ -16,9 +18,9 @@ enum {
     UC_GATE16, UC_GATE8, UC_CRUSH, UC_THROW, UC_LOWPASS,
     UC_HIGHPASS, UC_REVERSE, UC_FILL, UC_STOP,
     UC_REPEAT4, UC_REPEAT8, UC_SFX_SOUND, UC_SFX_LEVEL,
-    UC_SFX_LENGTH, UC_SFX_DENSITY
+    UC_SFX_LENGTH, UC_SFX_DENSITY, UC_TAPE_TRANSPORT
 };
-#define URBAN_EDITOR_CUSTOM_LAST UC_SFX_DENSITY
+#define URBAN_EDITOR_CUSTOM_LAST UC_TAPE_TRANSPORT
 typedef struct {
     const char *title;
     int16_t param[4];
@@ -36,7 +38,8 @@ static const UrbanEditorBank urban_fx_master[] = {
     {"ECHO / REVERB", {P_ECHO,P_ETIME,P_REVERB,P_SIZE}},
     {"DRIVE / GATE", {P_DRIVE,UC_GATE16,UC_GATE8,UC_CRUSH}},
     {"FILTER / FX", {UC_LOWPASS,UC_HIGHPASS,UC_THROW,UC_FILL}},
-    {"TAPE / REPEAT", {UC_REVERSE,UC_STOP,UC_REPEAT4,UC_REPEAT8}}
+    {"TAPE / REPEAT", {UC_TAPE_TRANSPORT,UC_STOP,UC_REVERSE,UC_REPEAT4}},
+    {"TAPE / REPEAT 2", {UC_REPEAT8,UC_THROW,P_ETIME,P_SIZE}}
 };
 static const UrbanEditorBank urban_fx_drums[] = {
     {"KICK EQ/DECAY", {P_LANE_LVL(0),P_LANE_TUNE(0),P_LANE_DEC(0),P_KIT_KICK}},
@@ -107,6 +110,36 @@ static const UrbanEditorBank urban_edit_noise[] = {
 static const UrbanEditorBank urban_edit_sfx[] = {
     {"SFX GENERATOR", {UC_SFX_SOUND,UC_SFX_LEVEL,UC_SFX_LENGTH,UC_SFX_DENSITY}}
 };
+/* ENV and LFO are their own real editing pages, not track lock/mute.
+ * Lead's native ACID filter envelope can be edited, but HYP does not
+ * expose a native lead LFO. That requires a separate DSP modulator. */
+static const UrbanEditorBank urban_env_master[]={
+    {"PAD ENV", {P_PE_ATK,P_PE_HOLD,P_PE_REL,P_PE_REST}},
+    {"BASS ENV", {P_DE_TRIG,P_DE_ATK,P_DE_DEC,P_DE_AMT}},
+    {"LEAD ENV", {P_AC_ENV,P_AC_DEC,P_AC_ACC,P_AC_SLIDE}}
+};
+static const UrbanEditorBank urban_env_bass[]={
+    {"BASS ATTACK/DECAY", {P_DE_TRIG,P_DE_ATK,P_DE_DEC,P_DE_AMT}}
+};
+static const UrbanEditorBank urban_env_lead[]={
+    {"LEAD FILTER ENV", {P_AC_CUT,P_AC_ENV,P_AC_DEC,P_AC_ACC}}
+};
+static const UrbanEditorBank urban_env_pad[]={
+    {"PAD ADSR", {P_PE_ATK,P_PE_HOLD,P_PE_REL,P_PE_REST}}
+};
+static const UrbanEditorBank urban_lfo_master[]={
+    {"BASS LFO", {P_DL_RATE,P_DL_DEPTH,P_DL_SHAPE,P_DL_DEST}},
+    {"PAD LFO", {P_PL_RATE,P_PL_DEPTH,P_PL_SHAPE,P_PL_DEST}}
+};
+static const UrbanEditorBank urban_lfo_bass[]={
+    {"BASS LFO", {P_DL_RATE,P_DL_DEPTH,P_DL_SHAPE,P_DL_DEST}}
+};
+static const UrbanEditorBank urban_lfo_pad[]={
+    {"PAD LFO", {P_PL_RATE,P_PL_DEPTH,P_PL_SHAPE,P_PL_DEST}}
+};
+static const UrbanEditorBank urban_lfo_lead[]={
+    {"LEAD FILTER / SWEEP", {P_AC_CUT,P_AC_ENV,P_AC_RES,P_AC_DEC}}
+};
 #define UE_SIZE(a) ((unsigned)(sizeof(a)/sizeof((a)[0])))
 static const UrbanEditorBank *urban_editor_banks(
     unsigned view,unsigned target,unsigned *count) {
@@ -124,6 +157,22 @@ static const UrbanEditorBank *urban_editor_banks(
             UE_CASE(6,urban_fx_noise);
             UE_CASE(7,urban_fx_sfx);
             default: break; /* Track 8 remains reserved */
+        }
+    } else if(view==URBAN_EDITOR_ENV) {
+        switch(target) {
+            UE_CASE(0,urban_env_master);
+            UE_CASE(3,urban_env_bass);
+            UE_CASE(4,urban_env_lead);
+            UE_CASE(5,urban_env_pad);
+            default:break;
+        }
+    } else if(view==URBAN_EDITOR_LFO) {
+        switch(target) {
+            UE_CASE(0,urban_lfo_master);
+            UE_CASE(3,urban_lfo_bass);
+            UE_CASE(4,urban_lfo_lead);
+            UE_CASE(5,urban_lfo_pad);
+            default:break;
         }
     } else if(view==URBAN_EDITOR_EDIT) {
         switch(target) {
@@ -178,6 +227,7 @@ static const char *urban_editor_label(int id) {
       case UC_REVERSE:return "REVERSE";
       case UC_FILL:return "FILL";
       case UC_STOP:return "STOP";
+      case UC_TAPE_TRANSPORT:return "PLAY TAPE";
       case UC_REPEAT4:return "RPT 1/4";
       case UC_REPEAT8:return "RPT 1/8";
       case UC_SFX_SOUND:return "SFX SOUND";
