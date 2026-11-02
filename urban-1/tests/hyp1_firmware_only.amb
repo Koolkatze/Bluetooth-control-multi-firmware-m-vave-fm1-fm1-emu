@@ -19,7 +19,9 @@ expect urbanbar 4
 tap ARP
 expect urbanmode 0
 tap REC
+expect urbanrecstate 1
 expect urbanmode 0
+tap HOME
 wait 7300
 expect urbancurrent 1
 spin K4 1
