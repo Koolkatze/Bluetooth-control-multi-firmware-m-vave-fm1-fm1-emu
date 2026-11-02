@@ -24,14 +24,29 @@ static void urban_ui_set_genre(UrbanUI *ui, uint8_t genre, uint8_t subgenre) {
         t->genre=genre; t->subgenre=subgenre;
     }
 }
-static void urban_ui_generate(UrbanUI *ui) {
-    uint32_t seed=ui->song.seed ^ (++ui->generation_serial * 0x9e3779b9u);
+/* Generate is a NEW COMPOSITION, not merely reloading a style preset.
+ * The monotonic press counter guarantees an evolving seed even in Android
+ * where hardware RNG sources may return the same value; entropy adds the
+ * wall/transport input time without compromising deterministic test replays.
+ */
+static void urban_ui_generate_entropy(UrbanUI *ui,uint32_t entropy) {
+    uint32_t serial=++ui->generation_serial;
+    uint32_t seed=urban_mix_seed(ui->song.seed +
+         serial*0x9e3779b9u + (entropy^0xa511e9b3u));
+    if(seed==ui->song.seed) seed^=0x85ebca6bu;
     if(ui->page==URBAN_PAGE_SONG) {
         urban_song_set_genre(&ui->song,ui->genre);
+        /* Same genre and subgenre selected, but newly composed melody,
+         * chord progression, scale/mode, bass, drum variations and timbres.
+         * Preserve user key, BPM, complexity and locked tracks. */
         urban_generate_song(&ui->song,seed);
     } else {
+        /* Regeneration only changes the selected track's eight phrases. */
         urban_generate_track(&ui->song,ui->selected_track,seed);
     }
+}
+static void urban_ui_generate(UrbanUI *ui) {
+    urban_ui_generate_entropy(ui,0u);
 }
 static void urban_ui_song_mode(UrbanUI *ui,int automatic) {
     urban_song_set_mode(&ui->song,automatic);
