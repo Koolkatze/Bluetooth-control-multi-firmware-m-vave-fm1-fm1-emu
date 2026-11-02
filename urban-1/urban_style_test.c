@@ -13,6 +13,15 @@ int main(void) {
   for(unsigned s=0;s<4;s++) {
    const char *name=urban_style_name(g,s);
    assert(name && strlen(name)>=3u);
+   UrbanStylePatch patch=urban_style_patch(g,s);
+   assert(patch.bass<16u && patch.lead<16u && patch.pad<16u);
+   assert(patch.drum_kit<8u && patch.hat_kit<8u);
+   assert(patch.drive<=100u && patch.reverb<=100u && patch.echo<=100u);
+   assert(patch.bass_cut<=100u && patch.lead_cut<=100u);
+   if(s) {
+     UrbanStylePatch base=urban_style_patch(g,0);
+     assert(memcmp(&base,&patch,sizeof(base))!=0);
+   }
   }
  }
  assert(urban_groove(0,1).hat!=urban_groove(0,0).hat);
