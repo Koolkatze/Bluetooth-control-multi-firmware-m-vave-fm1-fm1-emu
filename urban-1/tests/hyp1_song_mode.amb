@@ -28,6 +28,8 @@ tap ARP
 expect urbanmode 1
 expect urbanbar 0
 tap REC
+expect urbanrecstate 1
+tap HOME
 expect urbanbar 0
 tap PLAY
 expect playing 0
