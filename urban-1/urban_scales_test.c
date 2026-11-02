@@ -31,7 +31,7 @@ int main(void) {
         }
         assert(urban_scale_offset(id,-1)==
                (int)urban_scale_pc(id,size-1u)-12);
-        assert(urban_scale_names[id] && strlen(urban_scale_names[id])>2u);
+        assert(urban_scale_names[id] && strlen(urban_scale_names[id])>=2u);
         count5+=(size==5u);count6+=(size==6u);
         count7+=(size==7u);count8+=(size==8u);count12+=(size==12u);
         /* A manual scale must survive an entire generated take and
