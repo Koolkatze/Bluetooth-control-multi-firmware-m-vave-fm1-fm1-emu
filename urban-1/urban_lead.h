@@ -175,8 +175,8 @@ static UrbanNote urban_lead_score(const UrbanSong *s,unsigned section,
     while(degree>=7){degree-=7;octave++;}
     int pitch=12*octave+(int)(s->key%12u)+
              (int)urban_scale_intervals[s->scale%URBAN_SCALE_COUNT][degree];
-    if(pitch<48)pitch+=12;
-    if(pitch>96)pitch-=12;
+    while(pitch<48)pitch+=12;
+    while(pitch>96)pitch-=12;
     input.note=(uint8_t)pitch;
     input.velocity=(uint8_t)(p->velocity+(r%11u));
     input.gate=(uint8_t)(p->gate+(t->subgenre%3u));
