@@ -35,6 +35,7 @@ jobs:
           hyp1/build/host/amb_host urban-1/tests/hyp1_song_mode.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_firmware_only.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_polychords.amb hyp1/build/urban
+          hyp1/build/host/amb_host urban-1/tests/hyp1_display_stable.amb hyp1/build/urban
           python3 - <<'PY'
           import wave
           from pathlib import Path
@@ -44,6 +45,31 @@ jobs:
               assert audio.getnframes()>44100, 'recording too short'
               assert any(b!=0 for b in frames), 'audio is silent'
               print('URBAN-1 HYP-1 host audio frames:', audio.getnframes())
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image,ImageChops
+          root=Path('hyp1/build/urban')
+          for a,b in [('urban-idle-a.png','urban-idle-b.png'),
+                      ('urban-tracks-a.png','urban-tracks-b.png')]:
+              im1=Image.open(root/a).convert('RGB')
+              im2=Image.open(root/b).convert('RGB')
+              assert im1.size==im2.size, f'{a}: changed display geometry'
+              assert ImageChops.difference(im1,im2).getbbox() is None, (
+                  f'{a}: idle LCD framebuffer changed or flickered')
+              width,height=im1.size
+              px=list(im1.getdata())
+              pitchblack=sum(1 for r,g,b in px if max(r,g,b)<4)
+              assert pitchblack<0.05*len(px), (
+                  f'{a}: {pitchblack} unexpectedly pure-black screen pixels')
+              print(f'URBAN-1 LCD idle stable: {a} {width}x{height}; '
+                    f'{pitchblack} black pixels / {len(px)}')
+          source=Path('urban-1/integrations/urban_hyp_port.h').read_text()
+          frame=source.split('static void urban_port_frame(void) {',1)[1]
+          assert 'lcd_fill(' not in frame, 'Full-screen clear reintroduced'
+          assert 'draw_text_box(' not in frame, 'Per-label black background reintroduced'
+          assert 'cv_begin(240,144' in frame and 'cv_begin(240,96' in frame
+          print('URBAN-1 display dirty-state / two-band compositing checks OK')
           PY
       - name: Archive host recording and UI screenshot
         if: always()
