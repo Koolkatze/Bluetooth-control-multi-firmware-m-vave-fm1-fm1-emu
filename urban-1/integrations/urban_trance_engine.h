@@ -10,6 +10,7 @@
 static UrbanTranceGrid urban_trance_grids[2];
 static volatile uint8_t urban_trance_front;
 volatile uint32_t urban_trance_audio_onsets;
+volatile uint32_t urban_trance_offgrid_onsets;
 volatile uint32_t urban_trance_audio_last_step;
 void urban_trance_publish(const UrbanTranceGrid *grid) {
     unsigned back=urban_trance_front^1u;
@@ -66,6 +67,7 @@ static void urban_trance_audio_tick(uint32_t step) {
         held_key=key;
         left=n->gate;
         urban_trance_audio_onsets++;
+        if(st&1u)urban_trance_offgrid_onsets++;
     }
 }
 #endif
