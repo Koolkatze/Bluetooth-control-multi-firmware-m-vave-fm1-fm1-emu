@@ -71,7 +71,7 @@ static const UrbanStylePatch urban_style_patches[URBAN_GENRES][4]={
    {8,15,8,4,5,21,78,75,29,28} },
  /* Underground: raw breaks, dusty jazz, atmospheric experiment, funk breaks */
  { {1,15,0,4,4,18,14, 8,30,23},
-   {7,15,0,4,4,12,25,13,38,28},
+   {7,15,0,4,4,18,25,13,38,28},
    {1, 9,7,4,4,28,38,22,34,33},
    {1,12,4,4,4,23,12, 9,38,33} },
  /* Horrorcore: Memphis, cinematic, industrial, dark */
