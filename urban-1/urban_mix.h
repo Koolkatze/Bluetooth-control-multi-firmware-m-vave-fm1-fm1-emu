@@ -86,7 +86,7 @@ static UrbanMixPlan urban_mix_plan(const UrbanSong *s,
         m.chords=(uint8_t)(m.chords*95u/100u);
         m.noise=(uint8_t)(m.noise*95u/100u);
     }
-    m.kick=b->kick;
+    m.kick=urban_mix_cap(b->kick,82u);
     m.snare=urban_mix_cap((unsigned)b->kick*76u/100u,65);
     m.clap=urban_mix_cap((unsigned)b->kick*65u/100u,55);
     m.hat=b->hat;
