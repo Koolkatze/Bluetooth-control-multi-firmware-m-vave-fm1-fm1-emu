@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Regression: master Echo knob must inject ACTUAL PCM into HYP tape and
+# produce delayed wet taps, not merely update a P_ECHO UI number.
+# Throw remains a distinct performance effect on the SAME DSP delay.
+expect urbanfxechosend 0
+expect urbanfxechowet 0
+expect urbanfxthrowsend 0
+tap FX
+expect urbanview 1
+expect urbanbank 0
+spin K1 -100
+expect urbanfxecho 0
+tap PLAY
+wait 1250
+expect playing 1
+expect urbanfxechosend 0
+expect urbanfxechowet 0
+expect urbanfxthrowsend 0
+# Adjustable normal echo: the regular mix is now sent to the tape.
+spin K1 75
+expect urbanfxecho 75
+expect urbanfxoverride 1
+wait 3600
+expect urbanfxechosend >500
+expect urbanfxechowet >200
+shot fx-master-echo-wet.png
+# Turn it off: Throw still sends music to this same tape as before.
+spin K1 -100
+expect urbanfxecho 0
+spin PRESET 2
+expect urbanbank 2
+spin K3 1
+expect urbanfxmask >0
+wait 1000
+expect urbanfxthrowsend >100
+tap PLAY
+expect playing 0
