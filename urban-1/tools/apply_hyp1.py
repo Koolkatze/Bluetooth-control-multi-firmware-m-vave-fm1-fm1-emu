@@ -94,8 +94,8 @@ def main() -> None:
         '    urban_jazz_note_cmd(voice,key,on);\n'
         '    if (voice == EN_V_PAD) {\n        pad_play(key, on);')
     replace_once(dsp,
-        '    notes_off();\n}',
-        '    urban_jazz_quiet();\n    notes_off();\n}')
+        '    acid.amp = acid.amp_t = 0.0f;\n    notes_off();\n}',
+        '    acid.amp = acid.amp_t = 0.0f;\n    urban_jazz_quiet();\n    notes_off();\n}')
     replace_once(dsp,
         'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];',
         'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];\n'
