@@ -802,6 +802,7 @@ static void urban_port_input(void) {
         if(down&((1u<<B_LFO)|(1u<<B_GLO))) {
             urban_port_stage_pattern();
             urban_port_mix_levels();
+            urban_port_compile_trance(); /* mute/solo gates audio DSP lead */
         }
     }
     d=plat_enc(EN_K1);
