@@ -54,6 +54,8 @@ def main() -> None:
                     root / "firmware/src/app/urban_trance_clock.h")
     shutil.copyfile(HERE / "integrations/urban_trance_engine.h",
                     root / "firmware/src/app/urban_trance_engine.h")
+    shutil.copyfile(HERE / "integrations/urban_piano_roll_engine.h",
+                    root / "firmware/src/app/urban_piano_roll_engine.h")
     # HYP-1's Break kit applies random ghost kicks/snares and 32nd-roll
     # retriggers *after* reading the six authored pattern lanes. These
     # unscored hits sound like glitches in URBAN-1, where all fills and
@@ -99,6 +101,23 @@ def main() -> None:
     replace_once(dsp,
         'static void quiet(void)',
         '#include "../app/urban_trance_engine.h"\nstatic void quiet(void)')
+    # Piano voicings need key-press spacing of tens of milliseconds,
+    # not a 16th-note arpeggiator or simultaneous MIDI chord note-ons.
+    # Reuse the HYP renderer's existing subchunk slicing mechanism.
+    replace_once(dsp,
+        'static void quiet(void)',
+        '#include "../app/urban_piano_roll_engine.h"\nstatic void quiet(void)')
+    replace_once(dsp,
+        '    drain();\n    if (hush && hush_g <= 0.0f)',
+        '    drain();\n    urban_roll_receive();\n    if (hush && hush_g <= 0.0f)')
+    replace_once(dsp,
+        '        if (timed)\n            pulse_left -= (float)k;',
+        '        { uint32_t wait = urban_roll_wait();\n'
+        '          if (wait > 0u && wait < k) k = wait; }\n'
+        '        if (timed)\n            pulse_left -= (float)k;')
+    replace_once(dsp,
+        '        drums_wait_step((int32_t)k);',
+        '        drums_wait_step((int32_t)k);\n        urban_roll_advance(k);')
     # One shared port implementation in both the FM-1 and HYP-1 host simulator.
     replace_once(root / "firmware/src/main.c",
         '#include "app/main_fm1.c"',
