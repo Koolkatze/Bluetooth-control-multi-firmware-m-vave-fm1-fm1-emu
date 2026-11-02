@@ -84,6 +84,7 @@ static void urban_runtime_modal_step(const UrbanSong *s,UrbanNote *n,int offset)
 static void urban_runtime_bar_variation(const UrbanSong *s,
    unsigned track,unsigned section,unsigned bar,unsigned step,
    UrbanNote *n,uint8_t *glide) {
+    (void)glide;
     if(!bar || track<2u)return;
     uint8_t genre=s->tracks[track].genre%URBAN_GENRES;
     uint32_t rng=s->tracks[track].seq[section].seed ^
