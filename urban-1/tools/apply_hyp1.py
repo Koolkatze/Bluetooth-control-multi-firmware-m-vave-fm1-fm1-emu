@@ -75,6 +75,8 @@ def main() -> None:
     replace_once(root / "host/amb_host.c",
         '    else if (!strcmp(what, "sixteenths"))',
         '    else if (!strcmp(what, "urbanmode")) got = urban_port.rt.ui.song.song_mode;\n'
+        '    else if (!strcmp(what, "urbansub")) got = urban_port.rt.ui.song.subgenre;\n'
+        '    else if (!strcmp(what, "urbanphrase")) got = urban_phrase_bar(&urban_port.rt.ui.song);\n'
         '    else if (!strcmp(what, "urbanbar")) got = urban_port.rt.ui.song.arrangement_pos;\n'
         '    else if (!strcmp(what, "urbancurrent")) got = urban_port.rt.ui.song.current;\n'
         '    else if (!strcmp(what, "urbannext")) got = urban_port.rt.ui.song.queued;\n'
