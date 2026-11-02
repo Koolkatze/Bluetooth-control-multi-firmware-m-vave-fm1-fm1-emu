@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Real HYP audio DSP: Jazz Rap must NOT depress all chord notes at once.
+# Per-note timing is quantized to audio samples (14–24 ms spacing).
+expect urbanpianorolls 0
+expect urbanpianonotes 0
+spin K2 3
+spin K3 1
+expect urbansub 1
+tap PLAY
+wait 7500
+expect playing 1
+expect urbanpianorolls >0
+expect urbanpianonotes >3
+shot pianist-audio-key-presses.png
+tap PLAY
+expect playing 0
