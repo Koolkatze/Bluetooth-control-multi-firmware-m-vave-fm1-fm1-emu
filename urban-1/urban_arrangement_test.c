@@ -47,8 +47,10 @@ static void check_genre_identity(void) {
   }
   assert(identical==1u); /* 14 distinguishable drum signatures */
   urban_song_set_genre(&s,(uint8_t)a);
-  assert(s.scale==urban_genre_scale[a]);
-  assert(memcmp(s.progression,urban_progressions[a],4)==0);
+  assert(s.scale==urban_genre_mode_options[a][0]);
+  for(unsigned bar=0;bar<4u;bar++)
+   assert(s.progression[bar]==
+      urban_scale_intervals[s.scale][urban_chord_degrees[a][0][bar]]);
   uint16_t lanes[6],repeat[6];
   urban_generate_song(&s,123u);
   for(unsigned i=0;i<2;i++)s.tracks[i].genre=(uint8_t)a;
