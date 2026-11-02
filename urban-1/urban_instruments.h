@@ -85,6 +85,7 @@ static const uint8_t urban_subgenre_bass_sounds[URBAN_GENRES][4][4]={
 typedef struct {
     UrbanStylePatch patch;
     uint8_t noise_color,noise_amount,program_variant;
+    uint8_t jazz_voice; /* 0 = native HYP, 1..5 = real jazz DSP */
 } UrbanInstrumentProgram;
 static UrbanInstrumentProgram urban_instrument_program(
     const UrbanSong *s,unsigned track,unsigned section) {
@@ -100,6 +101,30 @@ static UrbanInstrumentProgram urban_instrument_program(
     unsigned variation=(seed>>5)&3u;
     unsigned column=track==2u?0u:track==3u?1u:2u;
     p.program_variant=(uint8_t)variation;
+    p.jazz_voice=0u;
+    /* Dedicated modelled instrument voices, NOT fake HYP sound IDs.
+     * The lead and chord track each honour its own named subgenre. */
+    if((track==3u||track==4u) &&
+       ((genre==3u&&t->subgenre%4u==1u) ||
+        (genre==5u&&t->subgenre%4u==1u) ||
+        (genre==13u&&t->subgenre%4u==2u) ||
+        (genre==2u&&t->subgenre%4u==1u))) {
+        static const uint8_t jazz_chords[4][4]={
+            {2,1,2,1}, /* Jazz Rap: Rhodes, acoustic grand */
+            {1,2,1,2}, /* Jazz Underground: pianist-led */
+            {2,4,2,1}, /* Jazz Liquid: Rhodes, vibraphone */
+            {1,1,2,1}  /* Sad Piano: mostly acoustic */
+        };
+        static const uint8_t jazz_leads[4][4]={
+            {3,4,3,5}, /* Jazz Rap: flute, vibes, bells */
+            {4,3,5,4}, /* Underground: vibes, flute, bells */
+            {3,4,5,3}, /* Liquid: airy flute and mallets */
+            {4,3,4,5}  /* Sad piano: soft mallet responses */
+        };
+        unsigned row=genre==3u?0u:genre==5u?1u:genre==13u?2u:3u;
+        p.jazz_voice=track==3u?
+            jazz_leads[row][variation]:jazz_chords[row][variation];
+    }
     if(track==2u) {
         /* The bass sound is now chosen from the named SUBGENRE, never
          * from the old genre-global alternative pool. */
