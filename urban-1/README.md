@@ -1,5 +1,8 @@
 # URBAN-1 — experimental generative groovebox for M-VAVE FM-1
 
+**v0.4.5 – Jazz instruments:** Dedicated five-voice DSP sound engine (four polyphonic chords plus one mono lead) introduces modelled acoustic piano, Rhodes/tine electric piano, breathy flute, vibraphone and soft bells, with per-voice attacks/decays and subtle modulation. Jazz Rap, Jazz Underground, Jazz Liquid and Sad Piano select curated, per-track and per-take acoustic-like programs; roll attacks stay sample-synchronous with HYP DSP, and effects/faders use the existing bus. **These are original procedural models, not acoustic samples, soundfonts or preset renames.** Other genres and ambient washes retain their previous HYP voices. Real HYP host and firmware CI test new PCM rendering and native-style isolation.
+
+
 **Current source:** HYP-1 GPL-3.0 synthesis integrated with the URBAN-1
 composition engine. **This release is firmware-only (`.fwsc`)**: load the
 package through your existing Android FM-1 emulator's firmware selector.
