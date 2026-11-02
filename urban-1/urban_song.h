@@ -249,8 +249,9 @@ static void urban_init(UrbanSong *s, uint32_t seed) {
     urban_song_arrange(s);
 }
 static void urban_song_set_genre(UrbanSong *s,uint8_t genre) {
-    s->genre=(uint8_t)(genre%URBAN_GENRES);
-    s->scale_manual=0u;
+    uint8_t next=(uint8_t)(genre%URBAN_GENRES);
+    if(s->genre!=next)s->scale_manual=0u;
+    s->genre=next;
     urban_song_harmony(s);
 }
 static void urban_song_set_mode(UrbanSong *s,int song_mode) {
