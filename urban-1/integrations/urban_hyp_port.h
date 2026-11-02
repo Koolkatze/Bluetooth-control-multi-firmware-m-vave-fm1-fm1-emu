@@ -14,6 +14,7 @@
 #include "urban/urban_chord_score.h"
 #include "urban/urban_mix.h"
 #include "urban/urban_fx.h"
+#include "urban_editor.h"
 
 typedef struct {
     UrbanRuntime rt;
@@ -22,12 +23,32 @@ typedef struct {
     uint8_t chord_notes[4], chord_count, chord_left;
     uint8_t previous_chord[4], previous_chord_count;
     uint8_t overridden[URBAN_TRACKS];
+    UrbanEditor editor;
     uint8_t bank;
     uint8_t active_mix_section;
     uint8_t ui_drawn;
     uint32_t ui_signature;
 } UrbanHypPort;
 static UrbanHypPort urban_port;
+
+/* Keep a shadow of the REAL synth values and user overrides. A manual
+ * parameter change cannot be reverted by the next automatic section
+ * profile or 16th-note mixer update. Elide duplicate en_set commands
+ * to protect the ISR command queue on Android.
+ */
+static void urban_port_set(int id,int value) {
+    if(id>=0 && id<P_NPARAMS) {
+        UrbanEditor *ed=&urban_port.editor;
+        const en_param_t *info=en_param_info(id);
+        if(value<info->lo)value=info->lo;
+        if(value>info->hi)value=info->hi;
+        if(ed->changed[id])value=ed->override[id];
+        if(ed->valid[id] && ed->live[id]==value)return;
+        ed->valid[id]=1u;
+        ed->live[id]=(int16_t)value;
+    }
+    en_set(id,value);
+}
 
 static const char *const urban_genre_name[URBAN_GENRES] = {
     "Trap","Goth trap","Sad trap","Hip-hop","Trip-hop","Underground",
@@ -91,7 +112,7 @@ static void urban_port_stage_pattern(void) {
     }
     urban_port_pattern(section,bar,bank);
     p->bank=bank;
-    en_set(P_PATTERN,bank);
+    urban_port_set(P_PATTERN,bank);
 }
 /* Match HYP-1's actual DSP with genre-specific sound palette.
  * The shared song genre selects groove/effects, but each track's genre
@@ -125,10 +146,10 @@ static void urban_port_sound_profile(void) {
         EN_CH_TRIAD,EN_CH_7TH,EN_CH_9TH,
         EN_CH_SUS,EN_CH_TRIAD,EN_CH_4THS
     };
-    en_set(P_ROOT,s->key%12u);
-    en_set(P_MODE,hyp_modes[s->scale%URBAN_SCALE_COUNT]);
-    en_set(P_CHORD,hyp_chords[s->chord_colors[0]%6u]);
-    en_set(P_VOICING,s->chord_colors[0]==URBAN_CH_QUARTAL?1:0);
+    urban_port_set(P_ROOT,s->key%12u);
+    urban_port_set(P_MODE,hyp_modes[s->scale%URBAN_SCALE_COUNT]);
+    urban_port_set(P_CHORD,hyp_chords[s->chord_colors[0]%6u]);
+    urban_port_set(P_VOICING,s->chord_colors[0]==URBAN_CH_QUARTAL?1:0);
     /* A subtle seeded variation of synthesis envelopes distinguishes
      * successive takes without changing the selected subgenre patch. */
     uint32_t human=urban_mix_seed(s->seed ^ 0x592fd9e1u);
@@ -136,58 +157,58 @@ static void urban_port_sound_profile(void) {
     brightness+=(int)(human%11u)-5;
     if(brightness<0)brightness=0;
     if(brightness>100)brightness=100;
-    en_set(P_KIT_KICK,d.drum_kit);
-    en_set(P_KIT_SNARE,d.drum_kit);
-    en_set(P_KIT_HAT,h.hat_kit);
-    en_set(P_KIT_PERC,h.drum_kit);
+    urban_port_set(P_KIT_KICK,d.drum_kit);
+    urban_port_set(P_KIT_SNARE,d.drum_kit);
+    urban_port_set(P_KIT_HAT,h.hat_kit);
+    urban_port_set(P_KIT_PERC,h.drum_kit);
     /* HYP SWING delays percussion but not our lead MIDI notes.
      * Straight 16ths keep ALL parts on one shared timing grid;
      * genre syncopation is already encoded in groove masks. */
-    en_set(P_SWING,0);
+    urban_port_set(P_SWING,0);
     /* 56 named FX palettes: HYP has SHARED wet echo/reverb but
      * independent lead/filter envelopes, bass/pad LFO and 6 drum decays. */
     UrbanFxPlan fx=urban_fx_plan(s);
-    en_set(P_DRIVE,fx.drive);
-    en_set(P_REVERB,fx.reverb);
-    en_set(P_ECHO,fx.echo);
-    en_set(P_ETIME,fx.echo_time);
-    en_set(P_SIZE,fx.reverb_size);
-    en_set(P_PL_RATE,fx.pad_lfo_rate);
-    en_set(P_PL_DEPTH,fx.pad_lfo_depth);
-    en_set(P_DETUNE,fx.pad_detune);
-    en_set(P_DL_RATE,fx.bass_lfo_rate);
-    en_set(P_DL_DEPTH,fx.bass_lfo_depth);
-    en_set(P_LANE_DEC(0),fx.kick_decay);
-    en_set(P_LANE_DEC(1),fx.snare_decay);
-    en_set(P_LANE_DEC(2),fx.snare_decay);
-    en_set(P_LANE_DEC(3),fx.hat_decay);
-    en_set(P_LANE_DEC(4),fx.hat_decay);
-    en_set(P_LANE_DEC(5),fx.perc_decay);
-    en_set(P_NZ_COLOR,atmosphere.noise_color);
-    en_set(P_NZ_TONE,fx.noise_tone);
-    en_set(P_NZ_PUMP,fx.noise_pump);
+    urban_port_set(P_DRIVE,fx.drive);
+    urban_port_set(P_REVERB,fx.reverb);
+    urban_port_set(P_ECHO,fx.echo);
+    urban_port_set(P_ETIME,fx.echo_time);
+    urban_port_set(P_SIZE,fx.reverb_size);
+    urban_port_set(P_PL_RATE,fx.pad_lfo_rate);
+    urban_port_set(P_PL_DEPTH,fx.pad_lfo_depth);
+    urban_port_set(P_DETUNE,fx.pad_detune);
+    urban_port_set(P_DL_RATE,fx.bass_lfo_rate);
+    urban_port_set(P_DL_DEPTH,fx.bass_lfo_depth);
+    urban_port_set(P_LANE_DEC(0),fx.kick_decay);
+    urban_port_set(P_LANE_DEC(1),fx.snare_decay);
+    urban_port_set(P_LANE_DEC(2),fx.snare_decay);
+    urban_port_set(P_LANE_DEC(3),fx.hat_decay);
+    urban_port_set(P_LANE_DEC(4),fx.hat_decay);
+    urban_port_set(P_LANE_DEC(5),fx.perc_decay);
+    urban_port_set(P_NZ_COLOR,atmosphere.noise_color);
+    urban_port_set(P_NZ_TONE,fx.noise_tone);
+    urban_port_set(P_NZ_PUMP,fx.noise_pump);
     UrbanMixPlan initial=urban_mix_plan(s,s->current,urban_phrase_bar(s));
-    en_set(P_LANE_LVL(0),initial.kick);
-    en_set(P_LANE_LVL(1),initial.snare);
-    en_set(P_LANE_LVL(2),initial.clap);
-    en_set(P_LANE_LVL(3),initial.hat);
-    en_set(P_LANE_LVL(4),initial.open);
-    en_set(P_LANE_LVL(5),initial.perc);
-    en_set(P_DR_INST,bass.bass);
-    en_set(P_DR_CUT,bass.bass_cut);
-    en_set(P_DR_RES,fx.bass_resonance);
-    en_set(P_BASSOCT,bass.bass==9u||bass.bass==8u?-1:0);
-    en_set(P_AC_WAVE,lead.lead);
-    en_set(P_AC_CUT,lead.lead_cut);
-    en_set(P_AC_RES,fx.lead_resonance);
-    en_set(P_AC_ENV,fx.lead_env);
-    en_set(P_AC_DEC,fx.lead_decay);
-    en_set(P_AC_ACC,fx.lead_accent);
-    en_set(P_AC_SLIDE,fx.lead_slide);
-    en_set(P_PADTONE,pad.pad);
-    en_set(P_BRIGHT,brightness);
-    en_set(P_PE_ATK,fx.pad_attack);
-    en_set(P_PE_REL,fx.pad_release);
+    urban_port_set(P_LANE_LVL(0),initial.kick);
+    urban_port_set(P_LANE_LVL(1),initial.snare);
+    urban_port_set(P_LANE_LVL(2),initial.clap);
+    urban_port_set(P_LANE_LVL(3),initial.hat);
+    urban_port_set(P_LANE_LVL(4),initial.open);
+    urban_port_set(P_LANE_LVL(5),initial.perc);
+    urban_port_set(P_DR_INST,bass.bass);
+    urban_port_set(P_DR_CUT,bass.bass_cut);
+    urban_port_set(P_DR_RES,fx.bass_resonance);
+    urban_port_set(P_BASSOCT,bass.bass==9u||bass.bass==8u?-1:0);
+    urban_port_set(P_AC_WAVE,lead.lead);
+    urban_port_set(P_AC_CUT,lead.lead_cut);
+    urban_port_set(P_AC_RES,fx.lead_resonance);
+    urban_port_set(P_AC_ENV,fx.lead_env);
+    urban_port_set(P_AC_DEC,fx.lead_decay);
+    urban_port_set(P_AC_ACC,fx.lead_accent);
+    urban_port_set(P_AC_SLIDE,fx.lead_slide);
+    urban_port_set(P_PADTONE,pad.pad);
+    urban_port_set(P_BRIGHT,brightness);
+    urban_port_set(P_PE_ATK,fx.pad_attack);
+    urban_port_set(P_PE_REL,fx.pad_release);
     /* Noise fader belongs to the same headroom-controlled mix as the
      * other layers, not a separately unbounded atmospheric constant. */
 }
@@ -198,11 +219,11 @@ static void urban_port_sound_profile(void) {
 static void urban_port_mix_levels(void) {
     const UrbanSong *s=&urban_port.rt.ui.song;
     UrbanMixPlan m=urban_mix_plan(s,s->current,urban_phrase_bar(s));
-    en_set(P_PULSE,m.drums);
-    en_set(P_BASS,m.bass);
-    en_set(P_ACID,m.lead);
-    en_set(P_PAD,m.chords);
-    en_set(P_NOISE,m.noise);
+    urban_port_set(P_PULSE,m.drums);
+    urban_port_set(P_BASS,m.bass);
+    urban_port_set(P_ACID,m.lead);
+    urban_port_set(P_PAD,m.chords);
+    urban_port_set(P_NOISE,m.noise);
 }
 static void urban_port_section_mix(void) {
     /* Programme changes at SECTION boundaries; the lead volume may also
@@ -426,28 +447,28 @@ static void urban_port_init(uint32_t seed) {
     en_play(0);
     /* First playable prototype: deliberately suppress HYP's auto voices
      * and drift; URBAN supplies notes and drum patterns instead. */
-    en_set(P_PAD_MAN,1);
-    en_set(P_DR_MAN,1);
-    en_set(P_AC_MAN,1);
-    en_set(P_DD_CHANGE,0);
-    en_set(P_DD_MUTATE,0);
-    en_set(P_MOTION,0);
-    en_set(P_AC_MUT,0);
-    en_set(P_OCT,0);
-    en_set(P_PAD_OCT,0);
-    en_set(P_BASSOCT,0);
-    en_set(P_AC_OCT,0);
-    en_set(P_TEMPO,p->rt.ui.song.tempo);
-    en_set(P_ROOT,p->rt.ui.song.key);
-    en_set(P_MODE,MODE_AEOLIAN);
-    en_set(P_PULSE,80);
-    en_set(P_BASS,78);
-    en_set(P_ACID,75);
-    en_set(P_PAD,70);
-    en_set(P_NOISE,0);
-    en_set(P_KIT_KICK,7);  /* HYP-1 808 kit */
-    en_set(P_KIT_SNARE,7);
-    en_set(P_KIT_HAT,7);
+    urban_port_set(P_PAD_MAN,1);
+    urban_port_set(P_DR_MAN,1);
+    urban_port_set(P_AC_MAN,1);
+    urban_port_set(P_DD_CHANGE,0);
+    urban_port_set(P_DD_MUTATE,0);
+    urban_port_set(P_MOTION,0);
+    urban_port_set(P_AC_MUT,0);
+    urban_port_set(P_OCT,0);
+    urban_port_set(P_PAD_OCT,0);
+    urban_port_set(P_BASSOCT,0);
+    urban_port_set(P_AC_OCT,0);
+    urban_port_set(P_TEMPO,p->rt.ui.song.tempo);
+    urban_port_set(P_ROOT,p->rt.ui.song.key);
+    urban_port_set(P_MODE,MODE_AEOLIAN);
+    urban_port_set(P_PULSE,80);
+    urban_port_set(P_BASS,78);
+    urban_port_set(P_ACID,75);
+    urban_port_set(P_PAD,70);
+    urban_port_set(P_NOISE,0);
+    urban_port_set(P_KIT_KICK,7);  /* HYP-1 808 kit */
+    urban_port_set(P_KIT_SNARE,7);
+    urban_port_set(P_KIT_HAT,7);
     for(i=0;i<URBAN_TRACKS;i++) p->rt.ui.song.tracks[i].genre=0;
     for(i=0;i<URBAN_TRACKS;i++) urban_runtime_refresh_track(&p->rt,i);
     urban_song_set_mode(&p->rt.ui.song,1); /* SONG MODE by default */
@@ -496,7 +517,7 @@ static void urban_port_song_key(int delta) {
     int v=((int)s->key+delta)%12;
     if(v<0)v+=12;
     s->key=(uint8_t)v;
-    en_set(P_ROOT,v);
+    urban_port_set(P_ROOT,v);
     for(unsigned i=0;i<URBAN_TRACKS;i++)
         if(!s->tracks[i].locked)
             urban_runtime_refresh_track(&p->rt,i);
@@ -528,7 +549,7 @@ static void urban_port_input(void) {
             if(v<70)v=70;
             if(v>190)v=190;
             s->tempo=(uint8_t)v;
-            en_set(P_TEMPO,v);
+            urban_port_set(P_TEMPO,v);
         } else {
             int v=(int)p->rt.ui.selected_track+(int)d;
             v=(v%URBAN_TRACKS+URBAN_TRACKS)%URBAN_TRACKS;
@@ -544,7 +565,7 @@ static void urban_port_input(void) {
             p->rt.ui.genre=(uint8_t)v;
             urban_song_set_genre(s,(uint8_t)v);
             s->tempo=urban_genre_bpm[v];
-            en_set(P_TEMPO,s->tempo);
+            urban_port_set(P_TEMPO,s->tempo);
             for(unsigned i=0;i<URBAN_TRACKS;i++)
                 if(!p->overridden[i] && !s->tracks[i].locked)
                     s->tracks[i].genre=(uint8_t)v;
