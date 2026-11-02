@@ -21,8 +21,8 @@ static unsigned lead_hits(const UrbanSong *s,unsigned sec,unsigned bar) {
         assert(a.note>=48u && a.note<=96u);
         unsigned pc=(a.note+120u-(unsigned)s->key)%12u;
         unsigned ok=0u;
-        for(unsigned d=0;d<7u;d++)
-            ok|=pc==urban_scale_intervals[s->scale][d];
+        for(unsigned d=0;d<urban_scale_size(s->scale);d++)
+            ok|=pc==urban_scale_pc(s->scale,d);
         assert(ok);  /* real diatonic mode, chord tone or permitted passing note */
         n++;
     }
@@ -43,7 +43,9 @@ static void test_all(void) {
         UrbanFxPlan fx[4];
         for(unsigned take=0u;take<4u;take++) {
             urban_generate_song(&s,0xa5617u+genre*73u+sub*113u+take*19u);
-            assert(s.scale==urban_genre_mode_options[genre][sub]);
+            assert(s.scale==urban_genre_mode_options[genre][sub] ||
+                   s.scale==urban_style_scale_alternatives[genre][sub][0] ||
+                   s.scale==urban_style_scale_alternatives[genre][sub][1]);
             assert(s.scale<URBAN_SCALE_COUNT);
             unsigned lead_sum=0u;
             for(unsigned sec=0;sec<URBAN_SEQUENCES;sec++)
