@@ -235,10 +235,8 @@ static UrbanNote urban_lead_score(const UrbanSong *s,unsigned section,
         relative=0;
     int degree=(int)s->chord_degrees[bar%4u]+relative;
     int octave=(g==12u?5:g==8u||g==11u?4:4)+p->register_shift;
-    while(degree<0){degree+=7;octave--;}
-    while(degree>=7){degree-=7;octave++;}
     int pitch=12*octave+(int)(s->key%12u)+
-             (int)urban_scale_intervals[s->scale%URBAN_SCALE_COUNT][degree];
+              urban_scale_offset(s->scale,degree);
     while(pitch<48)pitch+=12;
     while(pitch>(g==3u||g==5u?76:96))pitch-=12;
     input.note=(uint8_t)pitch;
