@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
   actions: write
+# One release upload at a time; old runs must never replace a newer
+# firmware while Update All reads the canonical GitHub asset.
+concurrency:
+  group: urban1-firmware-release-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-24.04
