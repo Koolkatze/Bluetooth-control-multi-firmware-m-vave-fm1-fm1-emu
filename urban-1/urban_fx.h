@@ -117,7 +117,6 @@ static UrbanFxPlan urban_fx_plan(const UrbanSong *s) {
         static const uint8_t del[4]={ 8,12,17,14};
         f.reverb=(uint8_t)urban_fx_clamp(rev[sub],8,mix.reverb);
         f.echo=(uint8_t)urban_fx_clamp(del[sub],8,mix.echo);
-        f.drive=(uint8_t)urban_fx_clamp(sub==3u?8:sub==2u?15:12,8,mix.drive);
         f.reverb_size=(uint8_t)(sub==3u?58u:42u);
     }
     if(pg==3u || pg==5u) {
@@ -139,7 +138,11 @@ static UrbanFxPlan urban_fx_plan(const UrbanSong *s) {
     }
     if(dg==3u || dg==5u) {
         f.snare_decay=(uint8_t)(31u+ds*3u);
-        f.kick_decay=(uint8_t)(57u+ds*4u);
+        /* Exact HYP Bristol Trip-hop kick envelope and clean gain;
+         * only the Lo-fi Hip-hop substyle opts into saturation and
+         * the longer decaying kick. P_DRIVE is KICK ONLY in HYP. */
+        f.kick_decay=(uint8_t)(dg==3u && ds==3u?64u:44u);
+        f.drive=(uint8_t)(dg==3u && ds==3u?34u:17u);
     }
     if(hg==3u || hg==5u) {
         f.hat_decay=(uint8_t)(18u+hs*4u);
