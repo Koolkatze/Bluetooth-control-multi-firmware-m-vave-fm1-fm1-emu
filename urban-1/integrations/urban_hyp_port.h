@@ -453,6 +453,7 @@ static void urban_port_chord(unsigned color,unsigned gate) {
 /* Loop notes and parameter automation are replayed on the existing
  * HYP song clock without changing any unrelated track's generated score. */
 static void urban_port_editor_write(int id,int delta);
+static int urban_port_editor_value(int id);
 static void urban_port_rec_timeline(void) {
     UrbanHypPort *p=&urban_port;
     UrbanRecorder *r=&p->recorder;
@@ -612,6 +613,7 @@ static void urban_port_poll(void) {
     }
     if(p->last_sixteenth!=now) {
         urban_port_step();
+        p->rec_step_ms=plat_ms();
         p->last_sixteenth=now;
     }
 }
@@ -1046,19 +1048,47 @@ static void urban_port_input(void) {
     UrbanHypPort *p=&urban_port;
     UrbanSong *s=&p->rt.ui.song;
     uint32_t b=plat_buttons(),down=b&~p->held_buttons;
+    uint32_t up=p->held_buttons&~b;
     int32_t d;
     p->held_buttons=b;
+    if(down&(1u<<B_PLAY)) {
+        p->play_press_ms=plat_ms();p->play_long_done=0u;
+    }
+    if((b&(1u<<B_PLAY))&&!p->play_long_done&&
+       plat_ms()-p->play_press_ms>=650u&&s->song_mode) {
+        p->play_long_done=1u;
+        urban_port_restart();
+    }
+    if((up&(1u<<B_PLAY))&&!p->play_long_done)
+        urban_port_play();
+    if(down&(1u<<B_REC)||p->rec_screen) {
+        urban_port_rec_input(b,down);
+        if(p->rec_screen) {
+            if(down&(1u<<B_HOME)||down&(1u<<B_SEQ)) {
+                p->rec_screen=0u;
+                urban_port_rec_keys();
+            } else {
+                urban_port_poll();
+                return;
+            }
+        }
+    }
     if(down&(1u<<B_HOME)) {
         p->editor.view=0u;
+        p->rec_screen=0u;
         urban_ui_page(&p->rt.ui,URBAN_PAGE_SONG);
     }
     if(down&(1u<<B_SEQ)) {
         p->editor.view=0u;
+        p->rec_screen=0u;
         urban_ui_page(&p->rt.ui,URBAN_PAGE_TRACKS);
     }
     if(down&(1u<<B_FX))urban_port_editor_open(URBAN_EDITOR_FX);
     if(down&(1u<<B_EDIT))urban_port_editor_open(URBAN_EDITOR_EDIT);
-    if(down&(1u<<B_PLAY))urban_port_play();
+    if(down&(1u<<B_ENV) && !(b&(1u<<B_SEL)))
+        urban_port_editor_open(URBAN_EDITOR_ENV);
+    if(down&(1u<<B_LFO) && !(b&(1u<<B_SEL)))
+        urban_port_editor_open(URBAN_EDITOR_LFO);
     if(p->editor.view) {
         /* SAVE never silently generates a new song while browsing FX. */
         urban_port_editor_input();
@@ -1067,14 +1097,16 @@ static void urban_port_input(void) {
     if(down&(1u<<B_SAVE))urban_port_generate();
     if(p->rt.ui.page==URBAN_PAGE_SONG) {
         if(down&(1u<<B_ARP))urban_port_set_mode(!s->song_mode);
-        if(down&(1u<<B_REC))urban_port_restart();
+        /* REC is now a live MIDI recorder. Long PLAY restarts INTRO. */
     } else {
         UrbanTrack *t=&s->tracks[p->rt.ui.selected_track];
         /* FX / EDIT now ALWAYS open their dedicated editor pages.
          * Existing track Lock and Mute move to ENV and LFO;
          * GLO remains solo, so no sequencing capability is lost. */
-        if(down&(1u<<B_ENV))t->locked=(uint8_t)!t->locked;
-        if(down&(1u<<B_LFO))t->muted=(uint8_t)!t->muted;
+        if((b&(1u<<B_SEL))&&(down&(1u<<B_ENV)))
+            t->locked=(uint8_t)!t->locked;
+        if((b&(1u<<B_SEL))&&(down&(1u<<B_LFO)))
+            t->muted=(uint8_t)!t->muted;
         if(down&(1u<<B_GLO))t->solo=(uint8_t)!t->solo;
         if(down&((1u<<B_LFO)|(1u<<B_GLO))) {
             urban_port_stage_pattern();
@@ -1118,6 +1150,7 @@ static void urban_port_input(void) {
             urban_ui_set_genre(&p->rt.ui,(uint8_t)v,
                               s->tracks[p->rt.ui.selected_track].subgenre);
             p->overridden[p->rt.ui.selected_track]=1u;
+            urban_port_style_reset();
             if(!s->tracks[p->rt.ui.selected_track].locked)
                 urban_runtime_refresh_track(&p->rt,p->rt.ui.selected_track);
             urban_port_release();
@@ -1152,6 +1185,7 @@ static void urban_port_input(void) {
             if(v<0)v+=4;
             t->subgenre=(uint8_t)v;
             p->overridden[p->rt.ui.selected_track]=1u;
+            urban_port_style_reset();
             if(!t->locked)
                 urban_runtime_refresh_track(&p->rt,p->rt.ui.selected_track);
             urban_port_release();
