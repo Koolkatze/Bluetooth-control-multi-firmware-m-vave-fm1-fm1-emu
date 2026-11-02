@@ -111,7 +111,8 @@ static void urban_generate_voice(const UrbanSong *song,unsigned track,
                ((uint32_t)song->melodic_variant*0xc2b2ae35u) ^
                ((uint32_t)(track+1u)*0x9e3779b9u));
     uint8_t motif[8];
-    uint8_t anchor=(uint8_t)(urban_rng(&motif_rng)%7u);
+    unsigned nscale=urban_scale_size(song->scale);
+    uint8_t anchor=(uint8_t)(urban_rng(&motif_rng)%nscale);
     motif[0]=anchor;
     /* Family of contour gestures: descending, ascending, question/answer,
      * angular, hypnotic repetition, scalar, leaps, arpeggiation.
@@ -120,7 +121,7 @@ static void urban_generate_voice(const UrbanSong *song,unsigned track,
      */
     int contour=(int)(song->melodic_variant%8u);
     for(unsigned i=1u;i<8u;i++) {
-        unsigned r=urban_rng(&motif_rng)%7u;
+        unsigned r=urban_rng(&motif_rng)%nscale;
         int step=contour==0?1:
                  contour==1?-1:
                  contour==2?(i%2u?2:-1):
@@ -135,8 +136,8 @@ static void urban_generate_voice(const UrbanSong *song,unsigned track,
         if(step>4)step=4;
         if(step< -4)step= -4;
         int next=(int)motif[i-1]+step;
-        if(next<0)next+=7;
-        motif[i]=(uint8_t)(next%7);
+        while(next<0)next+=(int)nscale;
+        motif[i]=(uint8_t)(next%(int)nscale);
     }
     for(unsigned section=0;section<URBAN_SEQUENCES;section++){
         UrbanPhrase *phrase=&out->sequence[section];
@@ -160,19 +161,20 @@ static void urban_generate_voice(const UrbanSong *song,unsigned track,
              */
             if(step%4u==0u) {
                 static const uint8_t chord_degrees[4]={0,2,4,6};
-                degree=chord_degrees[(step/4u+motif[0])%4u];
+                degree=urban_scale_root_degree(song->scale,
+                    chord_degrees[(step/4u+motif[0])%4u]);
             } else if((v%13u)==0u && song->complexity>1u)
-                degree=(degree+1u)%7u;
+                degree=(degree+1u)%nscale;
             if((cfg->genre==3u||cfg->genre==5u||
                 cfg->genre==13u) && step%2u)
-                degree=(degree+2u)%7u; /* jazz/neo-soul turns */
+                degree=(degree+2u)%nscale; /* jazz/neo-soul turns */
             unsigned octave=track==4u?48u:track==5u?60u:
                 track==2u?36u:60u+(g->octave*12u);
             if((section==URBAN_BRIDGE||section==URBAN_OUTRO) && octave>=60u)
                 octave-=12u;
             /* Genre and song both constrain note choice to its mode. */
             n->note=(uint8_t)(octave+song->key%12u+
-                 urban_scale_intervals[song->scale%URBAN_SCALE_COUNT][degree]);
+                 urban_scale_pc(song->scale,degree));
             uint8_t on=(uint8_t)((mask>>step)&1u);
             if(!on && (section==URBAN_HOOK||section==URBAN_DROP) &&
                  step>=12u && v%100u<
