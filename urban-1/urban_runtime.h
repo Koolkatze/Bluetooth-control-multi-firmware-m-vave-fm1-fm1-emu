@@ -6,6 +6,7 @@
 #define URBAN_RUNTIME_H
 #include "urban_music.h"
 #include "urban_bass.h"
+#include "urban_harmony.h"
 #include "urban_transport.h"
 typedef struct {
     UrbanUI ui;
@@ -55,15 +56,15 @@ static void urban_runtime_modal_step(const UrbanSong *s,UrbanNote *n,int offset)
     unsigned pc=(n->note+120u-tonic)%12u;
     unsigned degree=7u;
     for(unsigned d=0;d<7u;d++)
-        if(urban_scale_intervals[s->scale%4u][d]==pc){degree=d;break;}
+        if(urban_scale_intervals[s->scale%URBAN_SCALE_COUNT][d]==pc){degree=d;break;}
     if(degree>=7u)return;
     int next=(int)degree+offset;
     int oct=0;
     while(next<0){next+=7;oct--;}
     while(next>=7){next-=7;oct++;}
     int note=(int)n->note+
-      (int)urban_scale_intervals[s->scale%4u][next]-
-      (int)urban_scale_intervals[s->scale%4u][degree]+12*oct;
+      (int)urban_scale_intervals[s->scale%URBAN_SCALE_COUNT][next]-
+      (int)urban_scale_intervals[s->scale%URBAN_SCALE_COUNT][degree]+12*oct;
     if(note>=30&&note<=110)n->note=(uint8_t)note;
 }
 static void urban_runtime_bar_variation(const UrbanSong *s,
@@ -132,13 +133,12 @@ static void urban_runtime_tick(UrbanRuntime *rt, UrbanMidiFrame *frame) {
          * section-appropriate variations span 4x16 steps, not a one-bar
          * loop with an A-H label. Manual mode loops the same 4 bars. */
         unsigned bar=urban_phrase_bar(s);
-        uint8_t semitones=s->progression[bar];
         for(unsigned i=2u;i<URBAN_TRACKS;i++) {
             UrbanNote *n=&frame->event[i];
             urban_runtime_bar_variation(s,i,s->current,bar,t->step,
                                          n,&frame->glide[i]);
-            if(n->velocity && (unsigned)n->note+semitones<=127u)
-                n->note=(uint8_t)(n->note+semitones);
+            if(n->velocity)
+                n->note=urban_harmonize_note(s,n->note,bar);
         }
     }
     t->tick++;
