@@ -29,15 +29,16 @@ static const UrbanBassGrammar urban_bass_profiles[URBAN_GENRES][4]={
  /* Sad: Emo / Piano / Lo-fi / Guitar */
  {{0x0109,13,0,83,20,4},{0x0101,14,0,78,8,4},
   {0x0809,8,0,74,4,0},{0x0009,12,0,80,16,4}},
- /* Hip-hop: Boom bap / Jazz / G-funk / Lo-fi */
- {{0x1249,4,1,89,0,3},{0x2489,5,1,83,0,2},
-  {0x2089,7,1,94,25,3},{0x0109,7,0,76,0,0}},
+ /* Hip-hop: deeper, steadier bass notes with no incidental octave kicks.
+  * Boom-bap low fifth, jazz approach, G-Funk syncopation, lo-fi sustain. */
+ {{0x0489,7,0,83,0,0},{0x0489,6,0,83,0,2},
+  {0x0889,8,0,90,12,3},{0x0109,12,0,75,0,4}},
  /* Trip-hop: Bristol / Downtempo / Abstract / Dub */
  {{0x0441,8,0,79,0,4},{0x0109,11,0,74,0,4},
   {0x0a21,4,0,88,9,2},{0x0441,12,0,81,22,4}},
- /* Underground: Dusty / Jazz / Experimental / Break */
- {{0x1289,4,1,84,0,3},{0x2489,5,1,87,0,2},
-  {0x2a89,4,1,94,21,5},{0x2449,4,1,96,0,3}},
+ /* Underground: low sample-loop foundations, deliberate passing notes. */
+ {{0x0489,7,0,82,0,0},{0x0489,6,0,83,0,2},
+  {0x0809,10,0,79,0,4},{0x048b,6,0,91,0,3}},
  /* Horrorcore: Memphis / Cinematic / Industrial / Dark */
  {{0x0481,10,0,96,30,4},{0x0101,16,0,75,0,4},
   {0x0889,6,0,107,32,5},{0x0a81,11,0,96,38,1}},
@@ -94,7 +95,12 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
         uint32_t riff=urban_mix_seed(seed ^ song->seed ^
               ((uint32_t)sec*0xa511e9b3u));
         static const uint8_t pickup[7]={3,5,6,7,9,11,14};
-        for(unsigned n=0;n<1u+(song->complexity>1u);n++) {
+        if(track->genre==3u || track->genre==5u) {
+            /* No independent random bass skips in a sample-like loop.
+             * The selected pattern stays recognizable in every bar. */
+            if(song->complexity>=3u && (urban_rng(&riff)&1u))
+                mask|=0x2000u;
+        } else for(unsigned n=0;n<1u+(song->complexity>1u);n++) {
             unsigned st=pickup[urban_rng(&riff)%7u];
             if(urban_rng(&riff)&1u)mask|=(uint16_t)(1u<<st);
             else mask&=(uint16_t)~(1u<<st);
@@ -138,10 +144,23 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
                        (v%4u==0u?4u:0u);
                 break;
             }
+            /* Hip-hop should sit beneath the chords, not leap to random
+             * high fifths, 9ths and octave stabs. Keep the sampled loop
+             * anchored in the low register; jazz still walks diatonically. */
+            if(track->genre==3u || track->genre==5u) {
+                if(style->motion==2u)
+                    degree=step>=12u?5u:step>=8u?4u:step>=4u?2u:0u;
+                else if(style->motion==3u)
+                    degree=step==10u || step==14u?4u:0u;
+                else if(style->motion==0u)
+                    degree=step==10u?4u:0u;
+            }
             unsigned interval=scale[degree];
-            if(style->motion==2u && v%5u==0u)
+            if(track->genre!=3u && track->genre!=5u &&
+               style->motion==2u && v%5u==0u)
                 interval=phrase_note[(step/4u)%4u];
-            if(style->octave && v%6u==0u)interval+=12u;
+            if(track->genre!=3u && track->genre!=5u &&
+               style->octave && v%6u==0u)interval+=12u;
             if(song->complexity>=2u && track->subgenre%4u==3u && step==15u &&
                (sec==URBAN_HOOK || sec==URBAN_DROP))hit=1u;
             n->note=(uint8_t)(root_note+interval);
