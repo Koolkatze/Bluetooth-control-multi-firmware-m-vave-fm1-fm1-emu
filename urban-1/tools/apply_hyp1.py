@@ -244,6 +244,7 @@ def main() -> None:
         '    else if (!strcmp(what, "urbanjazzchord")) got = urban_jazz_chord_mode;\n'
         '    else if (!strcmp(what, "urbanjazzlead")) got = urban_jazz_lead_mode;\n'
         '    else if (!strcmp(what, "urbanjazznotes")) got = urban_jazz_note_onsets;\n'
+        '    else if (!strcmp(what, "urbanjazzmodframes")) got = urban_jazz_modulated_frames;\n'
         '    else if (!strcmp(what, "urbanjazzframes")) got = urban_jazz_rendered_frames;\n'
         '    else if (!strcmp(what, "urbanpianorolls"))')
     # Expose the actual URBAN-1 song transport to host regression scripts.
