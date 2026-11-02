@@ -461,6 +461,23 @@ static void urban_port_init(uint32_t seed) {
  * The left SELECT encoder changes the tonal key as an optional control.
  * ALGORITHM is kept as a second substyle encoder for physical FM-1.
  */
+/* Rebuild all unlocked musical scores when the global genre/subgenre
+ * changes. Previously KNOB3 updated only the LCD/timbres, leaving old
+ * bass notes and old chord roots in memory until SAVE was pressed.
+ * Preserve the selected tempo, key, manual LOOP position, locked
+ * tracks and four-bar arrangement instead of generating a new song. */
+static void urban_port_restyle_song(void) {
+    UrbanHypPort *p=&urban_port;
+    UrbanSong *s=&p->rt.ui.song;
+    urban_song_harmony(s);
+    for(unsigned i=0;i<URBAN_TRACKS;i++)
+        if(!s->tracks[i].locked)
+            urban_runtime_refresh_track(&p->rt,i);
+    urban_port_release();
+    urban_port_sound_profile();
+    urban_port_mix_levels();
+    urban_port_stage_pattern();
+}
 static void urban_port_song_subgenre(int delta) {
     UrbanHypPort *p=&urban_port;
     UrbanSong *s=&p->rt.ui.song;
@@ -471,8 +488,7 @@ static void urban_port_song_subgenre(int delta) {
     for(unsigned i=0;i<URBAN_TRACKS;i++)
         if(!p->overridden[i] && !s->tracks[i].locked)
             s->tracks[i].subgenre=(uint8_t)v;
-    urban_port_sound_profile();
-    urban_port_stage_pattern();
+    urban_port_restyle_song();
 }
 static void urban_port_song_key(int delta) {
     UrbanHypPort *p=&urban_port;
@@ -532,14 +548,19 @@ static void urban_port_input(void) {
             for(unsigned i=0;i<URBAN_TRACKS;i++)
                 if(!p->overridden[i] && !s->tracks[i].locked)
                     s->tracks[i].genre=(uint8_t)v;
-            /* Patch and drum-kit preview; SAVE regenerates motifs. */
-            urban_port_sound_profile();
-            urban_port_stage_pattern();
+            /* Selecting a different genre now changes the ACTUAL
+             * chord degrees, scale, bass/drum notes and synth patches,
+             * while SAVE still creates a completely new take. */
+            urban_port_restyle_song();
         } else {
             urban_ui_set_genre(&p->rt.ui,(uint8_t)v,
                               s->tracks[p->rt.ui.selected_track].subgenre);
             p->overridden[p->rt.ui.selected_track]=1u;
+            if(!s->tracks[p->rt.ui.selected_track].locked)
+                urban_runtime_refresh_track(&p->rt,p->rt.ui.selected_track);
+            urban_port_release();
             urban_port_sound_profile();
+            urban_port_mix_levels();
             urban_port_stage_pattern();
         }
     }
@@ -569,7 +590,11 @@ static void urban_port_input(void) {
             if(v<0)v+=4;
             t->subgenre=(uint8_t)v;
             p->overridden[p->rt.ui.selected_track]=1u;
+            if(!t->locked)
+                urban_runtime_refresh_track(&p->rt,p->rt.ui.selected_track);
+            urban_port_release();
             urban_port_sound_profile();
+            urban_port_mix_levels();
             urban_port_stage_pattern();
         }
     }
