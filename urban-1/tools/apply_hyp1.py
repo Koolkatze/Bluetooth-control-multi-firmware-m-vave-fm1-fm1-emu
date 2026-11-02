@@ -158,6 +158,13 @@ def main() -> None:
         '    else if (!strcmp(what, "urbantrancelaststep")) got = urban_trance_audio_last_step;\n'
         '    else if (!strcmp(what, "urbantranceoffgrid")) got = urban_trance_offgrid_onsets;\n'
         '    else if (!strcmp(what, "urbansfxrendered"))')
+    # Verify that piano note onsets come from HYP audio processing,
+    # not a synthetic editor label; ambient modes should never roll.
+    replace_once(root / "host/amb_host.c",
+        '    else if (!strcmp(what, "urbantranceonsets"))',
+        '    else if (!strcmp(what, "urbanpianorolls")) got = urban_piano_rolled_chords;\n'
+        '    else if (!strcmp(what, "urbanpianonotes")) got = urban_piano_note_onsets;\n'
+        '    else if (!strcmp(what, "urbantranceonsets"))')
     # Expose the actual URBAN-1 song transport to host regression scripts.
     replace_once(root / "host/amb_host.c",
         '    else if (!strcmp(what, "sixteenths"))',
