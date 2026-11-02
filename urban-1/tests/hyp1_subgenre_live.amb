@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# End-to-end real HYP synth controls: changing subgenre MUST change
+# real chord roots, modal scale and live six-lane drum scores.
+# No SAVE required: KNOB3 applies the new subgenre immediately.
+expect urbanpage 0
+expect urbansub 0
+expect urbanscale 0
+expect urbanroot1 5
+expect urbandrumkick 1065
+spin K3 1
+expect urbansub 1
+expect urbanscale 1
+expect urbanroot1 1
+expect urbandrumkick 2689
+spin K3 1
+expect urbansub 2
+expect urbanscale 0
+expect urbanroot1 3
+expect urbandrumkick 257
+spin K3 1
+expect urbansub 3
+expect urbanscale 3
+expect urbanroot1 6
+expect urbandrumkick 5161
+spin K3 1
+expect urbansub 0
+expect urbanscale 0
+expect urbanroot1 5
+expect urbandrumkick 1065
+# Track Bass override must be independent: not silently change the
+# global Song subgenre or future Generate identity.
+tap SEQ
+expect urbanpage 1
+spin K1 2
+expect urbantrack 2
+expect urbanbasssub 0
+spin K3 1
+expect urbanbasssub 1
+expect urbansub 0
+expect urbanroot1 5
+tap HOME
+expect urbanpage 0
+tap SAVE
+expect urbansub 0
+expect urbanroot1 5
+shot subgenre-harmony-and-drums.png
