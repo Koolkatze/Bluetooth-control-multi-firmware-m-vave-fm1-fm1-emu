@@ -44,6 +44,8 @@ def main() -> None:
     dst.mkdir(parents=True, exist_ok=True)
     for source in HERE.glob("urban_*.h"):
         shutil.copyfile(source, dst / source.name)
+    shutil.copyfile(HERE / "integrations/urban_editor.h",
+                    root / "firmware/src/app/urban_editor.h")
     shutil.copyfile(HERE / "integrations/urban_hyp_port.h",
                     root / "firmware/src/app/urban_hyp_port.h")
     # One shared port implementation in both the FM-1 and HYP-1 host simulator.
