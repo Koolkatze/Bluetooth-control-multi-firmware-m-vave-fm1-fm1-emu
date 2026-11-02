@@ -626,6 +626,7 @@ static void urban_port_song_subgenre(int delta) {
     int v=((int)s->subgenre+delta)%4;
     if(v<0)v+=4;
     s->subgenre=(uint8_t)v;
+    s->harmony_variant=0u; /* direct selection presents primary style scale */
     s->scale_manual=0u; /* new substyle loads its authored scale palette */
     p->rt.ui.subgenre=(uint8_t)v;
     for(unsigned i=0;i<URBAN_TRACKS;i++)
@@ -839,6 +840,7 @@ static void urban_port_input(void) {
         v=(v%URBAN_GENRES+URBAN_GENRES)%URBAN_GENRES;
         if(p->rt.ui.page==URBAN_PAGE_SONG) {
             p->rt.ui.genre=(uint8_t)v;
+            s->harmony_variant=0u;
             urban_song_set_genre(s,(uint8_t)v);
             s->tempo=urban_genre_bpm[v];
             urban_port_set(P_TEMPO,s->tempo);
