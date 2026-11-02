@@ -33,9 +33,9 @@ static const uint8_t urban_alt_sounds[URBAN_GENRES][3][3]={
   {{9,8,10},            {4,9,15},    {5,3,11}}, /* trap */
   {{8,3,9},             {15,7,2},    {7,11,3}}, /* goth */
   {{9,1,7},             {11,4,15},   {0,2,5}},  /* sad */
-  {{1,7,5},             {4,11,12},   {0,4,6}},  /* hip-hop */
+  {{1,7,9},             {15,12,5},   {0,4,5}},  /* hip-hop */
   {{8,2,6},             {15,9,4},    {7,3,8}},  /* trip */
-  {{2,7,5},             {4,12,6},    {0,3,4}},  /* underground */
+  {{1,7,9},             {15,12,5},   {0,4,5}},  /* underground */
   {{8,13,9},            {2,13,9},    {7,11,14}},/* horror */
   {{9,6,1},             {4,11,9},    {6,0,10}}, /* reggaeton */
   {{4,14,15},           {2,6,3},     {6,10,1}}, /* dnb */
@@ -58,12 +58,13 @@ static const uint8_t urban_subgenre_bass_sounds[URBAN_GENRES][4][4]={
  {{8,9,3,8},{3,2,13,11},{5,1,8,7},{9,8,1,6}},
  /* sad: emo / piano / lo-fi / guitar */
  {{9,1,8,9},{1,9,7,1},{1,7,9,8},{1,9,5,7}},
- /* hip-hop: boom-bap / jazz / G-funk / lo-fi */
- {{1,7,5,1},{7,1,6,12},{5,10,12,7},{1,7,9,5}},
+ /* Hip-hop: deep fundamentals, no metallic FM/Fifths/bright Saws.
+  * Keep four audible variations within the right acoustic/analog family. */
+ {{1,7,9,1},{7,1,9,7},{1,7,5,10},{1,9,7,1}},
  /* trip-hop: Bristol / down / abstract / dub */
  {{8,9,2,6},{1,8,9,7},{6,13,2,9},{8,9,1,4}},
- /* underground: dusty / jazz / experimental / breaks */
- {{2,1,7,5},{7,1,6,12},{6,13,14,2},{2,5,9,4}},
+ /* Underground: acoustic-like bass or dark analog; no bell-like FM. */
+ {{1,7,9,1},{7,1,9,7},{1,8,7,9},{1,7,5,9}},
  /* horror: Memphis / cinematic / industrial / dark */
  {{8,9,3,8},{9,8,1,7},{3,13,2,11},{8,9,11,4}},
  /* reggaeton: dembow / perreo / romantic / future */
@@ -103,6 +104,20 @@ static UrbanInstrumentProgram urban_instrument_program(
         /* The bass sound is now chosen from the named SUBGENRE, never
          * from the old genre-global alternative pool. */
         p.patch.bass=urban_subgenre_bass_sounds[genre][t->subgenre%4u][variation];
+    } else if(genre==3u || genre==5u) {
+        /* Never let a generic, RNG-selected Chip/Bell/Pluck overwrite
+         * a laid-back hip-hop patch. Map the melodic layer by SUBSTYLE.
+         * G-Funk alone may select warm analog PWM, while boom-bap and
+         * lo-fi stay soft/organ-like; pad remains Rhodes, warm or organ. */
+        static const uint8_t hip_leads[4][4]={
+            {15,12,15,12},{15,12,15,12},{5,15,5,12},{15,12,15,12}
+        };
+        static const uint8_t hip_pads[4][4]={
+            {0,5,0,4},{0,4,5,0},{4,5,0,4},{0,5,0,4}
+        };
+        unsigned sub=t->subgenre%4u;
+        if(track==3u)p.patch.lead=hip_leads[sub][variation];
+        if(track==4u)p.patch.pad=hip_pads[sub][variation];
     } else if(variation) {
         unsigned alt=urban_alt_sounds[genre][column][variation-1u];
         if(track==3u)p.patch.lead=(uint8_t)alt;
