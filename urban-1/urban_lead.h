@@ -18,9 +18,9 @@ static const UrbanLeadStyle urban_lead_styles[URBAN_GENRES]={
  /* Trap */ {0x0101,0x0841,0x0849, 4,-1, 0x5,0xf, 82},
  /* Goth */ {0x0001,0x0801,0x0901, 8,-1, 0x1,0x5, 66},
  /* Sad  */ {0x0081,0x0101,0x0901,10,-1, 0x5,0x7, 68},
- /* Hip  */ {0x0849,0x2489,0x2489, 3,-1, 0x7,0xf, 83},
+ /* Hip  */ {0x0081,0x0881,0x0881, 8,-1, 0x5,0xb, 69},
  /* Trip */ {0x0021,0x1281,0x1481, 6,-1, 0x5,0x7, 66},
- /* Undg */ {0x1089,0x1489,0x3489, 3,-1, 0x7,0xf, 78},
+ /* Undg */ {0x0081,0x0881,0x0881, 7,-1, 0x5,0xb, 70},
  /* Horr */ {0x0001,0x0901,0x0901, 7,-1, 0x1,0xb, 72},
  /* Reg  */ {0x0249,0x2229,0x2a29, 3,-1, 0x7,0xf, 84},
  /* DnB  */ {0x0081,0x9249,0x9249, 2, 0, 0x5,0xf, 88},
@@ -43,9 +43,9 @@ static const UrbanLeadTone urban_lead_tones[URBAN_GENRES]={
     {28,29, 9,24,27}, /* Trap */
     {21,76,45,17,41}, /* Goth trap */
     {18,84,19,13,23}, /* Sad trap */
-    {34,27,11,28,29}, /* Hip-hop */
+    {18,58,25,17,20}, /* Hip-hop: mellow, no squelchy toy attack */
     {22,64,21,18,31}, /* Trip-hop */
-    {38,40,25,31,40}, /* Underground */
+    {24,52,20,19,23}, /* Underground: restrained lead */
     {36,61,43,38,49}, /* Horrorcore */
     {45,24, 8,39,26}, /* Reggaeton */
     {51,23,19,59,51}, /* Drum & Bass */
@@ -64,9 +64,9 @@ static const int8_t urban_lead_degrees[URBAN_GENRES][8]={
     {0,2,1,0,-1,0,2,0},      /* trap */
     {0,-1,-2,0,1,-1,-2,0},   /* goth */
     {0,1,2,1,0,-1,0,-2},     /* sad */
-    {2,0,1,-1,2,0,-1,0},     /* hip hop */
+    {0,0,1,0,2,0,-1,0}, /* hip hop: smooth tonic/third response */
     {0,-2,0,1,-1,0,2,-1},    /* trip hop */
-    {2,4,3,1,2,0,-1,1},     /* underground */
+    {0,1,0,-1,2,0,-1,0}, /* underground */
     {0,-1,1,-2,0,1,-1,-2},   /* horrorcore */
     {0,2,1,2,0,1,-1,0},     /* reggaeton */
     {0,3,-1,2,-2,1,4,-1},   /* DnB */
@@ -95,9 +95,9 @@ static const uint8_t urban_lead_chance[URBAN_GENRES][4]={
     {25,45,12,35},   /* Trap: often leaves room for vocals / 808 */
     {20,35,18,12},   /* Goth: sparse dark distant motifs */
     {35,20,12,30},   /* Sad: pluck/piano chord main layer */
-    {12,28,35,10},   /* Hip-hop: boom-bap especially vocal-forward */
+    {8,14,72,6},     /* Hip-hop: space for MC; G-Funk leads */
     {12,15,22,12},   /* Trip-hop: atmosphere and bass dominate */
-    {15,40,25,35},   /* Underground: sample/chord front */
+    {8,18,12,22},    /* Underground: chord/sample first */
     {25,32,20,25},   /* Horrorcore */
     {45,55,24,42},   /* Reggaeton: hook, not continuous lead */
     {15,35,18,18},   /* DnB: Reese/breaks dominate */
@@ -146,12 +146,26 @@ static uint16_t urban_lead_bar_mask(const UrbanSong *s,unsigned section,
     const UrbanLeadStyle *p=&urban_lead_styles[t->genre%URBAN_GENRES];
     uint16_t mask=section==URBAN_HOOK?p->hook:
                   section==URBAN_DROP?p->drop:p->verse;
+    if(t->genre==3u || t->genre==5u) {
+        /* Different hip-hop parts: G-Funk can sustain a lead,
+         * boom-bap / jazz / lo-fi leave room for an MC. */
+        static const uint16_t hip_masks[4][3]={
+            {0x0001,0x0081,0x0081}, /* boom-bap */
+            {0x0081,0x0081,0x0881}, /* jazz */
+            {0x0801,0x0881,0x0881}, /* G-Funk */
+            {0x0001,0x0081,0x0081}  /* lo-fi */
+        };
+        unsigned sub=t->subgenre%4u;
+        unsigned col=section==URBAN_HOOK?1u:section==URBAN_DROP?2u:0u;
+        mask=hip_masks[sub][col];
+    }
     uint32_t r=urban_mix_seed(s->seed ^
             t->seq[section%URBAN_SEQUENCES].seed ^
             ((uint32_t)(bar+1u)*0x85ebca6bu) ^
             ((uint32_t)(s->melodic_variant+1u)*0x9e3779b9u));
     static const uint8_t weak[6]={3,5,6,9,11,14};
-    if(s->complexity>1u && t->genre!=1u && t->genre!=2u) {
+    if(s->complexity>1u && t->genre!=1u && t->genre!=2u &&
+       t->genre!=3u && t->genre!=5u) {
         unsigned edits=s->complexity==3u?2u:1u;
         for(unsigned i=0;i<edits;i++) {
             unsigned loc=weak[urban_rng(&r)%6u];
@@ -190,7 +204,7 @@ static UrbanNote urban_lead_score(const UrbanSong *s,unsigned section,
     int pitch=12*octave+(int)(s->key%12u)+
              (int)urban_scale_intervals[s->scale%URBAN_SCALE_COUNT][degree];
     while(pitch<48)pitch+=12;
-    while(pitch>96)pitch-=12;
+    while(pitch>(g==3u||g==5u?76:96))pitch-=12;
     input.note=(uint8_t)pitch;
     input.velocity=(uint8_t)(p->velocity+(r%11u));
     input.gate=(uint8_t)(p->gate+(t->subgenre%3u));
