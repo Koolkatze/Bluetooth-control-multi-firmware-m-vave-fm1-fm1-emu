@@ -23,6 +23,10 @@
 void urban_sfx_trigger(unsigned type,unsigned level,unsigned length);
 void urban_sfx_silence(void);
 extern volatile uint32_t urban_sfx_rendered_events;
+void urban_piano_roll_arm(const uint8_t *notes,unsigned count,unsigned gap_ms);
+void urban_piano_roll_stop(void);
+extern volatile uint32_t urban_piano_note_onsets;
+extern volatile uint32_t urban_piano_rolled_chords;
 
 typedef struct {
     UrbanRuntime rt;
@@ -88,6 +92,7 @@ static void urban_port_release(void) {
     /* PAD is polyphonic in HYP-1: release EVERY held chord tone, not
      * merely the last played note. Otherwise changing song/stop may
      * leave notes ringing indefinitely. */
+    urban_piano_roll_stop(); /* cancel not-yet-pressed piano keys */
     for(i=0;i<urban_port.chord_count;i++)
         en_note(EN_V_PAD,urban_port.chord_notes[i],0);
     urban_port.chord_count=0u;
@@ -362,6 +367,7 @@ static void urban_port_note(unsigned track,UrbanNote n,uint8_t glide) {
  */
 static void urban_port_chord_off(void) {
     UrbanHypPort *p=&urban_port;
+    urban_piano_roll_stop();
     for(unsigned i=0;i<p->chord_count;i++)
         en_note(EN_V_PAD,p->chord_notes[i],0);
     p->chord_count=0u;
@@ -382,11 +388,33 @@ static void urban_port_chord(unsigned color,unsigned gate) {
     unsigned count=urban_build_chord_colored(s,urban_phrase_bar(s),
                             color,prev,next);
     if(count>EN_NPAD)count=EN_NPAD;
+    UrbanChordExpression expression=urban_chord_expression(s,s->current,
+                                                     urban_phrase_bar(s));
     for(unsigned i=0;i<count;i++) {
         if(!next[i])continue;
-        en_note(EN_V_PAD,next[i],1);
+        if(expression.touch==URBAN_CH_TOUCH_BLOCK)
+            en_note(EN_V_PAD,next[i],1);
         p->chord_notes[p->chord_count++]=next[i];
         p->previous_chord[i]=next[i];
+    }
+    if(expression.touch!=URBAN_CH_TOUCH_BLOCK && p->chord_count>0u) {
+        /* Note order follows real pitch, not the chord builder's
+         * inversion order, for natural ascending/descending piano rolls.
+         * Audio HYP schedules 14–25 ms per key, not UI-frame spacing. */
+        uint8_t ordered[4]={0u,0u,0u,0u};
+        for(unsigned i=0u;i<p->chord_count;i++)ordered[i]=p->chord_notes[i];
+        for(unsigned i=0u;i<p->chord_count;i++)
+          for(unsigned j=i+1u;j<p->chord_count;j++)
+            if(ordered[j]<ordered[i]) {
+                uint8_t temp=ordered[i];ordered[i]=ordered[j];ordered[j]=temp;
+            }
+        if(expression.touch==URBAN_CH_TOUCH_DOWN)
+            for(unsigned i=0u;i<p->chord_count/2u;i++) {
+                uint8_t temp=ordered[i];
+                ordered[i]=ordered[p->chord_count-1u-i];
+                ordered[p->chord_count-1u-i]=temp;
+            }
+        urban_piano_roll_arm(ordered,p->chord_count,expression.spacing_ms);
     }
     p->previous_chord_count=p->chord_count;
     p->chord_left=(uint8_t)(gate?gate:1u);
