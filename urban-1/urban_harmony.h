@@ -17,7 +17,7 @@ static int urban_scale_note(const UrbanSong *s,int degree,int octave) {
 static int urban_nearest_degree(const UrbanSong *s,int note) {
     int best=0,best_error=10000;
     for(int degree=-7;degree<=13;degree++) {
-        int cand=urban_scale_note(s,degree,5);
+        int cand=urban_scale_note(s,degree,note/12);
         int err=urban_theory_abs(cand-note);
         if(err<best_error){best_error=err;best=degree;}
     }
@@ -29,7 +29,7 @@ static int urban_nearest_degree(const UrbanSong *s,int note) {
  */
 static uint8_t urban_harmonize_note(const UrbanSong *s,uint8_t note,unsigned bar) {
     int degree=urban_nearest_degree(s,note);
-    int target=urban_scale_note(s,degree+(int)s->chord_degrees[bar%4u],5);
+    int target=urban_scale_note(s,degree+(int)s->chord_degrees[bar%4u],note/12);
     if(target<24)target=24;
     if(target>111)target=111;
     return (uint8_t)target;
