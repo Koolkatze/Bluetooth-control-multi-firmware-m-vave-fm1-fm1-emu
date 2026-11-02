@@ -44,6 +44,70 @@ static void urban_runtime_generate(UrbanRuntime *rt) {
             if(!rt->ui.song.tracks[i].locked) urban_runtime_refresh_track(rt,i);
     }
 }
+/* Keep the first bar as the recognizable theme; bars 2-4 answer,
+ * develop and turn around that theme. Four bars repeat identically in
+ * manual LOOP mode and when a hook reappears in Song Mode.
+ * No 4x phrase caches and no allocations on the FM-1.
+ */
+static void urban_runtime_modal_step(const UrbanSong *s,UrbanNote *n,int offset) {
+    if(!n->velocity || offset==0)return;
+    unsigned tonic=s->key%12u;
+    unsigned pc=(n->note+120u-tonic)%12u;
+    unsigned degree=7u;
+    for(unsigned d=0;d<7u;d++)
+        if(urban_scale_intervals[s->scale%4u][d]==pc){degree=d;break;}
+    if(degree>=7u)return;
+    int next=(int)degree+offset;
+    int oct=0;
+    while(next<0){next+=7;oct--;}
+    while(next>=7){next-=7;oct++;}
+    int note=(int)n->note+
+      (int)urban_scale_intervals[s->scale%4u][next]-
+      (int)urban_scale_intervals[s->scale%4u][degree]+12*oct;
+    if(note>=30&&note<=110)n->note=(uint8_t)note;
+}
+static void urban_runtime_bar_variation(const UrbanSong *s,
+   unsigned track,unsigned section,unsigned bar,unsigned step,
+   UrbanNote *n,uint8_t *glide) {
+    if(!bar || track<2u)return;
+    uint8_t genre=s->tracks[track].genre%URBAN_GENRES;
+    uint32_t rng=s->tracks[track].seq[section].seed ^
+       ((uint32_t)(bar+1u)*0x9e3779b9u) ^
+       ((uint32_t)(step+1u)*0x85ebca6bu);
+    uint32_t v=urban_rng(&rng);
+    unsigned complexity=s->complexity;
+    /* bar 2: answer or question, without losing the recognizable downbeat */
+    if(bar==1u && track==3u && step==11u &&
+       complexity>=2u && !n->velocity)
+        n->velocity=(uint8_t)(62u+(v%18u));
+    /* bar 3: greater drive in hook/drop but not in a sparse bridge */
+    if(bar==2u && (section==URBAN_HOOK||section==URBAN_DROP)) {
+        if(track==3u && step==14u && complexity>=1u)
+            n->velocity=n->velocity?(uint8_t)(n->velocity+5u):76u;
+        if(track==2u && step==12u && complexity>=2u && !n->velocity)
+            n->velocity=(uint8_t)(86u+(v%15u));
+    }
+    /* bar 4: turn-around, tension and genre-specific pick-up */
+    if(bar==3u && complexity>=1u && step>=12u) {
+        if(track==3u && step==15u && genre>=10u && !n->velocity)
+            n->velocity=78u;
+        if(track==2u && step==14u && (genre<=2u||genre==9u)) {
+            n->velocity=(uint8_t)(91u+(v%17u));
+            *glide=genre<=2u || genre==9u;
+        }
+    }
+    /* Variation is diatonic and does not break the shared song harmony.
+     * Only chosen phrase accents move by a scale degree. */
+    if(n->velocity && track>=3u && (track!=4u) && step%4u!=0u &&
+       (v%100u)<complexity*10u) {
+        urban_runtime_modal_step(s,n,bar==3u?-1:1);
+    }
+    if(n->velocity && bar==2u && (section==URBAN_HOOK||section==URBAN_DROP)) {
+        unsigned accent=n->velocity+5u;
+        n->velocity=(uint8_t)(accent>119u?119u:accent);
+    }
+}
+
 static void urban_runtime_tick(UrbanRuntime *rt, UrbanMidiFrame *frame) {
     UrbanTransport *t=&rt->transport;
     UrbanSong *s=&rt->ui.song;
@@ -64,14 +128,15 @@ static void urban_runtime_tick(UrbanRuntime *rt, UrbanMidiFrame *frame) {
             frame->event[2].gate=bass.gate;
             frame->glide[2]=bass.glide;
         }
-        /* A 4-bar harmonic cycle advances under every 1-bar motif,
-         * including repeated hooks. One shared transposition guarantees
-         * that regenerated per-track genres cannot clash in key.
-         * Note zero-velocity events remain silent. */
-        uint8_t bar=s->song_mode?s->arrangement_pos:s->section_bar;
-        uint8_t semitones=s->progression[bar%4u];
+        /* Four REAL bars per phrase. The motif, harmonic motion and
+         * section-appropriate variations span 4x16 steps, not a one-bar
+         * loop with an A-H label. Manual mode loops the same 4 bars. */
+        unsigned bar=urban_phrase_bar(s);
+        uint8_t semitones=s->progression[bar];
         for(unsigned i=2u;i<URBAN_TRACKS;i++) {
             UrbanNote *n=&frame->event[i];
+            urban_runtime_bar_variation(s,i,s->current,bar,t->step,
+                                         n,&frame->glide[i]);
             if(n->velocity && (unsigned)n->note+semitones<=127u)
                 n->note=(uint8_t)(n->note+semitones);
         }
