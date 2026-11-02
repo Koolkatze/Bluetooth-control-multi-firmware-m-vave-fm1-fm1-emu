@@ -220,7 +220,7 @@ static UrbanBassStep urban_bass_bar_score(const UrbanSong *s,
              unsigned bar,unsigned step) {
     UrbanBassStep n=score->seq[section%URBAN_SEQUENCES].steps[step%URBAN_STEPS];
     const UrbanTrack *t=&s->tracks[2];
-    unsigned genre=t->genre%URBAN_GENRES,sub=t->subgenre%4u;
+    unsigned sub=t->subgenre%4u;
     uint16_t mask=urban_bass_bar_mask(t,section,bar);
     if(!(mask&(1u<<(step%16u)))) {
         n.velocity=0u;n.glide=0u;return n;
