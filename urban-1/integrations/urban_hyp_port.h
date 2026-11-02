@@ -174,8 +174,10 @@ static void urban_port_sound_profile(void) {
      * HYP swing delays ONLY off-sixteenth drum triggers by up to 0.5
      * steps; keep the 2/4 snare fixed and pad/bass on the harmonic grid.
      * Style.swing is 7..33 = roughly 9..42 ms at 90 BPM, not extra hits. */
-    UrbanGroove swing_groove=urban_groove(d.genre,d.subgenre);
-    urban_port_set(P_SWING,(d.genre==3u||d.genre==5u)?swing_groove.swing:0);
+    unsigned drum_genre=s->tracks[0].genre%URBAN_GENRES;
+    UrbanGroove swing_groove=urban_groove((uint8_t)drum_genre,
+                                         s->tracks[0].subgenre);
+    urban_port_set(P_SWING,(drum_genre==3u||drum_genre==5u)?swing_groove.swing:0);
     /* 56 named FX palettes: HYP has SHARED wet echo/reverb but
      * independent lead/filter envelopes, bass/pad LFO and 6 drum decays. */
     UrbanFxPlan fx=urban_fx_plan(s);
