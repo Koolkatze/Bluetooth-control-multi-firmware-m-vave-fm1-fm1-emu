@@ -50,6 +50,10 @@ def main() -> None:
                     root / "firmware/src/app/urban_hyp_port.h")
     shutil.copyfile(HERE / "integrations/urban_sfx_engine.h",
                     root / "firmware/src/app/urban_sfx_engine.h")
+    shutil.copyfile(HERE / "integrations/urban_trance_clock.h",
+                    root / "firmware/src/app/urban_trance_clock.h")
+    shutil.copyfile(HERE / "integrations/urban_trance_engine.h",
+                    root / "firmware/src/app/urban_trance_engine.h")
     # HYP-1's Break kit applies random ghost kicks/snares and 32nd-roll
     # retriggers *after* reading the six authored pattern lanes. These
     # unscored hits sound like glitches in URBAN-1, where all fills and
@@ -83,6 +87,18 @@ def main() -> None:
     replace_once(dsp,
         '    duck_env = fm_flush(de);',
         '    urban_sfx_render(n); /* dedicated SFX voice, mixed before master FX */\n    duck_env = fm_flush(de);')
+    # HYP's drum tick is sample-aligned, while the previous Acid lead
+    # note-on ran after WebView/LCD polling (up to a full UI frame late).
+    # Trance now consumes a prebuilt score on the very same DSP tick.
+    replace_once(dsp,
+        'static void tick(void)',
+        'static void urban_trance_audio_tick(uint32_t step);\nstatic void tick(void)')
+    replace_once(dsp,
+        '    sixteenth++;\n    en_bars = sixteenth;',
+        '    urban_trance_audio_tick(sixteenth); /* sample-locked with drums */\n    sixteenth++;\n    en_bars = sixteenth;')
+    replace_once(dsp,
+        'static void quiet(void)',
+        '#include "../app/urban_trance_engine.h"\nstatic void quiet(void)')
     # One shared port implementation in both the FM-1 and HYP-1 host simulator.
     replace_once(root / "firmware/src/main.c",
         '#include "app/main_fm1.c"',
