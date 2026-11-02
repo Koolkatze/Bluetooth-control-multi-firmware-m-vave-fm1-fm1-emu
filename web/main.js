@@ -325,6 +325,23 @@ const installedUpdates = (() => {
   try { return JSON.parse(nativeWindow.FM1Android?.installedFirmwareUpdates?.(updateDevice) || "{}"); }
   catch { return {}; }
 })();
+/* The APK's bundled catalog never changes when an update is downloaded.
+ * A native update is authoritative across WebView/page restarts only when
+ * its version is at least as new as the bundled firmware version. */
+function installedUpdateIsNewer(f) {
+  const item = installedUpdates[f.id];
+  if (!item?.version) return false;
+  const digits = (value) => /^\\d+(?:\\.\\d+)*$/.test(String(value || ""))
+    ? String(value).split(".").map(Number) : null;
+  const a = digits(item.version), b = digits(f.version);
+  if (a && b) {
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
+    }
+    return true;
+  }
+  return item.version !== f.version || !!item.url;
+}
 function updateButtonsState() {
   if (updateSelectedBtn) updateSelectedBtn.disabled = updatingFirmwares || fw.id === "local" || !!fw.byo;
   if (updateAllBtn) updateAllBtn.disabled = updatingFirmwares;
@@ -352,10 +369,15 @@ async function keptEntry(id) {
 async function packageOf(f) {
   if (f.id === "local") return { bytes: f.bytes, url: null };
   if (packages.has(f.id)) return packages.get(f.id);
-  if (installedUpdates[f.id] && !f.byo) {
+  if (installedUpdateIsNewer(f) && !f.byo) {
+    /* Never silently boot a stale 0.3.4 IndexedDB snapshot if the
+     * persistent 0.3.9 Android update is missing/corrupt. */
     try { return await loadInstalledUpdate(f); }
     catch (error) {
       updateLine.textContent = "Actualización " + f.name + " dañada: " + error.message;
+      throw new Error("No se pudo cargar el firmware instalado " +
+        installedUpdates[f.id]?.version + ": " + error.message +
+        ". Utiliza Actualizar seleccionado para repararlo.");
     }
   }
   const kept = await keptEntry(f.id);
@@ -456,6 +478,13 @@ function showFirmware() {
   updateButtonsState();
 }
 showFirmware();
+/* On *every* Android launch, hydrate version badges from the native
+ * installed.json before any firmware boot. Otherwise the UI always
+ * displays the stale catalog version embedded in the original APK. */
+for (const item of catalog.firmwares) {
+  if (!item.byo && installedUpdateIsNewer(item))
+    noteVersion(item, installedUpdates[item.id].version);
+}
 
 // Install changed packages only in the emulator cache; never flash hardware.
 // The currently playing synth is not interrupted. It will use the update the
