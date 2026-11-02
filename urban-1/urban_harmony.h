@@ -8,15 +8,13 @@
 #include "urban_song.h"
 static int urban_theory_abs(int x){return x<0?-x:x;}
 static int urban_scale_note(const UrbanSong *s,int degree,int octave) {
-    int oct=0,idx=degree;
-    while(idx<0){idx+=7;oct--;}
-    while(idx>=7){idx-=7;oct++;}
-    return 12*octave + (int)(s->key%12u) +
-        (int)urban_scale_intervals[s->scale%URBAN_SCALE_COUNT][idx]+12*oct;
+    return 12*octave+(int)(s->key%12u)+
+           urban_scale_offset(s->scale,degree);
 }
 static int urban_nearest_degree(const UrbanSong *s,int note) {
     int best=0,best_error=10000;
-    for(int degree=-7;degree<=13;degree++) {
+    int size=(int)urban_scale_size(s->scale);
+    for(int degree=-size;degree<=2*size;degree++) {
         int cand=urban_scale_note(s,degree,note/12);
         int err=urban_theory_abs(cand-note);
         if(err<best_error){best_error=err;best=degree;}
