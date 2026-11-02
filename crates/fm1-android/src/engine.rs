@@ -9,7 +9,7 @@ use fm1_core::{Bus, Cpu};
 use fm1_soc::{machine, Action, Soc};
 use std::cell::UnsafeCell;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -81,6 +81,12 @@ pub struct Shared {
     pub ready: AtomicBool,
     pub playing: AtomicBool,
     pub halted: AtomicBool,
+    /// AAudio can disconnect when Android changes from speaker to Bluetooth.
+    /// Set by the native error callback; never restart a stream there.
+    pub audio_disconnected: AtomicBool,
+    /// Output device rate changes on Bluetooth/USB routes. The firmware
+    /// always synthesizes at 44.1kHz and keeps the same CPU/flash state.
+    pub output_sample_rate: AtomicU32,
     /// Emulated firmware millisecond clock, updated outside AAudio callback.
     pub emulated_ms: AtomicU64,
     /// PCM frames produced and submitted to the ring. Helps diagnose stalls.
@@ -92,6 +98,8 @@ impl Shared {
             ring: AudioRing::new(), lcd: Mutex::new(vec![0; LCD_PIXELS]),
             quit: AtomicBool::new(false), ready: AtomicBool::new(false),
             playing: AtomicBool::new(false), halted: AtomicBool::new(false),
+            audio_disconnected: AtomicBool::new(false),
+            output_sample_rate: AtomicU32::new(48_000),
             emulated_ms: AtomicU64::new(0), produced_frames: AtomicU64::new(0),
         })
     }
@@ -191,6 +199,10 @@ impl Machine {
     }
 }
 
+fn resampling_step(output_rate: u32) -> f64 {
+    44_100.0 / output_rate.clamp(32_000, 192_000) as f64
+}
+
 pub fn run_worker(mut machine: Machine, shared: Arc<Shared>, rx: mpsc::Receiver<Cmd>,
                   output_rate: u32, save: Option<std::path::PathBuf>) {
     // This is the CPU/JIT thread, *not* the AAudio callback. Raise scheduling
@@ -205,12 +217,21 @@ pub fn run_worker(mut machine: Machine, shared: Arc<Shared>, rx: mpsc::Receiver<
     shared.ready.store(true, Ordering::Release);
     let mut src = VecDeque::<[f32; 2]>::with_capacity(2048);
     let mut fraction = 0f64;
-    let step = 44100f64 / output_rate as f64;
+    let mut current_output_rate = output_rate;
+    let mut step = resampling_step(current_output_rate);
     let mut last_lcd = Instant::now();
     let mut last_save = Instant::now();
     let mut no_audio_chunks = 0usize;
     let mut last_diagnostics = Instant::now();
     while !shared.quit.load(Ordering::Acquire) && !machine.halted {
+        // AAudio may reopen at 44.1/48/96kHz after a Bluetooth audio route
+        // change. Recompute the resampling ratio on the SAME emulation worker:
+        // do not replace the firmware CPU, discard flash, or reset transport.
+        let new_rate = shared.output_sample_rate.load(Ordering::Acquire);
+        if (32_000..=192_000).contains(&new_rate) && new_rate != current_output_rate {
+            current_output_rate = new_rate;
+            step = resampling_step(new_rate);
+        }
         // MIDI and panel commands are checked once per 128 output frames or
         // every native emulation burst, not once for each individual sample.
         while let Ok(command) = rx.try_recv() {
@@ -364,6 +385,19 @@ mod tests {
         assert!(AUDIO_LEAD <= 2048, "avoid large instrument latency");
         assert!(AUDIO_LEAD + WORK_CHUNK < AUDIO_CAP);
     }
+    #[test]
+    fn bluetooth_route_rate_changes_keep_correct_resampling_ratio() {
+        assert!((resampling_step(48_000) - 0.91875).abs() < 1e-10);
+        assert!((resampling_step(44_100) - 1.0).abs() < 1e-10);
+        assert!((resampling_step(96_000) - 0.459375).abs() < 1e-10);
+        let shared = Shared::new();
+        assert!(!shared.audio_disconnected.load(Ordering::Acquire));
+        shared.output_sample_rate.store(44_100, Ordering::Release);
+        assert_eq!(shared.output_sample_rate.load(Ordering::Acquire), 44_100);
+        shared.audio_disconnected.store(true, Ordering::Release);
+        assert!(shared.audio_disconnected.load(Ordering::Acquire));
+    }
+
     #[test]
     fn native_flash_sectors_round_trip_and_reject_malformed_data() {
         let sectors = vec![(4096u32, vec![0x41;4096]), (8192, vec![0xfa;4096])];
