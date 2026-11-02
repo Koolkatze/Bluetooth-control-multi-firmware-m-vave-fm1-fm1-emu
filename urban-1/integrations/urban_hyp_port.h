@@ -165,10 +165,14 @@ static void urban_port_sound_profile(void) {
     en_set(P_DR_CUT,bass.bass_cut);
     en_set(P_DR_RES,bass.bass==9u?20:51);
     en_set(P_BASSOCT,bass.bass==9u||bass.bass==8u?-1:0);
+    const UrbanLeadTone *tone=&urban_lead_tones[s->tracks[3].genre%URBAN_GENRES];
     en_set(P_AC_WAVE,lead.lead);
     en_set(P_AC_CUT,lead.lead_cut);
-    en_set(P_AC_RES,lead.lead==2u?68:43);
-    en_set(P_AC_ENV,lead.lead==4u||lead.lead==15u?32:59);
+    en_set(P_AC_RES,tone->resonance);
+    en_set(P_AC_ENV,tone->filter_env);
+    en_set(P_AC_DEC,tone->decay);
+    en_set(P_AC_ACC,tone->accent);
+    en_set(P_AC_SLIDE,tone->slide);
     en_set(P_PADTONE,pad.pad);
     en_set(P_BRIGHT,brightness);
     en_set(P_PE_ATK,pad.pad==7u||pad.pad==3u?36:12);
@@ -570,6 +574,15 @@ static void urban_port_screen_text(int32_t y,const felucca_font_t *font,
     int32_t x=(240-text_w(font,str))/2;
     cv_text(x<0?0:x,y,font,str,colour);
 }
+static const char *urban_port_instrument_name(const UrbanSong *s,
+                                                 unsigned track) {
+    UrbanInstrumentProgram ip=urban_instrument_program(s,track,s->current);
+    if(track==2u)return urban_bass_names[ip.patch.bass];
+    if(track==3u)return urban_lead_names[ip.patch.lead];
+    if(track==4u)return urban_pad_names[ip.patch.pad];
+    if(track==0u||track==1u)return urban_kit_names[ip.patch.drum_kit];
+    return urban_noise_names[ip.noise_color];
+}
 static void urban_port_frame(void) {
     UrbanHypPort *p=&urban_port;
     UrbanSong *s=&p->rt.ui.song;
@@ -649,7 +662,8 @@ static void urban_port_frame(void) {
                 s->song_mode?"SAVE GENERATE  ARP LOOP":"ARP AUTO  SAVE GENERATE",C_WHITE);
             urban_port_screen_text(79,&FONT_S,"SEQ TRACKS   SELECT KEY",dim);
         } else {
-            urban_port_screen_text(14,&FONT_S,"A-H INDEPENDENT",C_WHITE);
+            urban_port_screen_text(14,&FONT_S,
+                urban_port_instrument_name(s,p->rt.ui.selected_track),orange);
             urban_port_screen_text(36,&FONT_S,"SAVE: REGENERATE TRACK",dim);
             urban_port_screen_text(57,&FONT_S,"K1 TRACK  K2 GENRE",C_WHITE);
             urban_port_screen_text(79,&FONT_S,"HOME: SONG   EDIT: LOCK",dim);
