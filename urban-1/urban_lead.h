@@ -40,8 +40,8 @@ static const uint16_t urban_trance_masks[4][3]={
     {0x0101u,0x1111u,0x5151u}  /* Tech trance: quarter-note stabs */
 };
 static const int8_t urban_trance_contour[4][8]={
-    {0,2,4,2,0,2,4,2},
-    {0,2,4,5,4,2,4,0},
+    {0,0,2,2,4,4,2,0}, /* active offbeats: tonic, third, fifth, tonic */
+    {0,0,2,2,4,4,5,5}, /* active offbeats: tonic, third, fifth, sixth */
     {0,4,0,4,0,4,2,4},
     {0,2,0,4,2,0,4,0}
 };
