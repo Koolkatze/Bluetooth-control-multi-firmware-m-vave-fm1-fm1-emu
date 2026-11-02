@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Real HYP audio-clock Trance test: native drum tick, not UI polling.
+expect urbantranceonsets 0
+tap HOME
+spin K2 12
+expect urbansub 0
+spin K3 1
+expect urbansub 1
+# Queue the hook in manual LOOP; lead has true eighth-note backbeats.
+tap ARP
+expect urbanmode 0
+spin K4 2
+tap PLAY
+wait 8500
+expect playing 1
+expect urbantranceonsets >0
+expect urbantrancelaststep >0
+shot trance-synchronized-hook.png
+tap PLAY
+expect playing 0
