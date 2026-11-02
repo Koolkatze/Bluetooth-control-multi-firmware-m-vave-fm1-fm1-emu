@@ -55,6 +55,11 @@ static void urban_rec_start(UrbanRecorder *r) {
     r->count=0u;r->play_cursor=0u;
     for(unsigned i=0u;i<27u;i++)r->held[i]=0u;
 }
+static void urban_rec_overdub(UrbanRecorder *r) {
+    r->state=UR_REC_RECORD;
+    r->pass++;
+    r->overdub=1u;
+}
 static void urban_rec_stop(UrbanRecorder *r) {
     r->state=UR_REC_EDIT;
     for(unsigned i=0u;i<27u;i++)r->held[i]=0u;
