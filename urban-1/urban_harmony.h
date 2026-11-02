@@ -53,12 +53,12 @@ static unsigned urban_build_chord(const UrbanSong *s,unsigned bar,
      * minimize total voice motion from the previous bar. */
     for(unsigned i=0;i<n;i++) {
         int note=urban_scale_note(s,(int)base_degree+degrees[color][i],4);
-        int target=previous?previous[i]:0;
+        int target=(previous && previous[i])?previous[i]:0;
         int best=note,dist=10000;
         for(int shift=-24;shift<=24;shift+=12) {
             int x=note+shift;
             if(x<46+(int)i*2 || x>85)continue;
-            int d=previous?urban_theory_abs(x-target):urban_theory_abs(x-(55+(int)i*5));
+            int d=target?urban_theory_abs(x-target):urban_theory_abs(x-(55+(int)i*5));
             if(d<dist){dist=d;best=x;}
         }
         out[i]=(uint8_t)best;
