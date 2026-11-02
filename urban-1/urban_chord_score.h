@@ -22,12 +22,13 @@ static const UrbanChordGrammar urban_chord_grammars[URBAN_GENRES][4]={
  {{0x0001,16,0},{0x1101,3,2},{0x0101,12,1},{0x0001,16,0}},
  /* Emo / piano / lo-fi / guitar */
  {{0x0001,15,0},{0x0101,8,1},{0x0001,16,0},{0x1011,6,2}},
- /* Boom-bap / jazzy comp / G-funk / lo-fi */
- {{0x1101,3,2},{0x2081,5,2},{0x0105,8,2},{0x0001,15,0}},
+ /* Boom-bap two-bar sample / jazz 9th syncs / G-funk sustain / lo-fi wash.
+  * Longer chords replace toy-like 16th staccato chord retriggers. */
+ {{0x0101,8,1},{0x0801,8,1},{0x0001,15,0},{0x0001,16,0}},
  /* Bristol / downtempo / abstract / dub */
  {{0x0881,7,2},{0x0101,9,1},{0x2401,5,3},{0x0401,12,1}},
- /* Dusty / jazz / experimental / break */
- {{0x1101,4,2},{0x2481,5,2},{0x2201,4,3},{0x0901,6,2}},
+ /* Underground: looped sevenths; syncopation only on funk/break variants. */
+ {{0x0101,9,1},{0x0801,8,1},{0x0001,14,0},{0x0881,7,1}},
  /* Memphis / cinematic / industrial / dark */
  {{0x0101,8,1},{0x0001,16,0},{0x1101,3,2},{0x0801,12,1}},
  /* Dembow / perreo / romantic / futuro */
