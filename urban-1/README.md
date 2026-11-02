@@ -61,6 +61,13 @@ Trance, Liquid Jungle. Every genre has a specific:
   **not licensed genre-specific samples**.
 - repeated hook and song-form transitions, controlled four-bar drum fills.
 
+**Hip-hop overhaul (v0.3.7):** Boom Bap, Jazz Rap, G-Funk and Lo-fi
+(and four Underground variants) now use warm curated synthesis palettes,
+low-register bass, longer Rhodes-style comping, reduced lead density,
+drier break/808 drum kits and actual HYP drum micro-swing. The music
+engine no longer applies randomized hip-hop kick rearrangements or
+stacked clap doubling. See [the detailed production audit](HIP_HOP_PRODUCTION_AUDIT.md).
+
 This is a **genre-aware rule-based prototype**, not sample-based genre
 reconstruction or a trained music model. More accurate per-substyle
 programming, richer chord voicings and multi-voice instrument synthesis
