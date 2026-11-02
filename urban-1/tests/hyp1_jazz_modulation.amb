@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Jazz modelled DSP must not bypass native editable envelopes and LFOs.
+expect urbanjazzmodframes 0
+spin K2 3
+spin K3 1
+expect urbansub 1
+tap ENV
+expect urbanview 3
+spin K1 18
+tap LFO
+expect urbanview 4
+spin ALGO 4
+expect urbantarget 4
+spin K1 26
+spin K2 48
+expect urbanleadlforate 26
+expect urbanleadlfodepth 48
+tap HOME
+tap PLAY
+wait 4000
+expect playing 1
+expect urbanjazzbass 1
+expect urbanleadlfoframes >1000
+expect urbanjazzmodframes >1000
+shot jazz-live-env-lfo.png
+tap PLAY
+expect playing 0
