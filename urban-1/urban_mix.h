@@ -119,6 +119,22 @@ static UrbanMixPlan urban_mix_plan(const UrbanSong *s,
         m.reverb=urban_mix_cap(fx.reverb,38u);
         m.echo=urban_mix_cap(fx.echo,30u);
     }
+    /* The kick voice must reproduce the Bristol Trip-hop reference:
+     * its lane level (70) and dry drive (17) stay consistent across
+     * Boom Bap, Jazz Rap, G-Funk and Underground, irrespective of the
+     * global song genre or independently selected drum track.
+     *
+     * Lo-fi hip-hop alone may push HYP's KICK-ONLY P_DRIVE to 34:
+     * it saturates the kick oscillator without distorting the snare.
+     * This is a separate engine parameter, not the full FX bus. */
+    unsigned dg=s->tracks[0].genre%URBAN_GENRES;
+    unsigned ds=s->tracks[0].subgenre%4u;
+    if(dg==3u || dg==5u) {
+        m.kick=(uint8_t)(dg==3u && ds==3u?74u:70u);
+        m.drive=(uint8_t)(dg==3u && ds==3u?34u:17u);
+        if(dg==3u && ds==0u)
+            m.clap=0u; /* Boom Bap: pure snare even in mixed-genre songs. */
+    }
     /* Strong compression in hardcore / neuro is a *deliberate* colour,
      * but kick + hat + clap should not all operate at 100% gain. */
     return m;
