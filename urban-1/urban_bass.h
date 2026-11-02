@@ -64,6 +64,39 @@ static const UrbanBassGrammar urban_bass_profiles[URBAN_GENRES][4]={
  {{0x2a49,6,1,83,0,2},{0x0101,15,0,75,0,4},
   {0x2689,5,1,89,0,2},{0x0109,12,0,77,0,4}}
 };
+/* A genuinely authored 4-bar bass rhythm for each named substyle.
+ * Four masks per style = 224 distinct bar positions, not the old
+ * one-bar loop pasted four times. The clock remains strict 16ths.
+ * Sparse/ambient styles intentionally leave gaps rather than adding
+ * arbitrary 32nd ratchets or speed from unrelated genres. */
+static const uint16_t urban_bass_fourbar[URBAN_GENRES][4][4]={
+  /* 0 */ {{0x0429u,0x0489u,0x1429u,0x04a9u},{0x0a81u,0x0a09u,0x2a81u,0x0ac1u},{0x0101u,0x0001u,0x0101u,0x0001u},{0x1429u,0x34a9u,0x14a9u,0x1c29u}},
+  /* 1 */ {{0x0821u,0x0809u,0x0a21u,0x0829u},{0x0921u,0x0a21u,0x2921u,0x0929u},{0x1111u,0x0101u,0x1111u,0x1011u},{0x0101u,0x0001u,0x0101u,0x0801u}},
+  /* 2 */ {{0x0109u,0x0009u,0x0101u,0x0109u},{0x0101u,0x1101u,0x0101u,0x0001u},{0x0809u,0x0409u,0x0801u,0x0c09u},{0x0009u,0x0109u,0x0001u,0x0809u}},
+  /* 3 */ {{0x0489u,0x0409u,0x0489u,0x04c9u},{0x1111u,0x1111u,0x1111u,0x9111u},{0x0889u,0x28c9u,0x0ac9u,0x18c9u},{0x0109u,0x0009u,0x0109u,0x0101u}},
+  /* 4 */ {{0x0441u,0x0401u,0x0441u,0x0641u},{0x0109u,0x0009u,0x0101u,0x0809u},{0x0a21u,0x2a21u,0x0a89u,0x8a21u},{0x0441u,0x0401u,0x0c41u,0x0449u}},
+  /* 5 */ {{0x0489u,0x0409u,0x0489u,0x0c89u},{0x1111u,0x1111u,0x1111u,0x5111u},{0x0809u,0x0801u,0x0a09u,0x0809u},{0x048bu,0x24c9u,0x0c8bu,0x04cbu}},
+  /* 6 */ {{0x0481u,0x0401u,0x0489u,0x0c81u},{0x0101u,0x0001u,0x0101u,0x0401u},{0x0889u,0x0ac9u,0x2889u,0x0c89u},{0x0a81u,0x0801u,0x0a89u,0x0a01u}},
+  /* 7 */ {{0x1119u,0x1199u,0x1119u,0x1999u},{0x1199u,0x1999u,0x11b9u,0x1999u},{0x1109u,0x1009u,0x0109u,0x1109u},{0x1299u,0x12b9u,0x1a99u,0x12d9u}},
+  /* 8 */ {{0x4a41u,0x6a41u,0x4b41u,0x4a61u},{0x4444u,0x4644u,0x444cu,0x4464u},{0x0401u,0x0241u,0x0601u,0x0a41u},{0x2a49u,0x6a49u,0x2b49u,0x3a49u}},
+  /* 9 */ {{0x0401u,0x0409u,0x0401u,0x0601u},{0x0101u,0x0001u,0x0101u,0x0001u},{0x2021u,0x2221u,0x2029u,0x2229u},{0x0c81u,0x2c81u,0x0e81u,0x2c89u}},
+  /* 10 */ {{0x4444u,0x4544u,0x4446u,0x4464u},{0x4444u,0x4444u,0x4444u,0x4444u},{0x0101u,0x0001u,0x0101u,0x0401u},{0x4444u,0x0404u,0x4444u,0x0404u}},
+  /* 11 */ {{0x5555u,0x5555u,0x5555u,0x5d55u},{0x1111u,0x1311u,0x1119u,0x1319u},{0x4444u,0x444cu,0x4644u,0x4444u},{0x5555u,0x5d55u,0x5755u,0x5f55u}},
+  /* 12 */ {{0x4444u,0x4444u,0x4444u,0x4444u},{0x4444u,0x444cu,0x4444u,0x4464u},{0x5555u,0x5555u,0x5555u,0x5555u},{0x4444u,0x4444u,0x444cu,0x4444u}},
+  /* 13 */ {{0x2a49u,0x6a49u,0x2a41u,0x2ac9u},{0x0101u,0x0001u,0x0101u,0x0001u},{0x1111u,0x1111u,0x1111u,0x9111u},{0x0109u,0x0101u,0x0809u,0x0109u}}
+};
+static uint16_t urban_bass_bar_mask(const UrbanTrack *t,unsigned sec,
+                                    unsigned bar) {
+    const unsigned g=t->genre%URBAN_GENRES,sub=t->subgenre%4u;
+    uint16_t mask=urban_bass_fourbar[g][sub][bar%4u];
+    if(sec==URBAN_INTRO || sec==URBAN_OUTRO) {
+        if(g==12u || g==10u)mask&=0x4444u;
+        else mask&=0x0101u;
+    } else if(sec==URBAN_BREAK || sec==URBAN_BRIDGE) {
+        mask&=(g==12u?0x4444u:0x0101u);
+    }
+    return mask;
+}
 static UrbanBassGrammar urban_bass_style(const UrbanTrack *t) {
     return urban_bass_profiles[t->genre%URBAN_GENRES][t->subgenre%4u];
 }
@@ -177,5 +210,58 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
                                      urban_scale_root_degree(scale,4u)));
         }
     }
+}
+/* At playback choose the authored bar score. The original 16th base
+ * notes retain their synth envelopes/seed; only deterministic, styled
+ * onset and melodic response are varied. All 4 bars are audible.
+ * Keep chord transposition downstream in urban_runtime_tick(). */
+static UrbanBassStep urban_bass_bar_score(const UrbanSong *s,
+             const UrbanBassSong *score,unsigned section,
+             unsigned bar,unsigned step) {
+    UrbanBassStep n=score->seq[section%URBAN_SEQUENCES].steps[step%URBAN_STEPS];
+    const UrbanTrack *t=&s->tracks[2];
+    unsigned genre=t->genre%URBAN_GENRES,sub=t->subgenre%4u;
+    uint16_t mask=urban_bass_bar_mask(t,section,bar);
+    if(!(mask&(1u<<(step%16u)))) {
+        n.velocity=0u;n.glide=0u;return n;
+    }
+    UrbanBassGrammar g=urban_bass_style(t);
+    uint32_t v=urban_mix_seed(t->seq[section%URBAN_SEQUENCES].seed ^
+                    ((bar+1u)*0x9e3779b9u) ^ ((step+1u)*0x85ebca6bu));
+    unsigned accent=step%4u==0u?6u:step%2u==0u?3u:0u;
+    unsigned vel=(unsigned)g.accent+accent+(v%8u);
+    n.velocity=(uint8_t)(vel>124u?124u:vel);
+    /* Different phrase replies: walking scale degrees for jazz,
+     * sustained root/fifth for lofi/ambient, and funk slides only
+     * for slide-enabled substyles. No global random octave jumps. */
+    unsigned degree=0u;
+    if(g.motion==2u) {
+        static const uint8_t walk[4][4]={
+            {0,2,4,5},{0,1,2,4},{4,5,2,1},{0,2,4,6}
+        };
+        degree=walk[bar%4u][(step/4u)%4u];
+    } else if(g.motion==3u) {
+        degree=(step%4u==2u || (bar==3u && step>=12u))?4u:0u;
+    } else if(g.motion==5u) {
+        degree=(bar==1u && step>=8u)?2u:
+               (bar==2u && step>=8u)?4u:
+               (bar==3u && step>=12u)?6u:0u;
+    } else if(g.motion==1u) {
+        degree=(bar==3u && step>=12u)?4u:
+               (step==6u || step==14u)?2u:0u;
+    } else if(g.motion==0u && (step==10u || (bar==3u && step==14u)))
+        degree=4u;
+    else if(g.motion==4u && bar==3u && step>=12u && sub!=2u)
+        degree=4u;
+    unsigned semitone=urban_scale_pc(s->scale,
+                              urban_scale_root_degree(s->scale,degree));
+    unsigned note=36u+s->key%12u+semitone;
+    if(g.octave && g.motion==5u && (step==10u||step==14u))note+=12u;
+    if(note>71u)note-=12u;
+    n.note=(uint8_t)note;
+    unsigned gate=g.gate+(v%3u);
+    n.gate=(uint8_t)(gate>16u?16u:gate);
+    n.glide=(uint8_t)(g.slide && step>=7u && (v%100u)<g.slide);
+    return n;
 }
 #endif
