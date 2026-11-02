@@ -99,17 +99,15 @@ static void urban_runtime_bar_variation(const UrbanSong *s,
     if(bar==2u && (section==URBAN_HOOK||section==URBAN_DROP)) {
         if(track==3u && step==14u && complexity>=1u)
             n->velocity=n->velocity?(uint8_t)(n->velocity+5u):76u;
-        if(track==2u && step==12u && complexity>=2u && !n->velocity)
-            n->velocity=(uint8_t)(86u+(v%15u));
+        /* The new four-bar bass score already owns every onset.
+         * Do not insert generic off-style bass hits afterwards. */
     }
     /* bar 4: turn-around, tension and genre-specific pick-up */
     if(bar==3u && complexity>=1u && step>=12u) {
         if(track==3u && step==15u && genre>=10u && !n->velocity)
             n->velocity=78u;
-        if(track==2u && step==14u && (genre<=2u||genre==9u)) {
-            n->velocity=(uint8_t)(91u+(v%17u));
-            *glide=genre<=2u || genre==9u;
-        }
+        /* Bass pickups come from the independently authored 4-bar
+         * mask and remain 16th-quantized; preserve per-style glide. */
     }
     /* Variation is diatonic and does not break the shared song harmony.
      * Only chosen phrase accents move by a scale degree. */
@@ -136,8 +134,9 @@ static void urban_runtime_tick(UrbanRuntime *rt, UrbanMidiFrame *frame) {
         for(unsigned i=0;i<URBAN_TRACKS;i++)
             if(!s->tracks[i].muted && (!any_solo || s->tracks[i].solo))
                 frame->event[i]=rt->voices[i].sequence[s->current].steps[t->step];
+        unsigned bar=urban_phrase_bar(s);
         if(!s->tracks[2].muted && (!any_solo || s->tracks[2].solo)) {
-            UrbanBassStep bass=rt->bass.seq[s->current].steps[t->step];
+            UrbanBassStep bass=urban_bass_bar_score(s,&rt->bass,s->current,bar,t->step);
             frame->event[2].note=bass.note;
             frame->event[2].velocity=bass.velocity;
             frame->event[2].gate=bass.gate;
@@ -146,7 +145,6 @@ static void urban_runtime_tick(UrbanRuntime *rt, UrbanMidiFrame *frame) {
         /* Four REAL bars per phrase. The motif, harmonic motion and
          * section-appropriate variations span 4x16 steps, not a one-bar
          * loop with an A-H label. Manual mode loops the same 4 bars. */
-        unsigned bar=urban_phrase_bar(s);
         /* The lead has its own genre score: intentional silent bars,
          * section-aware motifs and genre-specific articulation.
          * Never resurrect notes from a muted/unsoloed track. */
