@@ -62,6 +62,8 @@ def main() -> None:
                     root / "firmware/src/app/urban_echo_engine.h")
     shutil.copyfile(HERE / "integrations/urban_tape_transport.h",
                     root / "firmware/src/app/urban_tape_transport.h")
+    shutil.copyfile(HERE / "integrations/urban_lead_lfo_engine.h",
+                    root / "firmware/src/app/urban_lead_lfo_engine.h")
     # HYP-1's Break kit applies random ghost kicks/snares and 32nd-roll
     # retriggers *after* reading the six authored pattern lanes. These
     # unscored hits sound like glitches in URBAN-1, where all fills and
@@ -104,7 +106,8 @@ def main() -> None:
         'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];',
         'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];\n'
         '#include "../app/urban_jazz_engine.h"\n'
-        '#include "../app/urban_echo_engine.h"')
+        '#include "../app/urban_echo_engine.h"\n'
+        '#include "../app/urban_lead_lfo_engine.h"')
     replace_once(dsp,
         'static void render_pad(uint32_t n)\n{',
         'static void render_pad(uint32_t n)\n{\n'
@@ -113,6 +116,9 @@ def main() -> None:
         'static void render_acid(uint32_t n)\n{',
         'static void render_acid(uint32_t n)\n{\n'
         '    if(urban_jazz_lead_mode)return; /* use modelled flute/mallets */')
+    replace_once(dsp,
+        'float oct = base + envmod * acid.env * (1.0f + accamt * acid.acc)',
+        'float oct = base + urban_lead_lfo_oct + envmod * acid.env * (1.0f + accamt * acid.acc)')
     replace_once(dsp,
         'static void render_bass(uint32_t n)\n{',
         'static void render_bass(uint32_t n)\n{\n'
@@ -151,6 +157,9 @@ def main() -> None:
         '        fx_master(&l, &r);',
         '        fx_master(&l, &r);\n'
         '        urban_tape_start_mix(&l,&r);')
+    replace_once(dsp,
+        '    mods_step(n);\n    heads_step(n);',
+        '    mods_step(n);\n    urban_lead_lfo_tick(n);\n    heads_step(n);')
     # HYP's drum tick is sample-aligned, while the previous Acid lead
     # note-on ran after WebView/LCD polling (up to a full UI frame late).
     # Trance now consumes a prebuilt score on the very same DSP tick.
@@ -243,6 +252,7 @@ def main() -> None:
         '    else if (!strcmp(what, "urbanview")) got = urban_port.editor.view;\n'
         '    else if (!strcmp(what, "urbantarget")) got = urban_port.editor.target;\n'
         '    else if (!strcmp(what, "urbanbank")) got = urban_port.editor.bank;\n'
+        '    else if (!strcmp(what, "urbanleadlfoframes")) got = urban_lead_lfo_frames;\n'
         '    else if (!strcmp(what, "urbantapestartframes")) got = urban_tape_start_frames;\n'
         '    else if (!strcmp(what, "urbantapestarts")) got = urban_tape_start_completed;\n'
         '    else if (!strcmp(what, "urbanfxechosend")) got = urban_echo_normal_input_frames;\n'
