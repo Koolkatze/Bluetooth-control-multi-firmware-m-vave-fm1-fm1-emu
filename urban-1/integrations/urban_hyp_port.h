@@ -55,7 +55,7 @@ typedef struct {
     uint32_t play_press_ms,tape_stop_at,rec_step_ms;
     uint32_t rec_last_keys;
     uint8_t play_long_done,tape_enabled,tape_stop_pending;
-    uint8_t rec_clock_started,lead_lfo_rate,lead_lfo_depth;
+    uint8_t rec_clock_started,lead_lfo_rate,lead_lfo_depth,rec_screen;
     uint8_t ui_drawn;
     int8_t sfx_type_override; /* -1: keep the chosen 56-style preset */
     uint8_t sfx_level,sfx_length,sfx_density;
@@ -450,6 +450,34 @@ static void urban_port_chord(unsigned color,unsigned gate) {
     p->previous_chord_count=p->chord_count;
     p->chord_left=(uint8_t)(gate?gate:1u);
 }
+/* Loop notes and parameter automation are replayed on the existing
+ * HYP song clock without changing any unrelated track's generated score. */
+static void urban_port_rec_timeline(void) {
+    UrbanHypPort *p=&urban_port;
+    UrbanRecorder *r=&p->recorder;
+    if(r->state!=UR_REC_RECORD && r->state!=UR_REC_EDIT)return;
+    if(!p->rec_clock_started) {
+        p->rec_clock_started=1u;r->position=0u;
+    } else urban_rec_advance(r,2u);
+    unsigned len=urban_rec_length(r),pos=r->position;
+    for(unsigned i=0u;i<r->count;i++) {
+        const UrbanRecEvent *e=&r->event[i];
+        if(r->state==UR_REC_RECORD && e->pass==r->pass)continue;
+        if(e->pos!=pos && !(e->pos==(pos+1u)%len && !(pos&1u)))
+            continue;
+        if(e->kind==UR_REC_PARAM && e->parameter<P_NPARAMS) {
+            UrbanEditor *ed=&p->editor;
+            ed->changed[e->parameter]=1u;
+            ed->override[e->parameter]=e->value;
+            urban_port_set(e->parameter,e->value);
+        } else if(e->kind==UR_REC_NOTE_ON||e->kind==UR_REC_NOTE_OFF) {
+            int voice=urban_hyp_voice(r->track);
+            if(voice>=0)
+                en_note(voice,urban_hyp_key((unsigned)voice,e->note),
+                        e->kind==UR_REC_NOTE_ON);
+        }
+    }
+}
 static void urban_port_advance_score(void) {
     UrbanHypPort *p=&urban_port;
     UrbanMidiFrame unused;
@@ -479,7 +507,9 @@ static void urban_port_step(void) {
     UrbanChordScore cs=urban_chord_score(&p->rt.ui.song,
                            p->rt.ui.song.current,
                            urban_phrase_bar(&p->rt.ui.song));
-    if((cs.onsets>>cstep)&1u)
+    if((cs.onsets>>cstep)&1u &&
+       !((p->recorder.state==UR_REC_RECORD||p->recorder.state==UR_REC_EDIT)&&
+         p->recorder.track==4u))
         urban_port_chord(cs.color,cs.gate);
     for(i=0;i<3;i++) if(p->held[i] && p->left[i]) {
         if(--p->left[i]==0u) {
@@ -502,8 +532,12 @@ static void urban_port_step(void) {
          * polling function. Firing both would sound doubled/late. */
         if(i==3u && p->rt.ui.song.tracks[3].genre%URBAN_GENRES==12u)
             continue;
+        if((p->recorder.state==UR_REC_RECORD||
+            p->recorder.state==UR_REC_EDIT)&&p->recorder.track==i)
+            continue;
         urban_port_note(i,frame.event[i],frame.glide[i]);
     }
+    urban_port_rec_timeline();
     /* Track 7 is a genuine separate procedural SFX voice. Its
      * deterministic cue score follows the same song clock as drums and
      * obeys track mute/solo. Editing a SFX track never changes bass,
@@ -531,6 +565,12 @@ static void urban_port_poll(void) {
     UrbanHypPort *p=&urban_port;
     uint32_t now=en_bars,steps;
     if(!p->rt.ui.song.playing) {
+        if(p->tape_stop_pending &&
+           (int32_t)(plat_ms()-p->tape_stop_at)>=0) {
+            en_play(0);
+            p->tape_stop_pending=0u;
+            en_fx(p->editor.performance_mask);
+        }
         urban_port_release();
         p->last_sixteenth=now;
         return;
