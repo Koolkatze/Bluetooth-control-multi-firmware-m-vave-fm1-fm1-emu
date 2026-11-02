@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Verify real HYP audio callback runs new acoustic upright string voice,
+# and the original electronic drone is restored for non-jazz tracks.
+expect urbanjazzbass 0
+expect urbanjazzbassnotes 0
+expect urbanjazzbassframes 0
+spin K2 3
+spin K3 1
+expect urbansub 1
+tap PLAY
+wait 7400
+expect playing 1
+expect urbanjazzbass 1
+expect urbanjazzbassnotes >3
+expect urbanjazzbassframes >3000
+shot jazz-upright-bass.png
+tap PLAY
+expect playing 0
+spin K3 -1
+expect urbansub 0
+wait 120
+expect urbanjazzbass 0
