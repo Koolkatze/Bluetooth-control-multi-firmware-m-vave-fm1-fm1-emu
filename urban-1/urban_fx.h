@@ -142,7 +142,7 @@ static UrbanFxPlan urban_fx_plan(const UrbanSong *s) {
          * only the Lo-fi Hip-hop substyle opts into saturation and
          * the longer decaying kick. P_DRIVE is KICK ONLY in HYP. */
         f.kick_decay=(uint8_t)(dg==3u && ds==3u?64u:44u);
-        f.drive=(uint8_t)(dg==3u && ds==3u?34u:17u);
+        f.drive=(uint8_t)(dg==3u && ds==3u?42u:8u);
     }
     if(hg==3u || hg==5u) {
         f.hat_decay=(uint8_t)(18u+hs*4u);
