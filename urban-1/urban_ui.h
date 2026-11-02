@@ -18,10 +18,18 @@ static void urban_ui_select_track(UrbanUI *ui, unsigned index) {
     if(index<URBAN_TRACKS) ui->selected_track=(uint8_t)index;
 }
 static void urban_ui_set_genre(UrbanUI *ui, uint8_t genre, uint8_t subgenre) {
-    ui->genre=genre; ui->subgenre=subgenre;
     if(ui->page==URBAN_PAGE_TRACKS) {
+        /* Track genre must NEVER silently replace global song genre.
+         * Otherwise returning HOME and pressing SAVE used the last
+         * edited track's style for the whole arrangement. */
         UrbanTrack *t=&ui->song.tracks[ui->selected_track];
-        t->genre=genre; t->subgenre=subgenre;
+        t->genre=(uint8_t)(genre%URBAN_GENRES);
+        t->subgenre=(uint8_t)(subgenre%4u);
+    } else {
+        ui->genre=(uint8_t)(genre%URBAN_GENRES);
+        ui->subgenre=(uint8_t)(subgenre%4u);
+        ui->song.subgenre=ui->subgenre;
+        urban_song_set_genre(&ui->song,ui->genre);
     }
 }
 /* Generate is a NEW COMPOSITION, not merely reloading a style preset.
