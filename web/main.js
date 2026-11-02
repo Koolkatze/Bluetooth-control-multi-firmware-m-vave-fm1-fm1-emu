@@ -331,7 +331,7 @@ const installedUpdates = (() => {
 function installedUpdateIsNewer(f) {
   const item = installedUpdates[f.id];
   if (!item?.version) return false;
-  const digits = (value) => /^\\d+(?:\\.\\d+)*$/.test(String(value || ""))
+  const digits = (value) => /^\d+(?:\.\d+)*$/.test(String(value || ""))
     ? String(value).split(".").map(Number) : null;
   const a = digits(item.version), b = digits(f.version);
   if (a && b) {
