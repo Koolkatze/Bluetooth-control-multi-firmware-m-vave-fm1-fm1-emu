@@ -84,6 +84,9 @@ pub struct Shared {
     /// AAudio can disconnect when Android changes from speaker to Bluetooth.
     /// Set by the native error callback; never restart a stream there.
     pub audio_disconnected: AtomicBool,
+    /// Counts real AAudio device callbacks, used to detect silent route
+    /// failures even when the OS never invokes AAudio's error callback.
+    pub audio_callbacks: AtomicU64,
     /// Output device rate changes on Bluetooth/USB routes. The firmware
     /// always synthesizes at 44.1kHz and keeps the same CPU/flash state.
     pub output_sample_rate: AtomicU32,
@@ -99,6 +102,7 @@ impl Shared {
             quit: AtomicBool::new(false), ready: AtomicBool::new(false),
             playing: AtomicBool::new(false), halted: AtomicBool::new(false),
             audio_disconnected: AtomicBool::new(false),
+            audio_callbacks: AtomicU64::new(0),
             output_sample_rate: AtomicU32::new(48_000),
             emulated_ms: AtomicU64::new(0), produced_frames: AtomicU64::new(0),
         })
