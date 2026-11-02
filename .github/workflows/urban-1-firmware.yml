@@ -70,21 +70,21 @@ jobs:
       - name: Apply URBAN-1 and compile actual FM-1 package
         run: |
           cd hyp1
-          ./build.sh --release 0.3.7
-          test -s build/amb-0.3.7.fwsc
-          cp build/amb-0.3.7.fwsc build/URBAN-1-v0.3.7-FX-EDIT-MASTER-TRACKS.fwsc
+          ./build.sh --release 0.3.8
+          test -s build/amb-0.3.8.fwsc
+          cp build/amb-0.3.8.fwsc build/URBAN-1-v0.3.8-FX-EDIT-MASTER-TRACKS.fwsc
       - name: Verify package with HYP-1 updater tests
         run: |
           cd hyp1
           cc -o build/ota_test tests/ota_test.c
-          build/ota_test build/amb-0.3.7.fwsc
+          build/ota_test build/amb-0.3.8.fwsc
           python3 tests/install_test.py
       - name: Publish untested experimental firmware as artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: URBAN-1-v0.3.7-firmware-only
-          path: hyp1/build/URBAN-1-v0.3.7-FX-EDIT-MASTER-TRACKS.fwsc
+          name: URBAN-1-v0.3.8-firmware-only
+          path: hyp1/build/URBAN-1-v0.3.8-FX-EDIT-MASTER-TRACKS.fwsc
           if-no-files-found: error
 
       - name: Publish permanent firmware-only download (GitHub Releases)
@@ -94,17 +94,17 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -eu
-          fw="hyp1/build/URBAN-1-v0.3.7-FX-EDIT-MASTER-TRACKS.fwsc"
+          fw="hyp1/build/URBAN-1-v0.3.8-FX-EDIT-MASTER-TRACKS.fwsc"
           test -s "$fw"
-          (cd hyp1/build && sha256sum URBAN-1-v0.3.7-FX-EDIT-MASTER-TRACKS.fwsc > SHA256SUMS-URBAN1-v0.3.7.txt)
-          tag="urban1-firmware-v0.3.7"
-          notes="URBAN-1 v0.3.7 FIRMWARE ONLY: Hip-hop and underground production overhaul with actual HYP DSP swing: dry break and G-Funk drum timbres, restrained Rhodes/organ/analog lead palette, warmer low-register bass, tighter chords and per-subgenre arrangements and FX, no randomly placed hip-hop drum hits, regression coverage for 128 multi-take variants.  FX button opens a real master mixing/FX editor, ALGORITHM navigates Master plus 8 track pages, PRESET/SELECT changes 4-knob parameter banks, and K1-K4 live-control actual HYP engine settings. EDIT opens a parallel master and 8-track synthesis editor: global tempo/key/scale/complexity/octaves/tuning/motion, bass resonant filter, envelope trigger/attack/decay/amount and full LFO rate/depth/shape/target, lead cutoff/resonance/envelope/slide/accent/wave, pad attack/hold/release/rest, detune, brightness and full LFO, drum lane independent level/tune/decay/kit, noise filter/color/pump. Master FX includes shared delay/time/reverb/room and drive plus actual HYP performance gates, repeat, filter, crusher, tape and fill. Manual edits survive automatic song-section presets; synth controls reflect real parameter values, with safe bounded layer levels. FX/EDIT are overlays and do not replace Song/Track mode; HOME and SEQ exit. Original mute and lock remain available on LFO and ENV in Tracks, GLO remains solo. HYP wet echo/reverb is shared, not independent track sends; Extra 1 and 2 do not currently have separate DSP voices and are marked reserved. Tested on real HYP-1 host engine, native score tests and actual JieLi hardware cross-compiler/package install tests; no APK rebuild; update via existing FM-1 Mobile Firmware > Actualizar todo. GPL-3.0-only experimental firmware; physical FM-1 audio not verified."
+          (cd hyp1/build && sha256sum URBAN-1-v0.3.8-FX-EDIT-MASTER-TRACKS.fwsc > SHA256SUMS-URBAN1-v0.3.8.txt)
+          tag="urban1-firmware-v0.3.8"
+          notes="URBAN-1 v0.3.8 FIRMWARE ONLY: Match Boom Bap, Jazz Rap, G-Funk and Underground kick timbre, gain, drive and decay to Bristol Trip-hop; reserve isolated kick saturation and longer decay for Lo-fi Hip-hop; eliminate all Boom Bap clap lane events and mute its clap gain, including song sections and mixed-genre drum tracks. Also includes the previous hip-hop/underground overhaul and HYP DSP swing: dry break and G-Funk drum timbres, restrained Rhodes/organ/analog lead palette, warmer low-register bass, tighter chords and per-subgenre arrangements and FX, no randomly placed hip-hop drum hits, regression coverage for 128 multi-take variants.  FX button opens a real master mixing/FX editor, ALGORITHM navigates Master plus 8 track pages, PRESET/SELECT changes 4-knob parameter banks, and K1-K4 live-control actual HYP engine settings. EDIT opens a parallel master and 8-track synthesis editor: global tempo/key/scale/complexity/octaves/tuning/motion, bass resonant filter, envelope trigger/attack/decay/amount and full LFO rate/depth/shape/target, lead cutoff/resonance/envelope/slide/accent/wave, pad attack/hold/release/rest, detune, brightness and full LFO, drum lane independent level/tune/decay/kit, noise filter/color/pump. Master FX includes shared delay/time/reverb/room and drive plus actual HYP performance gates, repeat, filter, crusher, tape and fill. Manual edits survive automatic song-section presets; synth controls reflect real parameter values, with safe bounded layer levels. FX/EDIT are overlays and do not replace Song/Track mode; HOME and SEQ exit. Original mute and lock remain available on LFO and ENV in Tracks, GLO remains solo. HYP wet echo/reverb is shared, not independent track sends; Extra 1 and 2 do not currently have separate DSP voices and are marked reserved. Tested on real HYP-1 host engine, native score tests and actual JieLi hardware cross-compiler/package install tests; no APK rebuild; update via existing FM-1 Mobile Firmware > Actualizar todo. GPL-3.0-only experimental firmware; physical FM-1 audio not verified."
           if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
-            gh release upload "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.3.7.txt --repo "$GH_REPO" --clobber
+            gh release upload "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.3.8.txt --repo "$GH_REPO" --clobber
           else
-            gh release create "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.3.7.txt \
+            gh release create "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.3.8.txt \
               --repo "$GH_REPO" --target "$GITHUB_SHA" \
-              --title "URBAN-1 v0.3.7 – Hip-Hop Production Overhaul" \
+              --title "URBAN-1 v0.3.8 – Trip-Hop Kicks and Pure Boom Bap Snares" \
               --notes "$notes" --prerelease
           fi
           gh release view "$tag" --repo "$GH_REPO" --json assets,url \
@@ -119,5 +119,5 @@ jobs:
           # release:published events; this is required for cross-workflow
           # updates of master/web/firmwares.json when GitHub Actions creates
           # the firmware release.
-          gh workflow run sync-urban1-firmware.yml --repo "$GH_REPO" --ref master -f tag=urban1-firmware-v0.3.7
+          gh workflow run sync-urban1-firmware.yml --repo "$GH_REPO" --ref master -f tag=urban1-firmware-v0.3.8
           echo "Triggered updater-catalog sync on master (APK untouched)."
