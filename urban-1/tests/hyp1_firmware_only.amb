@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Firmware-only regression for Android FM-1 emulator:
+# KNOB3 subgenre, 4-bar A-H phrases, LOOP indefinite until manually queued.
+expect urbanmode 1
+expect urbansub 0
+expect urbanphrase 0
+spin K3 1
+expect urbansub 1
+spin K3 1
+expect urbansub 2
+spin K3 -1
+expect urbansub 1
+tap SAVE
+expect urbansub 1
+tap PLAY
+wait 7300
+expect urbancurrent 1
+expect urbanbar 4
+tap ARP
+expect urbanmode 0
+tap REC
+expect urbanmode 0
+wait 7300
+expect urbancurrent 1
+spin K4 1
+expect urbannext 2
+wait 2000
+expect urbancurrent 2
+wait 7300
+expect urbancurrent 2
+tap PLAY
+expect playing 0
+shot firmware-loop-and-song.png
