@@ -166,7 +166,11 @@ static void urban_port_sound_profile(void) {
     brightness+=(int)(human%11u)-5;
     if(brightness<0)brightness=0;
     if(brightness>100)brightness=100;
-    urban_port_set(P_KIT_KICK,d.drum_kit);
+    /* Kick is not tied to the snare's kit. A G-Funk 808 snare can
+     * coexist with the same round Bristol Trip-hop kick as Boom Bap.
+     * Boom Bap's clap lane is separately guaranteed silent. */
+    urban_port_set(P_KIT_KICK,urban_kick_kit(s->tracks[0].genre,
+                                            s->tracks[0].subgenre));
     urban_port_set(P_KIT_SNARE,d.drum_kit);
     urban_port_set(P_KIT_HAT,h.hat_kit);
     urban_port_set(P_KIT_PERC,h.drum_kit);
@@ -191,6 +195,7 @@ static void urban_port_sound_profile(void) {
     urban_port_set(P_DETUNE,fx.pad_detune);
     urban_port_set(P_DL_RATE,fx.bass_lfo_rate);
     urban_port_set(P_DL_DEPTH,fx.bass_lfo_depth);
+    urban_port_set(P_LANE_TUNE(0),0); /* trip-hop reference, editor-overridable */
     urban_port_set(P_LANE_DEC(0),fx.kick_decay);
     urban_port_set(P_LANE_DEC(1),fx.snare_decay);
     urban_port_set(P_LANE_DEC(2),fx.snare_decay);
