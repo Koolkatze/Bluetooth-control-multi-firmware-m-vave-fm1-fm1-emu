@@ -249,6 +249,19 @@ def main() -> None:
     # Expose the actual URBAN-1 song transport to host regression scripts.
     replace_once(root / "host/amb_host.c",
         '    else if (!strcmp(what, "sixteenths"))',
+        '    else if (!strcmp(what, "urbanrecscreen")) got = urban_port.rec_screen;\n'
+        '    else if (!strcmp(what, "urbanrecstate")) got = urban_port.recorder.state;\n'
+        '    else if (!strcmp(what, "urbanrecbars")) got = urban_port.recorder.bars;\n'
+        '    else if (!strcmp(what, "urbanrecquant")) got = urban_port.recorder.quant;\n'
+        '    else if (!strcmp(what, "urbanrecmod")) got = urban_port.recorder.mod_page;\n'
+        '    else if (!strcmp(what, "urbanrectrack")) got = urban_port.recorder.track;\n'
+        '    else if (!strcmp(what, "urbanrecevents")) got = urban_port.recorder.count;\n'
+        '    else if (!strcmp(what, "urbanrecdub")) got = urban_port.recorder.overdub;\n'
+        '    else if (!strcmp(what, "urbanrecposition")) got = urban_port.recorder.position;\n'
+        '    else if (!strcmp(what, "urbantapeon")) got = urban_port.tape_enabled;\n'
+        '    else if (!strcmp(what, "urbantapepending")) got = urban_port.tape_stop_pending;\n'
+        '    else if (!strcmp(what, "urbanleadlforate")) got = urban_port.lead_lfo_rate;\n'
+        '    else if (!strcmp(what, "urbanleadlfodepth")) got = urban_port.lead_lfo_depth;\n'
         '    else if (!strcmp(what, "urbanview")) got = urban_port.editor.view;\n'
         '    else if (!strcmp(what, "urbantarget")) got = urban_port.editor.target;\n'
         '    else if (!strcmp(what, "urbanbank")) got = urban_port.editor.bank;\n'
