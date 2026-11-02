@@ -58,6 +58,47 @@ Bluetooth A2DP añade su propia latencia; para interpretación en directo utiliz
 USB-C/cable. La latencia final requiere medición física con MIDI, DAC y
 firmwares concretos.
 
+## Solución de bloqueo al conectar o desconectar Bluetooth (v0.2.6)
+
+Cuando Android cambia la ruta de salida (altavoz, Bluetooth A2DP/SCO o DAC USB),
+el flujo AAudio anterior puede quedar desconectado. Las versiones anteriores
+solo abrían AAudio al arrancar un firmware, por lo que el audio dejaba de
+avanzar y parecía que el **firmware completo estaba congelado**, cualquiera
+que fuese el firmware seleccionado.
+
+La versión **0.2.6** añade recuperación de audio sin reinicio:
+
+- `AudioDeviceCallback` detecta conexiones/desconexiones de cualquier
+  salida Android y solicita una reapertura asíncrona tras un debounce.
+- El callback de error de AAudio no realiza operaciones peligrosas: marca
+  una señal atómica. Un watchdog comprueba además la actividad real de los
+  callbacks por si Android se queda callado sin notificar un error.
+- Un hilo independiente cierra el flujo AAudio defectuoso y abre otro;
+  **no se reinicia la CPU FM-1**, ni su RAM/flash, ni se cambia la
+  canción/preset/tempo, ni se pierden notas MIDI enviadas al worker.
+- La frecuencia del nuevo dispositivo se comunica al resampler PCM:
+  si pasa de 48 kHz a 44,1 o 96 kHz, ajusta la relación sin reiniciar
+  el firmware.
+- Las desconexiones de un *controlador Bluetooth MIDI (BLE)* se tratan
+  aparte: Android cierra solamente los puertos MIDI que desaparecieron
+  y descarta eventos tardíos de conexiones anteriores.
+
+Si una salida Bluetooth tarda en estar disponible, se realizan reintentos
+controlados y se muestra un estado de reconexión. Sigue siendo posible que
+un dispositivo Android no admita una salida concreta o requiera permisos,
+y la latencia Bluetooth A2DP continúa dependiendo del sistema/dispositivo.
+
+**Importante:** este arreglo está en el motor Android nativo, **no** en un
+`.fwsc`. Se debe instalar la nueva APK (v0.2.6), no basta con pulsar
+«Actualizar todo» en Firmwares. La instalación de builds de desarrollo
+puede requerir conservar previamente copia de los presets porque la firma
+APK de GitHub Actions puede cambiar entre compilaciones.
+
+Las pruebas automatizadas verifican el Rust/JNI, compilación de ambas ABI,
+arranque offline y consistencia del resampler. La conmutación real de
+Bluetooth se debe confirmar con un teléfono y un dispositivo físico; el
+emulador de CI carece de un dispositivo A2DP emparejado.
+
 ## Instalar un APK
 
 1. Entra en [GitHub Actions → Android offline APK](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/actions/workflows/android-offline.yml).
