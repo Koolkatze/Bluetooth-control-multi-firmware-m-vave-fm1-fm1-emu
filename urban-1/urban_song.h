@@ -15,10 +15,13 @@
 #define URBAN_BARS_PER_PHRASE 4u
 #define URBAN_ARRANGEMENT 64
 #define URBAN_GENRES 14u
+#define URBAN_SCALE_COUNT 10u
 
 enum { URBAN_INTRO, URBAN_VERSE_A, URBAN_HOOK, URBAN_VERSE_B,
        URBAN_BRIDGE, URBAN_DROP, URBAN_BREAK, URBAN_OUTRO };
-enum { URBAN_NATURAL_MINOR, URBAN_PHRYGIAN, URBAN_DORIAN, URBAN_HARMONIC_MINOR };
+enum { URBAN_NATURAL_MINOR, URBAN_PHRYGIAN, URBAN_DORIAN, URBAN_HARMONIC_MINOR,
+       URBAN_IONIAN, URBAN_MIXOLYDIAN, URBAN_PHRYGIAN_DOMINANT,
+       URBAN_LYDIAN, URBAN_MELODIC_MINOR, URBAN_LOCRIAN };
 
 typedef struct {
     uint8_t steps[URBAN_STEPS];
@@ -34,6 +37,8 @@ typedef struct {
     uint8_t arrangement_len, key, tempo, current, queued, playing;
     uint32_t seed;
     uint8_t genre, subgenre, scale, complexity, progression[4];
+    uint8_t harmony_variant, melodic_variant, drum_variant, chord_colors[4];
+    uint8_t chord_degrees[4];
     uint8_t song_mode, arrangement_pos, section_bar; /* song_mode=1 AUTO, 0 LOOP */
 } UrbanSong;
 
@@ -62,6 +67,69 @@ static const uint8_t urban_progressions[URBAN_GENRES][4] = {
     {0,8,3,10},  /* trance: i-VI-III-VII */
     {0,5,3,10}   /* liquid: i-iv-III-VII */
 };
+/* Scales are diatonic collections, in semitones from the tonic. Each
+ * genre can choose musically related modes on each Generate press.
+ * Any track can have its own groove/timbre while sharing the song's
+ * selected scale and chord progression.
+ */
+static const uint8_t urban_scale_intervals[URBAN_SCALE_COUNT][7]={
+  {0,2,3,5,7,8,10},   /* Aeolian */
+  {0,1,3,5,7,8,10},   /* Phrygian */
+  {0,2,3,5,7,9,10},   /* Dorian */
+  {0,2,3,5,7,8,11},   /* Harmonic minor */
+  {0,2,4,5,7,9,11},   /* Ionian */
+  {0,2,4,5,7,9,10},   /* Mixolydian */
+  {0,1,4,5,7,8,10},   /* Phrygian dominant */
+  {0,2,4,6,7,9,11},   /* Lydian */
+  {0,2,3,5,7,9,11},   /* Melodic minor */
+  {0,1,3,5,6,8,10}    /* Locrian */
+};
+static const uint8_t urban_genre_mode_options[URBAN_GENRES][4]={
+  {0,0,3,1}, {1,1,9,6}, {0,0,2,3}, {2,0,5,4},
+  {0,2,1,8}, {2,5,4,0}, {1,3,9,6}, {0,2,4,3},
+  {0,2,5,8}, {1,0,6,3}, {0,2,1,5}, {1,0,6,3},
+  {2,0,8,7}, {2,4,5,0}
+};
+/* Scale-DEGREE (not arbitrary chromatic) chord root movements.
+ * 14 genres * 4 alternative 4-chord progressions. Every root belongs
+ * to the selected mode, even on subgenre / tonal shifts.
+ */
+static const uint8_t urban_chord_degrees[URBAN_GENRES][4][4]={
+  {{0,5,6,3},{0,5,2,6},{0,3,5,6},{0,6,5,3}}, /* trap */
+  {{0,1,5,6},{0,1,0,6},{0,4,1,5},{0,5,1,6}}, /* goth */
+  {{0,5,2,6},{0,3,5,2},{0,5,3,4},{0,2,6,5}}, /* sad */
+  {{0,3,2,6},{0,4,3,0},{0,5,3,4},{0,2,3,6}}, /* hiphop */
+  {{0,6,3,5},{0,4,3,6},{0,5,1,6},{0,3,2,4}}, /* triphop */
+  {{0,2,3,6},{0,3,5,2},{0,4,2,3},{0,5,6,2}}, /* underground */
+  {{0,1,3,6},{0,6,1,0},{0,4,1,3},{0,5,1,6}}, /* horror */
+  {{0,6,5,6},{0,3,6,5},{0,5,3,6},{0,4,3,6}}, /* reggaeton */
+  {{0,5,2,6},{0,3,6,4},{0,4,5,6},{0,6,3,5}}, /* dnb */
+  {{0,1,6,5},{0,4,1,6},{0,5,1,3},{0,6,1,4}}, /* dubstep */
+  {{0,0,6,5},{0,4,0,6},{0,1,0,4},{0,6,3,0}}, /* techno */
+  {{0,1,0,6},{0,4,1,0},{0,6,1,4},{0,1,5,6}}, /* hardcore */
+  {{0,5,2,6},{0,3,5,2},{0,4,3,6},{0,6,5,2}}, /* trance */
+  {{0,3,2,6},{0,5,2,3},{0,4,3,6},{0,6,3,2}}  /* liquid */
+};
+/* Companion chord colours: triad, seventh, ninth shell, suspension,
+ * fifth-only power, stacked fourths. Transposition remains diatonic.
+ */
+enum { URBAN_CH_TRIAD, URBAN_CH_SEVENTH, URBAN_CH_NINTH,
+       URBAN_CH_SUS, URBAN_CH_POWER, URBAN_CH_QUARTAL };
+static const uint8_t urban_chord_palettes[URBAN_GENRES][4]={
+  {0,4,1,0},{0,1,4,3},{1,2,0,1},{1,2,0,3},
+  {2,1,3,5},{2,1,5,0},{4,0,3,1},{0,1,3,0},
+  {1,3,4,2},{4,3,1,0},{4,3,5,0},{4,4,3,0},
+  {1,3,2,0},{2,1,3,5}
+};
+/* A tiny fixed-state mixer, not a platform RNG dependency. */
+static uint32_t urban_mix_seed(uint32_t x) {
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    return x ^ (x >> 16);
+}
+
 static uint32_t urban_rng(uint32_t *x) {
     uint32_t a = *x ? *x : 0x6d2b79f5u;
     a ^= a << 13; a ^= a >> 17; a ^= a << 5;
@@ -128,9 +196,26 @@ static void urban_generate_track(UrbanSong *s, unsigned track, uint32_t seed) {
             p->steps[step]=(uint8_t)((urban_rng(&r)%100u)<threshold);
     }
 }
+/* New song != a re-roll of a few notes against one static chord chart.
+ * Compose an entire modal palette, a 4-bar diatonic progression, chord
+ * colours, rhythmic fingerprint and melodic contour from the NEW seed.
+ * The genre, subgenre, user key, tempo and locked tracks are preserved.
+ */
 static void urban_generate_song(UrbanSong *s,uint32_t seed) {
+    uint8_t g=s->genre%URBAN_GENRES;
+    uint32_t r=urban_mix_seed(seed ^ ((uint32_t)g*0x9e3779b9u) ^
+                              ((uint32_t)s->subgenre*0x85ebca6bu));
     s->seed=seed;
-    urban_song_harmony(s);
+    s->harmony_variant=(uint8_t)(urban_rng(&r)%4u);
+    s->scale=urban_genre_mode_options[g][urban_rng(&r)%4u];
+    s->melodic_variant=(uint8_t)(urban_rng(&r)%8u);
+    s->drum_variant=(uint8_t)(urban_rng(&r)%4u);
+    for(unsigned bar=0;bar<4u;bar++) {
+        unsigned deg=urban_chord_degrees[g][s->harmony_variant][bar];
+        s->chord_degrees[bar]=(uint8_t)deg;
+        s->progression[bar]=urban_scale_intervals[s->scale][deg];
+        s->chord_colors[bar]=urban_chord_palettes[g][(bar+s->melodic_variant)%4u];
+    }
     urban_song_arrange(s);
     for(unsigned t=0;t<URBAN_TRACKS;t++)
         urban_generate_track(s,t,seed ^ ((uint32_t)t*0x85ebca6bu));
