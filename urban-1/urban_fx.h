@@ -45,6 +45,25 @@ static UrbanFxPlan urban_fx_plan(const UrbanSong *s) {
     const unsigned g=s->genre%URBAN_GENRES;
     const unsigned sub=s->subgenre%4u;
     const uint8_t *v=urban_fx_genre[g];
+    /* Every track's independent genre/subgenre now owns the audible
+     * processing applied to THAT instrument rather than inheriting an
+     * unrelated preset from the global song genre. The HYP stereo
+     * echo/reverb bus remains shared across voices. */
+    const unsigned pg=s->tracks[4].genre%URBAN_GENRES;
+    const unsigned ps=s->tracks[4].subgenre%4u;
+    const unsigned bg=s->tracks[2].genre%URBAN_GENRES;
+    const unsigned bs=s->tracks[2].subgenre%4u;
+    const unsigned lg=s->tracks[3].genre%URBAN_GENRES;
+    const unsigned ls=s->tracks[3].subgenre%4u;
+    const unsigned dg=s->tracks[0].genre%URBAN_GENRES;
+    const unsigned ds=s->tracks[0].subgenre%4u;
+    const unsigned hg=s->tracks[1].genre%URBAN_GENRES;
+    const unsigned hs=s->tracks[1].subgenre%4u;
+    const unsigned ng=s->tracks[5].genre%URBAN_GENRES;
+    const unsigned ns=s->tracks[5].subgenre%4u;
+    const uint8_t *pv=urban_fx_genre[pg];
+    const uint8_t *bv=urban_fx_genre[bg];
+    const uint8_t *nv=urban_fx_genre[ng];
     UrbanFxPlan f;
     UrbanMixPlan mix=urban_mix_plan(s,s->current,urban_phrase_bar(s));
     /* Substyle variations: e.g. atmospheric vs industrial vs minimal.
@@ -56,40 +75,40 @@ static UrbanFxPlan urban_fx_plan(const UrbanSong *s) {
     f.reverb=(uint8_t)urban_fx_clamp((int)v[1]+wet[sub],8,mix.reverb);
     f.reverb_size=(uint8_t)urban_fx_clamp((int)v[2]+wet[sub],35,90);
     f.drive=(uint8_t)urban_fx_clamp((int)v[3]+drive[sub],8,mix.drive);
-    f.pad_lfo_rate=(uint8_t)((v[4]+sub)%8u);
-    f.pad_lfo_depth=(uint8_t)urban_fx_clamp(v[5]+(int)sub*5,6,60);
-    f.pad_detune=(uint8_t)urban_fx_clamp(v[6]+(int)sub*3,3,28);
+    f.pad_lfo_rate=(uint8_t)((pv[4]+ps)%8u);
+    f.pad_lfo_depth=(uint8_t)urban_fx_clamp(pv[5]+(int)ps*5,6,60);
+    f.pad_detune=(uint8_t)urban_fx_clamp(pv[6]+(int)ps*3,3,28);
     f.pad_attack=(uint8_t)urban_fx_clamp(
-         (g==1u||g==12u||g==13u?32:14)+(int)sub*3,7,50);
+         (pg==1u||pg==12u||pg==13u?32:14)+(int)ps*3,7,50);
     f.pad_release=(uint8_t)urban_fx_clamp(
-         (g==1u||g==2u||g==12u||g==13u?65:38)+(int)sub*4,25,83);
-    f.bass_lfo_rate=(uint8_t)((v[7]+sub)%8u);
-    f.bass_lfo_depth=(uint8_t)urban_fx_clamp(v[8]+(int)sub*4,6,54);
+         (pg==1u||pg==2u||pg==12u||pg==13u?65:38)+(int)ps*4,25,83);
+    f.bass_lfo_rate=(uint8_t)((bv[7]+bs)%8u);
+    f.bass_lfo_depth=(uint8_t)urban_fx_clamp(bv[8]+(int)bs*4,6,54);
     f.bass_resonance=(uint8_t)urban_fx_clamp(
-        g==0u||g==2u||g==7u?19:36+(int)sub*8,16,68);
-    const UrbanLeadTone *lead=&urban_lead_tones[s->tracks[3].genre%URBAN_GENRES];
+        bg==0u||bg==2u||bg==7u?19:36+(int)bs*8,16,68);
+    const UrbanLeadTone *lead=&urban_lead_tones[lg];
     f.lead_env=(uint8_t)urban_fx_clamp((int)lead->filter_env+
-                                                  (int)sub*3,12,82);
+                                                  (int)ls*3,12,82);
     f.lead_decay=(uint8_t)urban_fx_clamp((int)lead->decay+
-                                                  (int)sub*4,12,88);
+                                                  (int)ls*4,12,88);
     f.lead_slide=(uint8_t)urban_fx_clamp((int)lead->slide+
-                                                  (int)sub*4,4,78);
+                                                  (int)ls*4,4,78);
     f.lead_accent=(uint8_t)urban_fx_clamp((int)lead->accent+
-                                                  (int)sub*3,8,78);
+                                                  (int)ls*3,8,78);
     f.lead_resonance=(uint8_t)urban_fx_clamp((int)lead->resonance+
-                                                  (int)sub*3,12,79);
-    f.snare_decay=(uint8_t)urban_fx_clamp(g==8u||g==13u?
-                  31+(int)sub*4:42+(int)sub*3,20,72);
-    f.hat_decay=(uint8_t)urban_fx_clamp(g==0u||g==8u?
-                  19+(int)sub*4:36+(int)sub*3,14,65);
-    f.kick_decay=(uint8_t)urban_fx_clamp(g<=2u||g==9u?
-                  67+(int)sub*3:44+(int)sub*3,30,82);
-    f.perc_decay=(uint8_t)urban_fx_clamp(g==7u?
-                  24+(int)sub*4:40+(int)sub*2,18,62);
-    f.noise_tone=(uint8_t)urban_fx_clamp((int)v[9]+
-                                             (int)sub*5,12,78);
+                                                  (int)ls*3,12,79);
+    f.snare_decay=(uint8_t)urban_fx_clamp(dg==8u||dg==13u?
+                  31+(int)ds*4:42+(int)ds*3,20,72);
+    f.hat_decay=(uint8_t)urban_fx_clamp(hg==0u||hg==8u?
+                  19+(int)hs*4:36+(int)hs*3,14,65);
+    f.kick_decay=(uint8_t)urban_fx_clamp(dg<=2u||dg==9u?
+                  67+(int)ds*3:44+(int)ds*3,30,82);
+    f.perc_decay=(uint8_t)urban_fx_clamp(dg==7u?
+                  24+(int)ds*4:40+(int)ds*2,18,62);
+    f.noise_tone=(uint8_t)urban_fx_clamp((int)nv[9]+
+                                             (int)ns*5,12,78);
     f.noise_pump=(uint8_t)urban_fx_clamp(
-         g==8u||g==10u||g==12u?57+(int)sub*5:26+(int)sub*5,20,80);
+         ng==8u||ng==10u||ng==12u?57+(int)ns*5:26+(int)ns*5,20,80);
     return f;
 }
 #endif
