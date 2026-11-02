@@ -17,6 +17,7 @@
 #include "urban_editor.h"
 #include "urban/urban_drum_sync.h"
 #include "urban/urban_sfx.h"
+#include "urban_trance_clock.h"
 /* The MCU builds HYP as a unity compilation; host builds amb.c as a
  * separate object. Both need the same exported DSP entry points. */
 void urban_sfx_trigger(unsigned type,unsigned level,unsigned length);
@@ -140,6 +141,44 @@ static void urban_port_stage_pattern(void) {
  * sound indexes. Global style owns the FX bus; individual track style
  * owns its synth/kit timbre. These patches are not audio samples.
  */
+/* Pre-render all 4-bar lead parts into a double-buffered DSP-owned grid.
+ * The audio callback can then launch Trance notes at exactly the same
+ * sample clock as HYP drum_fire(), regardless of LCD/WebView workload. */
+static void urban_port_compile_trance(void) {
+    static UrbanTranceGrid stage;
+    const UrbanSong *s=&urban_port.rt.ui.song;
+    const UrbanTrack *lead=&s->tracks[3];
+    memset(&stage,0,sizeof(stage));
+    uint8_t solo=0u;
+    for(unsigned i=0;i<URBAN_TRACKS;i++)solo|=s->tracks[i].solo;
+    stage.enabled=(uint8_t)(lead->genre%URBAN_GENRES==12u &&
+        !lead->muted && (!solo || lead->solo));
+    stage.song_mode=s->song_mode;
+    stage.loop_queued=s->queued%URBAN_SEQUENCES;
+    stage.length=s->arrangement_len;
+    unsigned previous=URBAN_SEQUENCES,phrase=0u;
+    for(unsigned bar=0;bar<s->arrangement_len;bar++) {
+        unsigned seq=s->arrangement[bar]%URBAN_SEQUENCES;
+        if(seq!=previous)phrase=0u;
+        else phrase=(phrase+1u)%URBAN_BARS_PER_PHRASE;
+        stage.sequence[bar]=(uint8_t)seq;
+        stage.bar[bar]=(uint8_t)phrase;
+        previous=seq;
+    }
+    if(stage.enabled) {
+        for(unsigned seq=0u;seq<URBAN_SEQUENCES;seq++)
+        for(unsigned bar=0u;bar<URBAN_BARS_PER_PHRASE;bar++)
+        for(unsigned step=0u;step<URBAN_STEPS;step++) {
+            UrbanNote in={0u,0u,0u};
+            UrbanNote n=urban_lead_score(s,seq,bar,step,in);
+            if(n.velocity) {
+                stage.notes[seq][bar][step].note=n.note;
+                stage.notes[seq][bar][step].gate=n.gate;
+            }
+        }
+    }
+    urban_trance_publish(&stage);
+}
 static void urban_port_sound_profile(void) {
     UrbanSong *s=&urban_port.rt.ui.song;
     UrbanStylePatch overall=urban_style_patch(s->genre,s->subgenre);
@@ -238,6 +277,7 @@ static void urban_port_sound_profile(void) {
     urban_port_set(P_PE_REL,fx.pad_release);
     /* Noise fader belongs to the same headroom-controlled mix as the
      * other layers, not a separately unbounded atmospheric constant. */
+    urban_port_compile_trance();
 }
 /* Song sections are actually orchestrated: the intro/bridge/break strip
  * layers, a hook raises melodic energy, and the drop restores full drums.
@@ -385,8 +425,13 @@ static void urban_port_step(void) {
      * still stage within the safe window instead of replaying old bars. */
     if(urban_drum_should_stage(en_bars,p->staged_for_bar))
         urban_port_stage_pattern();
-    for(i=2;i<=3;i++)
+    for(i=2;i<=3;i++) {
+        /* The Trance lead is emitted by the DSP tick, not this async UI
+         * polling function. Firing both would sound doubled/late. */
+        if(i==3u && p->rt.ui.song.tracks[3].genre%URBAN_GENRES==12u)
+            continue;
         urban_port_note(i,frame.event[i],frame.glide[i]);
+    }
     /* Track 7 is a genuine separate procedural SFX voice. Its
      * deterministic cue score follows the same song clock as drums and
      * obeys track mute/solo. Editing a SFX track never changes bass,
@@ -470,6 +515,7 @@ static void urban_port_play(void) {
 }
 static void urban_port_queue(int n) {
     urban_ui_next_knob(&urban_port.rt.ui,n);
+    urban_port_compile_trance(); /* queued Loop changes at next audio bar */
     urban_port_stage_pattern();
 }
 static void urban_port_set_mode(int automatic) {
@@ -583,6 +629,7 @@ static void urban_port_song_key(int delta) {
     for(unsigned i=0;i<URBAN_TRACKS;i++)
         if(!s->tracks[i].locked)
             urban_runtime_refresh_track(&p->rt,i);
+    urban_port_compile_trance();
 }
 /* View 0 is the existing transport; FX and EDIT are overlays, not
  * extra song modes. ALGORITHM selects MASTER / track, PRESET and SELECT
