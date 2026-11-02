@@ -143,9 +143,6 @@ static void urban_drum_lanes(const UrbanSong *s,unsigned section,unsigned sectio
     const UrbanTrack *d=&s->tracks[0],*h=&s->tracks[1];
     UrbanGroove g=urban_groove(d->genre,d->subgenre);
     UrbanGroove hg=urban_groove(h->genre,h->subgenre);
-    uint32_t r=d->seq[section%URBAN_SEQUENCES].seed ^
-               (h->seq[section%URBAN_SEQUENCES].seed*0x9e3779b9u) ^
-               ((section_bar/4u)*0x7f4a7c15u);
     out[0]=g.kick; out[1]=g.snare; out[2]=g.clap;
     out[3]=hg.hat; out[4]=hg.open; out[5]=hg.perc;
     /* NO universal random kick/snare mutation: that previously made
