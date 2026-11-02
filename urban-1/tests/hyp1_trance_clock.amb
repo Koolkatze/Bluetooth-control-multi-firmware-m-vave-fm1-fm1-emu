@@ -15,6 +15,7 @@ wait 8500
 expect playing 1
 expect urbantranceonsets >0
 expect urbantrancelaststep >0
+expect urbantranceoffgrid 0
 shot trance-synchronized-hook.png
 tap PLAY
 expect playing 0
