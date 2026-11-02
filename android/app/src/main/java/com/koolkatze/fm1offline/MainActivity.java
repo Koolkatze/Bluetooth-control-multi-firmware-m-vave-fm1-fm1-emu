@@ -599,10 +599,15 @@ public final class MainActivity extends Activity {
         ui.postDelayed(reopenAudioRoute, 650);
     }
 
+    // Java rejects directly capturing a lambda field from its own initializer.
+    private void retryAudioRouteAfter(long delayMs) {
+        ui.postDelayed(reopenAudioRoute, delayMs);
+    }
+
     private final Runnable reopenAudioRoute = () -> {
         if (shuttingDown || !nativeActive || !NativeSynth.AVAILABLE) return;
         if (!recoveringAudio.compareAndSet(false, true)) {
-            ui.postDelayed(reopenAudioRoute, 550);
+            retryAudioRouteAfter(550);
             return;
         }
         lastAudioRecoveryAttemptMs = android.os.SystemClock.uptimeMillis();
@@ -632,8 +637,7 @@ public final class MainActivity extends Activity {
                     updateStatus("Reconectando audio… " + response);
                     // Bluetooth can take several seconds to finish negotiating.
                     if (audioRecoveryFailures <= 6)
-                        ui.postDelayed(reopenAudioRoute,
-                                Math.min(3000, 500 * audioRecoveryFailures));
+                        retryAudioRouteAfter(Math.min(3000, 500 * audioRecoveryFailures));
                 }
             });
         });
