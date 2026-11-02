@@ -146,6 +146,11 @@ static void urban_runtime_tick(UrbanRuntime *rt, UrbanMidiFrame *frame) {
                                              frame->event[3]);
         for(unsigned i=2u;i<URBAN_TRACKS;i++) {
             UrbanNote *n=&frame->event[i];
+            /* Lead 3 is a completed, beat-quantized diatonic score.
+             * Legacy four-bar ornaments used to RESURRECT notes on
+             * intentionally silent steps and to re-harmonize the score a
+             * second time, making the melody seem out of rhythm. */
+            if(i==3u)continue;
             urban_runtime_bar_variation(s,i,s->current,bar,t->step,
                                          n,&frame->glide[i]);
             if(n->velocity)
