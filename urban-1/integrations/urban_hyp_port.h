@@ -1306,6 +1306,7 @@ static void urban_port_editor_value_text(int id,char buf[24]) {
     else urban_port_copy_text(buf,"--");
 }
 
+static void urban_port_editor_value_text(int id,char buf[24]);
 static void urban_port_rec_upper(uint16_t orange,uint16_t dim) {
     const UrbanRecorder *r=&urban_port.recorder;
     char label[24]="REC MIDI  0/8 BARS";
@@ -1316,8 +1317,7 @@ static void urban_port_rec_upper(uint16_t orange,uint16_t dim) {
      * Shows 1 bar at a time on 32nd slots, up to 12 MIDI pitches. */
     unsigned current_bar=r->state==UR_REC_EDIT?
                 (r->edit_cursor/32u):(r->position/32u);
-    unsigned first=(r->state==UR_REC_EDIT?
-                 r->edit_note:r->edit_note)/12u*12u;
+    unsigned first=(unsigned)(r->edit_note/12u)*12u;
     if(first>84u)first=84u;
     for(unsigned col=0u;col<32u;col++) {
         uint16_t bg=(col%8u==0u)?RGB(45,51,66):RGB(25,30,41);
@@ -1345,7 +1345,7 @@ static void urban_port_rec_upper(uint16_t orange,uint16_t dim) {
 }
 static void urban_port_rec_lower(uint16_t orange,uint16_t dim) {
     const UrbanRecorder *r=&urban_port.recorder;
-    char state[24]="REC ARM";
+    const char *state="REC ARM";
     if(r->state==UR_REC_RECORD)
         state=r->overdub?"REC OVERDUB":"REC FIRST PASS";
     else if(r->state==UR_REC_EDIT)state="MIDI EDIT / LOOP";
@@ -1371,7 +1371,7 @@ static void urban_port_rec_lower(uint16_t orange,uint16_t dim) {
         }
     }
     if(r->state==UR_REC_ARM) {
-        char info[24]="INST CHORDS  BARS 4";
+        const char *info="INST CHORDS  BARS 4";
         if(r->track==2u)info="INST BASS  BARS 4";
         else if(r->track==3u)info="INST LEAD  BARS 4";
         /* Print value separately, no dynamic text allocation. */
