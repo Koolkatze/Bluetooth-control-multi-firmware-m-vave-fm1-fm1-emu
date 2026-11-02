@@ -24,9 +24,9 @@ static const uint8_t urban_fx_genre[URBAN_GENRES][11]={
     {24,36,61,25, 2,15, 8, 2,12,28, 1}, /* trap, pluck and wide tails */
     {42,60,82,28, 1,31,14, 1,25,17, 3}, /* gothic dark distant */
     {36,61,81,13, 1,16, 5, 1, 9,15, 4}, /* sad piano */
-    {20,24,44,17, 3,16, 4, 2, 9,27, 1}, /* dry boom-bap */
+    {12,17,42,12, 2, 8, 4, 1, 6,20, 1}, /* muted hip-hop / Rhodes */
     {45,60,85,17, 2,22,12, 2,18,17, 3}, /* dub trip-hop */
-    {30,37,61,26, 3,25, 6, 3,22,34, 1}, /* underground jazz */
+    {15,22,52,16, 2,10, 4, 2, 9,22, 1}, /* dry underground breaks */
     {43,59,78,37, 1,28,10, 2,20,36, 4}, /* horrorcore */
     {23,31,49,19, 3,12, 6, 3,14,44, 1}, /* perreo punchy */
     {24,27,48,39, 3,18, 9, 4,29,48, 0}, /* neuro/DnB */
@@ -109,6 +109,42 @@ static UrbanFxPlan urban_fx_plan(const UrbanSong *s) {
                                              (int)ns*5,12,78);
     f.noise_pump=(uint8_t)urban_fx_clamp(
          ng==8u||ng==10u||ng==12u?57+(int)ns*5:26+(int)ns*5,20,80);
+    /* The synthetic HYP patch is very different from a vintage sampled
+     * record. Soften its envelopes/filter movement for hip-hop, while
+     * allowing a single more legato PWM lead specifically in G-Funk. */
+    if(g==3u || g==5u) {
+        static const uint8_t rev[4]={13,19,19,26};
+        static const uint8_t del[4]={ 8,12,17,14};
+        f.reverb=(uint8_t)urban_fx_clamp(rev[sub],8,mix.reverb);
+        f.echo=(uint8_t)urban_fx_clamp(del[sub],8,mix.echo);
+        f.drive=(uint8_t)urban_fx_clamp(sub==3u?8:sub==2u?15:12,8,mix.drive);
+        f.reverb_size=(uint8_t)(sub==3u?58u:42u);
+    }
+    if(pg==3u || pg==5u) {
+        f.pad_lfo_depth=(uint8_t)(8u+ps*3u);
+        f.pad_detune=(uint8_t)(3u+ps*2u);
+        f.pad_attack=(uint8_t)(ps==3u?12u:7u);
+        f.pad_release=(uint8_t)(ps==2u?63u:ps==3u?70u:50u);
+    }
+    if(bg==3u || bg==5u) {
+        f.bass_lfo_depth=(uint8_t)(6u+bs*2u);
+        f.bass_resonance=(uint8_t)(16u+bs*2u);
+    }
+    if(lg==3u || lg==5u) {
+        f.lead_env=(uint8_t)(15u+ls*3u);
+        f.lead_decay=(uint8_t)(ls==2u?76u:58u);
+        f.lead_slide=(uint8_t)(ls==2u?62u:6u);
+        f.lead_accent=(uint8_t)(14u+ls*3u);
+        f.lead_resonance=(uint8_t)(14u+ls*2u);
+    }
+    if(dg==3u || dg==5u) {
+        f.snare_decay=(uint8_t)(31u+ds*3u);
+        f.kick_decay=(uint8_t)(57u+ds*4u);
+    }
+    if(hg==3u || hg==5u) {
+        f.hat_decay=(uint8_t)(18u+hs*4u);
+        f.perc_decay=(uint8_t)(24u+hs*3u);
+    }
     return f;
 }
 #endif
