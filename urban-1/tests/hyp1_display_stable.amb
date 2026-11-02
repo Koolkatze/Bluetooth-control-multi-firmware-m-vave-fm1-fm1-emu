@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Render regression for the real HYP-1 host LCD simulator:
+# stopped pages must not change at all when the UI has no new state.
+expect playing 0
+shot urban-idle-a.png
+wait 600
+shot urban-idle-b.png
+tap SEQ
+expect urbanpage 1
+shot urban-tracks-a.png
+wait 600
+shot urban-tracks-b.png
+tap HOME
+expect urbanpage 0
+shot urban-song-return.png
