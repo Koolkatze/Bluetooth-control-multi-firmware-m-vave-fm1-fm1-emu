@@ -70,8 +70,8 @@ static void check_14_genres_and_instruments(void) {
                 for(unsigned k=0;k<n;k++) {
                     unsigned pc=(tones[k]+120u-rt.ui.song.key)%12u;
                     unsigned in_scale=0;
-                    for(unsigned d=0;d<7;d++)
-                        if(pc==urban_scale_intervals[rt.ui.song.scale][d])
+                    for(unsigned d=0;d<urban_scale_size(rt.ui.song.scale);d++)
+                        if(pc==urban_scale_pc(rt.ui.song.scale,d))
                             in_scale=1;
                     assert(in_scale);
                 }
