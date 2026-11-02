@@ -35,7 +35,7 @@ if (SCREEN_ONLY) document.documentElement.setAttribute("data-screen-only", "");
 const stored = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const store = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
 
-const catalog = await (await fetch("firmwares.json")).json();
+const catalog = await (await fetch("firmwares.json", { cache: "no-store" })).json();
 const byId = new Map(catalog.firmwares.map((f) => [f.id, f]));
 // the FM-1 Firmware Hub's ids too, where they differ (its cards link here with ?fw=<its id>)
 for (const f of catalog.firmwares) if (f.hub && !byId.has(f.hub)) byId.set(f.hub, f);
