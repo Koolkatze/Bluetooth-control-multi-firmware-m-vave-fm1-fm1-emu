@@ -16,8 +16,11 @@ static void test_style(unsigned genre,unsigned sub) {
             s.tracks[i].subgenre=(uint8_t)sub;
         }
         urban_generate_song(&s,0x9e37u+take*2917u);
+        UrbanInstrumentProgram b=urban_instrument_program(&s,2u,URBAN_HOOK);
         UrbanInstrumentProgram c=urban_instrument_program(&s,4u,URBAN_HOOK);
         UrbanInstrumentProgram l=urban_instrument_program(&s,3u,URBAN_HOOK);
+        assert((genre==2u && b.jazz_bass==0u) ||
+               (genre!=2u && b.jazz_bass>=1u && b.jazz_bass<=2u));
         assert(c.jazz_voice==1u||c.jazz_voice==2u||
                (genre==13u&&c.jazz_voice==4u));
         assert(l.jazz_voice>=3u && l.jazz_voice<=5u);
@@ -25,8 +28,10 @@ static void test_style(unsigned genre,unsigned sub) {
         heard_chords[c.jazz_voice]++;
         heard_leads[l.jazz_voice]++;
         /* A non-jazz/ambient track override MUST NOT borrow these sounds. */
+        s.tracks[2].genre=1u;s.tracks[2].subgenre=3u;
         s.tracks[3].genre=1u;s.tracks[3].subgenre=3u;
         s.tracks[4].genre=1u;s.tracks[4].subgenre=3u;
+        assert(!urban_instrument_program(&s,2u,URBAN_HOOK).jazz_bass);
         assert(!urban_instrument_program(&s,3u,URBAN_HOOK).jazz_voice);
         assert(!urban_instrument_program(&s,4u,URBAN_HOOK).jazz_voice);
     }
@@ -36,6 +41,6 @@ static void test_style(unsigned genre,unsigned sub) {
 int main(void) {
     test_style(3u,1u);test_style(5u,1u);
     test_style(13u,2u);test_style(2u,1u);
-    puts("URBAN-1: 512 jazz instrument assignments; 5 modelled DSP programs, native ambient isolation PASS");
+    puts("URBAN-1: 512 jazz instrument assignments; new acoustic bass plus 5 modelled DSP programs, native ambient isolation PASS");
     return 0;
 }
