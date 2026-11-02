@@ -31,13 +31,13 @@ static const UrbanBassGrammar urban_bass_profiles[URBAN_GENRES][4]={
   {0x0809,8,0,74,4,0},{0x0009,12,0,80,16,4}},
  /* Hip-hop: deeper, steadier bass notes with no incidental octave kicks.
   * Boom-bap low fifth, jazz approach, G-Funk syncopation, lo-fi sustain. */
- {{0x0489,7,0,83,0,0},{0x0489,6,0,83,0,2},
+ {{0x0489,7,0,83,0,0},{0x0489,8,0,83,0,2},
   {0x0889,8,0,90,12,3},{0x0109,12,0,75,0,4}},
  /* Trip-hop: Bristol / Downtempo / Abstract / Dub */
  {{0x0441,8,0,79,0,4},{0x0109,11,0,74,0,4},
   {0x0a21,4,0,88,9,2},{0x0441,12,0,81,22,4}},
  /* Underground: low sample-loop foundations, deliberate passing notes. */
- {{0x0489,7,0,82,0,0},{0x0489,6,0,83,0,2},
+ {{0x0489,7,0,82,0,0},{0x0489,8,0,83,0,2},
   {0x0809,10,0,79,0,4},{0x048b,6,0,91,0,3}},
  /* Horrorcore: Memphis / Cinematic / Industrial / Dark */
  {{0x0481,10,0,96,30,4},{0x0101,16,0,75,0,4},
@@ -62,7 +62,7 @@ static const UrbanBassGrammar urban_bass_profiles[URBAN_GENRES][4]={
   {0x5555,2,1,104,13,5},{0x4444,3,1,101,0,0}},
  /* Liquid Jungle: Soulful / Atmos / Jazz / Deep */
  {{0x2a49,6,1,83,0,2},{0x0101,15,0,75,0,4},
-  {0x2689,5,1,89,0,2},{0x0109,12,0,77,0,4}}
+  {0x2689,8,1,89,0,2},{0x0109,12,0,77,0,4}}
 };
 /* A genuinely authored 4-bar bass rhythm for each named substyle.
  * Four masks per style = 224 distinct bar positions, not the old
@@ -89,6 +89,14 @@ static uint16_t urban_bass_bar_mask(const UrbanTrack *t,unsigned sec,
                                     unsigned bar) {
     const unsigned g=t->genre%URBAN_GENRES,sub=t->subgenre%4u;
     uint16_t mask=urban_bass_fourbar[g][sub][bar%4u];
+    /* Jazz Rap, Jazz Underground and Jazz Liquid: half-time walking
+     * upright bass. Exactly 2 attacks per ordinary 4/4 bar (beats 1
+     * and 3 instead of every quarter), not a slower song clock.
+     * Apply on the ACTUAL four-bar score so neither SAVE nor the
+     * legacy one-bar template can reintroduce frantic bass notes. */
+    if((g==3u && sub==1u)||(g==5u && sub==1u)||
+       (g==13u && sub==2u))
+        mask&=0x0101u;
     if(sec==URBAN_INTRO || sec==URBAN_OUTRO) {
         if(g==12u || g==10u)mask&=0x4444u;
         else mask&=0x0101u;
@@ -239,7 +247,13 @@ static UrbanBassStep urban_bass_bar_score(const UrbanSong *s,
         static const uint8_t walk[4][4]={
             {0,2,4,5},{0,1,2,4},{4,5,2,1},{0,2,4,6}
         };
-        degree=walk[bar%4u][(step/4u)%4u];
+        /* Bass note phrases also advance at half-time in jazz:
+         * two melodic notes per bar instead of skipping alternating
+         * walking notes when the onsets are slowed down. */
+        unsigned jazz_half=(t->genre==3u&&sub==1u)||
+                           (t->genre==5u&&sub==1u)||
+                           (t->genre==13u&&sub==2u);
+        degree=walk[bar%4u][(step/(jazz_half?8u:4u))%4u];
     } else if(g.motion==3u) {
         degree=(step%4u==2u || (bar==3u && step>=12u))?4u:0u;
     } else if(g.motion==5u) {
