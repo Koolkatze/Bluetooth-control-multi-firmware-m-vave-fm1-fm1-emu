@@ -22,6 +22,8 @@ typedef struct {
     uint8_t previous_chord[4], previous_chord_count;
     uint8_t overridden[URBAN_TRACKS];
     uint8_t bank;
+    uint8_t ui_drawn;
+    uint32_t ui_signature;
 } UrbanHypPort;
 static UrbanHypPort urban_port;
 
@@ -538,70 +540,124 @@ static void urban_port_input(void) {
 static const char *const urban_section_name[URBAN_SEQUENCES] = {
     "INTRO","VERSE 1","HOOK","VERSE 2","BRIDGE","DROP","BREAK","OUTRO"
 };
+/* Never erase the real LCD between frames. draw_text_box() uses BLACK
+ * opaque backing and lcd_sync() on EVERY label; previously URBAN-1 also
+ * did a full 240x240 lcd_fill every frame. On the Android simulator this
+ * exposed partially cleared regions as ugly black flicker. Instead build
+ * two off-screen 240px-wide canvas bands (144 + 96; <= CV_MAX) and blit
+ * each only when the information on screen actually changes.
+ */
+static uint32_t urban_port_screen_signature(const UrbanHypPort *p) {
+    const UrbanSong *s=&p->rt.ui.song;
+    const UrbanTrack *t=&s->tracks[p->rt.ui.selected_track];
+    uint32_t v=0x811c9dc5u;
+#define UI_ACC(x) v=(v ^ ((uint32_t)(x) + 0x9e3779b9u))*16777619u
+    UI_ACC(p->rt.ui.page);
+    UI_ACC(s->playing);UI_ACC(s->song_mode);
+    UI_ACC(s->current);UI_ACC(s->queued);
+    UI_ACC(s->arrangement_pos);UI_ACC(s->section_bar);
+    UI_ACC(p->rt.ui.selected_track);
+    UI_ACC(p->rt.ui.genre);UI_ACC(s->genre);UI_ACC(s->subgenre);
+    UI_ACC(s->key);UI_ACC(s->scale);UI_ACC(s->complexity);
+    UI_ACC(p->rt.ui.generation_serial);
+    UI_ACC(t->genre);UI_ACC(t->subgenre);
+    UI_ACC(t->locked);UI_ACC(t->muted);UI_ACC(t->solo);
+#undef UI_ACC
+    return v;
+}
+static void urban_port_screen_text(int32_t y,const felucca_font_t *font,
+                                    const char *str,uint16_t colour) {
+    int32_t x=(240-text_w(font,str))/2;
+    cv_text(x<0?0:x,y,font,str,colour);
+}
 static void urban_port_frame(void) {
     UrbanHypPort *p=&urban_port;
     UrbanSong *s=&p->rt.ui.song;
-    char seq[20]="NOW A   NEXT A";
-    char bar[12]="BAR 01/56";
-    char phrase[20]="BAR 1/4 (LOOP)";
-    char trnum[14]="TRACK 1/8";
-    char take[20]="STOPPED   TAKE 00";
-    unsigned tr;
     urban_port_input();
-    tr=p->rt.ui.selected_track;
-    if(s->playing) {
-        take[0]='P';take[1]='L';take[2]='A';take[3]='Y';
-        take[4]='I';take[5]='N';take[6]='G';
-    }
-    take[15]=(char)('0'+(p->rt.ui.generation_serial/10u)%10u);
-    take[16]=(char)('0'+p->rt.ui.generation_serial%10u);
-    seq[4]=(char)('A'+s->current);
-    seq[13]=(char)('A'+s->queued);
-    phrase[4]=(char)('1'+urban_phrase_bar(s));
-    unsigned n=(unsigned)s->arrangement_pos+1u;
-    bar[4]=(char)('0'+n/10u); bar[5]=(char)('0'+n%10u);
-    trnum[6]=(char)('1'+tr);
-    lcd_fill(0,0,240,240,RGB(14,17,25));
-    draw_text_box(0,9,240,&FONT_B,"URBAN-1",RGB(255,165,110),1);
-    if(p->rt.ui.page==URBAN_PAGE_SONG) {
-        draw_text_box(0,42,240,&FONT_S,
-              s->song_mode?"SONG MODE: 4-BAR PHRASES":"LOOP MODE: REPEAT A-H",C_WHITE,1);
-        draw_text_box(0,66,240,&FONT_S,
-              s->song_mode?bar:seq,RGB(255,165,110),1);
-        draw_text_box(0,89,240,&FONT_S,urban_section_name[s->current],C_WHITE,1);
-        draw_text_box(0,107,240,&FONT_S,
-              urban_genre_name[p->rt.ui.genre],C_WHITE,1);
-        draw_text_box(0,128,240,&FONT_S,
-              urban_style_name(s->genre,s->subgenre),C_WHITE,1);
-        draw_text_box(0,148,240,&FONT_S,
-              take,RGB(255,165,110),1);
-        if(s->song_mode) {
-            lcd_fill(15,168,210,5,RGB(49,55,70));
-            lcd_fill(15,168,(int)(210u*n/s->arrangement_len),5,RGB(255,165,110));
-        } else {
-            draw_text_box(0,169,240,&FONT_S,phrase,RGB(255,165,110),1);
+    uint32_t sig=urban_port_screen_signature(p);
+    if(!p->ui_drawn || sig!=p->ui_signature) {
+        static const uint16_t background=RGB(14,17,25);
+        static const uint16_t orange=RGB(255,165,110);
+        static const uint16_t dim=RGB(175,185,195);
+        static const char *const section_name[URBAN_SEQUENCES]={
+            "INTRO","VERSE 1","HOOK","VERSE 2",
+            "BRIDGE","DROP","BREAK","OUTRO"
+        };
+        uint32_t pos=(uint32_t)s->arrangement_pos+1u;
+        char seq[20]="NOW A   NEXT A";
+        char bar[12]="BAR 01/56";
+        char phrase[20]="BAR 1/4 (LOOP)";
+        char track[14]="TRACK 1/8";
+        char take[20]="STOPPED   TAKE 00";
+        seq[4]=(char)('A'+s->current);
+        seq[13]=(char)('A'+s->queued);
+        phrase[4]=(char)('1'+urban_phrase_bar(s));
+        bar[4]=(char)('0'+(pos/10u)%10u);
+        bar[5]=(char)('0'+pos%10u);
+        track[6]=(char)('1'+p->rt.ui.selected_track);
+        if(s->playing) {
+            take[0]='P';take[1]='L';take[2]='A';take[3]='Y';
+            take[4]='I';take[5]='N';take[6]='G';
         }
-        draw_text_box(0,186,240,&FONT_S,
-                      s->song_mode?"K2 GENRE  K3 SUBGENRE":"K4 NEXT A-H  K3 SUB",C_WHITE,1);
-        draw_text_box(0,204,240,&FONT_S,
-                      s->song_mode?"SAVE GENERATE  ARP LOOP":"ARP AUTO  SAVE GENERATE",C_WHITE,1);
-        draw_text_box(0,223,240,&FONT_S,"SEQ TRACKS   SELECT KEY",C_WHITE,1);
-    } else {
-        draw_text_box(0,41,240,&FONT_S,trnum,RGB(255,165,110),1);
-        draw_text_box(0,65,240,&FONT_S,urban_track_name[tr],C_WHITE,1);
-        draw_text_box(0,89,240,&FONT_S,
-                      urban_genre_name[s->tracks[tr].genre],C_WHITE,1);
-        draw_text_box(0,110,240,&FONT_S,
-                 urban_style_name(s->tracks[tr].genre,
-                                  s->tracks[tr].subgenre),C_WHITE,1);
-        draw_text_box(0,136,240,&FONT_S,
-                 s->tracks[tr].locked?"LOCKED - EDIT":
-                 s->tracks[tr].muted?"MUTED - FX":
-                 s->tracks[tr].solo?"SOLO - GLO":"READY",RGB(255,165,110),1);
-        draw_text_box(0,158,240,&FONT_S,"A-H INDEPENDENT",C_WHITE,1);
-        draw_text_box(0,180,240,&FONT_S,"SAVE: REGENERATE TRACK",C_WHITE,1);
-        draw_text_box(0,201,240,&FONT_S,"K1 TRACK  K2 GENRE",C_WHITE,1);
-        draw_text_box(0,223,240,&FONT_S,"HOME: SONG   EDIT: LOCK",C_WHITE,1);
+        take[15]=(char)('0'+(p->rt.ui.generation_serial/10u)%10u);
+        take[16]=(char)('0'+p->rt.ui.generation_serial%10u);
+
+        /* Upper off-screen band: one DMA, no exposed intermediate black. */
+        cv_begin(240,144,background);
+        urban_port_screen_text(9,&FONT_B,"URBAN-1",orange);
+        if(p->rt.ui.page==URBAN_PAGE_SONG) {
+            urban_port_screen_text(42,&FONT_S,
+                s->song_mode?"SONG MODE: 4-BAR PHRASES":"LOOP MODE: REPEAT A-H",dim);
+            urban_port_screen_text(66,&FONT_S,
+                s->song_mode?bar:seq,orange);
+            urban_port_screen_text(89,&FONT_S,section_name[s->current],C_WHITE);
+            urban_port_screen_text(107,&FONT_S,
+                urban_genre_name[p->rt.ui.genre],C_WHITE);
+            urban_port_screen_text(128,&FONT_S,
+                urban_style_name(s->genre,s->subgenre),dim);
+        } else {
+            unsigned tr=p->rt.ui.selected_track;
+            const UrbanTrack *t=&s->tracks[tr];
+            urban_port_screen_text(41,&FONT_S,track,orange);
+            urban_port_screen_text(65,&FONT_S,urban_track_name[tr],C_WHITE);
+            urban_port_screen_text(88,&FONT_S,
+                urban_genre_name[t->genre],C_WHITE);
+            urban_port_screen_text(108,&FONT_S,
+                urban_style_name(t->genre,t->subgenre),dim);
+            urban_port_screen_text(126,&FONT_S,
+                t->locked?"LOCKED - EDIT":
+                t->muted?"MUTED - FX":
+                t->solo?"SOLO - GLO":"READY",orange);
+        }
+        cv_blit(0,0);
+
+        /* Lower band uses another off-screen canvas. Never call lcd_fill
+         * after sending the upper band: the previous content stays valid
+         * until this second DMA is ready. */
+        cv_begin(240,96,background);
+        if(p->rt.ui.page==URBAN_PAGE_SONG) {
+            urban_port_screen_text(4,&FONT_S,take,orange);
+            if(s->song_mode) {
+                cv_rect(15,24,210,5,RGB(49,55,70));
+                cv_rect(15,24,(int)(210u*pos/s->arrangement_len),5,orange);
+            } else {
+                urban_port_screen_text(25,&FONT_S,phrase,orange);
+            }
+            urban_port_screen_text(42,&FONT_S,
+                s->song_mode?"K2 GENRE  K3 SUBGENRE":"K4 NEXT A-H  K3 SUB",C_WHITE);
+            urban_port_screen_text(60,&FONT_S,
+                s->song_mode?"SAVE GENERATE  ARP LOOP":"ARP AUTO  SAVE GENERATE",C_WHITE);
+            urban_port_screen_text(79,&FONT_S,"SEQ TRACKS   SELECT KEY",dim);
+        } else {
+            urban_port_screen_text(14,&FONT_S,"A-H INDEPENDENT",C_WHITE);
+            urban_port_screen_text(36,&FONT_S,"SAVE: REGENERATE TRACK",dim);
+            urban_port_screen_text(57,&FONT_S,"K1 TRACK  K2 GENRE",C_WHITE);
+            urban_port_screen_text(79,&FONT_S,"HOME: SONG   EDIT: LOCK",dim);
+        }
+        cv_blit(0,144);
+        lcd_sync();
+        p->ui_signature=sig;
+        p->ui_drawn=1u;
     }
     plat_leds((s->playing?1u<<B_PLAY:0u)|
               (p->rt.ui.page==URBAN_PAGE_SONG?
