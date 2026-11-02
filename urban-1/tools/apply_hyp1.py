@@ -109,8 +109,13 @@ def main() -> None:
         'static void render_acid(uint32_t n)\n{\n'
         '    if(urban_jazz_lead_mode)return; /* use modelled flute/mallets */')
     replace_once(dsp,
+        'static void render_bass(uint32_t n)\n{',
+        'static void render_bass(uint32_t n)\n{\n'
+        '    if(urban_jazz_bass_mode)return; /* no electronic DRONE in jazz */')
+    replace_once(dsp,
         '    render_pad(n);\n    render_bass(n);',
-        '    urban_jazz_apply();\n    render_pad(n);\n    render_bass(n);')
+        '    urban_jazz_apply();\n    render_pad(n);\n    render_bass(n);\n'
+        '    urban_jazz_bass_render(n);')
     replace_once(dsp,
         '    render_acid(n);\n    render_noise(n);',
         '    render_acid(n);\n    urban_jazz_render(n);\n    render_noise(n);')
@@ -201,6 +206,9 @@ def main() -> None:
         '    else if (!strcmp(what, "urbantranceonsets"))')
     replace_once(root / "host/amb_host.c",
         '    else if (!strcmp(what, "urbanpianorolls"))',
+        '    else if (!strcmp(what, "urbanjazzbass")) got = urban_jazz_bass_mode;\n'
+        '    else if (!strcmp(what, "urbanjazzbassnotes")) got = urban_jazz_bass_onsets;\n'
+        '    else if (!strcmp(what, "urbanjazzbassframes")) got = urban_jazz_bass_rendered_frames;\n'
         '    else if (!strcmp(what, "urbanjazzchord")) got = urban_jazz_chord_mode;\n'
         '    else if (!strcmp(what, "urbanjazzlead")) got = urban_jazz_lead_mode;\n'
         '    else if (!strcmp(what, "urbanjazznotes")) got = urban_jazz_note_onsets;\n'
