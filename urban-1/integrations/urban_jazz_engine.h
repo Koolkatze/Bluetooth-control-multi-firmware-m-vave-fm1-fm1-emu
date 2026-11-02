@@ -24,7 +24,7 @@ static UrbanJazzVoice urban_jazz_chords[EN_NPAD],urban_jazz_melody;
 static volatile uint32_t urban_jazz_requested;
 static uint32_t urban_jazz_current,urban_jazz_age;
 volatile uint32_t urban_jazz_note_onsets,urban_jazz_rendered_frames;
-static uint8_t urban_jazz_chord_mode,urban_jazz_lead_mode;
+uint8_t urban_jazz_chord_mode,urban_jazz_lead_mode;
 
 /* The device and Android host use one identical audio implementation.
  * No engine state may be written from UI/transport except this 32-bit word. */
