@@ -137,6 +137,7 @@ def main() -> None:
         '    else if (!strcmp(what, "urbansfxrendered"))',
         '    else if (!strcmp(what, "urbantranceonsets")) got = urban_trance_audio_onsets;\n'
         '    else if (!strcmp(what, "urbantrancelaststep")) got = urban_trance_audio_last_step;\n'
+        '    else if (!strcmp(what, "urbantranceoffgrid")) got = urban_trance_offgrid_onsets;\n'
         '    else if (!strcmp(what, "urbansfxrendered"))')
     # Expose the actual URBAN-1 song transport to host regression scripts.
     replace_once(root / "host/amb_host.c",
