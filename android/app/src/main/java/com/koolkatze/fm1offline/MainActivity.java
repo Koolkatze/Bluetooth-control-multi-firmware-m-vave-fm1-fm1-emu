@@ -90,6 +90,8 @@ public final class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private MidiManager midiManager;
     private MidiDevice midiDevice;
+    private MidiManager.DeviceCallback midiDeviceCallback;
+    private volatile int midiConnectionGeneration = 0;
     private final List<MidiOutputPort> outputPorts = new ArrayList<>();
     private BluetoothLeScanner scanner;
     private ScanCallback scannerCallback;
@@ -143,6 +145,7 @@ public final class MainActivity extends Activity {
                     View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         }
         midiManager = (MidiManager) getSystemService(MIDI_SERVICE);
+        registerMidiDisconnectMonitor();
         outputAudioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         registerOutputDeviceMonitor();
         Log.i(TAG, "Rust AAudio native library loaded: " + NativeSynth.AVAILABLE);
@@ -542,6 +545,25 @@ public final class MainActivity extends Activity {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 
+    /** BLE MIDI connections use a different Android device API from
+     * AAudio routes. A BLE-MIDI disconnect should close ONLY its stale
+     * input ports, never the synthesizer or any AAudio stream. */
+    private void registerMidiDisconnectMonitor() {
+        if (midiManager == null) return;
+        midiDeviceCallback = new MidiManager.DeviceCallback() {
+            @Override
+            public void onDeviceRemoved(MidiDeviceInfo info) {
+                if (info == null || midiDevice == null) return;
+                if (midiDevice.getInfo().getId() != info.getId()) return;
+                Log.i(TAG, "Bluetooth/USB MIDI disconnected: " + info.getId());
+                closeMidi();
+                // No firmware reboot, no sound stream close, no reset.
+                updateStatus("MIDI desconectado; firmware y audio siguen activos.");
+            }
+        };
+        midiManager.registerDeviceCallback(midiDeviceCallback, ui);
+    }
+
     /** Register once: Android reports audio output additions/removals when
      * Bluetooth A2DP, SCO, USB DAC and speaker routes change. The callback
      * only posts a DEBOUNCED request; it never restarts the whole emulator. */
@@ -900,6 +922,7 @@ public final class MainActivity extends Activity {
     private void connectMidi(MidiDevice device) {
         closeMidi();
         midiDevice = device;
+        final int generation = midiConnectionGeneration;
         int connected = 0;
         for (int i = 0; i < device.getInfo().getOutputPortCount(); i++) {
             MidiOutputPort port = device.openOutputPort(i);
@@ -907,7 +930,9 @@ public final class MainActivity extends Activity {
             port.connect(new MidiReceiver() {
                 @Override
                 public void onSend(byte[] bytes, int offset, int count, long timestamp) {
-                    if (count < 1 || count > 4096) return;
+                    if (generation != midiConnectionGeneration ||
+                            count < 1 || count > 4096 || offset < 0 ||
+                            offset > bytes.length || count > bytes.length - offset) return;
                     byte[] copy = Arrays.copyOfRange(bytes, offset, offset + count);
                     if (nativeActive && NativeSynth.AVAILABLE) {
                         // Native MIDI should never queue behind JavaScript/UI painting.
@@ -958,6 +983,9 @@ public final class MainActivity extends Activity {
     }
 
     private void closeMidi() {
+        // Delayed Android BLE callbacks from the previous connection must
+        // not reach the emulated UART after a disconnect/reconnect.
+        midiConnectionGeneration++;
         for (MidiOutputPort port : outputPorts) {
             try { port.close(); } catch (IOException ignored) {}
         }
@@ -1069,6 +1097,8 @@ public final class MainActivity extends Activity {
         nativeActive = false;
         stopBleScan();
         closeMidi();
+        if (midiManager != null && midiDeviceCallback != null)
+            midiManager.unregisterDeviceCallback(midiDeviceCallback);
         if (fileCallback != null) {
             fileCallback.onReceiveValue(null);
             fileCallback = null;
