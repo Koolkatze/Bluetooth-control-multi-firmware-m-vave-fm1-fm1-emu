@@ -191,20 +191,33 @@ static void urban_port_sound_profile(void) {
     UrbanInstrumentProgram pp=urban_instrument_program(s,4u,s->current);
     UrbanInstrumentProgram atmosphere=urban_instrument_program(s,5u,s->current);
     UrbanStylePatch bass=bp.patch,lead=lp.patch,pad=pp.patch;
-    /* Match HYP's mode controls where an equivalent exists. HYP does
-     * not expose harmonic/melodic minor, Phrygian dominant or Locrian:
-     * those are played correctly by our explicit MIDI chord/note score. */
-    static const uint8_t hyp_modes[URBAN_SCALE_COUNT]={
+    /* HYP only exposes seven diatonic modes. Every selected scale
+     * (including 5/6/8/12-note scales) is nonetheless rendered by
+     * URBAN's explicit note and chord score. For HYP's display and
+     * incidental native motion choose the closest tonal reference.
+     * Do not index a 10-element native-mode table with a 124-scale ID. */
+    static const uint8_t hyp_modes[10]={
         MODE_AEOLIAN,MODE_PHRYGIAN,MODE_DORIAN,MODE_AEOLIAN,
         MODE_IONIAN,MODE_MIXOLYDIAN,MODE_PHRYGIAN,
         MODE_LYDIAN,MODE_AEOLIAN,MODE_PHRYGIAN
     };
+    unsigned scale=s->scale%URBAN_SCALE_COUNT;
+    uint16_t pcs=0u;
+    for(unsigned d=0;d<urban_scale_size(scale);d++)
+        pcs|=(uint16_t)(1u<<urban_scale_pc(scale,d));
+    int mode=(scale<10u)?hyp_modes[scale]:
+        (pcs&(1u<<4u))?
+            ((pcs&(1u<<6u)) && !(pcs&(1u<<5u))?MODE_LYDIAN:
+              (pcs&(1u<<10u))?MODE_MIXOLYDIAN:MODE_IONIAN):
+        (pcs&(1u<<1u))?MODE_PHRYGIAN:
+        ((pcs&(1u<<6u)) && !(pcs&(1u<<7u)))?MODE_PHRYGIAN:
+        (pcs&(1u<<9u))?MODE_DORIAN:MODE_AEOLIAN;
     static const uint8_t hyp_chords[6]={
         EN_CH_TRIAD,EN_CH_7TH,EN_CH_9TH,
         EN_CH_SUS,EN_CH_TRIAD,EN_CH_4THS
     };
     urban_port_set(P_ROOT,s->key%12u);
-    urban_port_set(P_MODE,hyp_modes[s->scale%URBAN_SCALE_COUNT]);
+    urban_port_set(P_MODE,mode);
     urban_port_set(P_CHORD,hyp_chords[s->chord_colors[0]%6u]);
     urban_port_set(P_VOICING,s->chord_colors[0]==URBAN_CH_QUARTAL?1:0);
     /* A subtle seeded variation of synthesis envelopes distinguishes
@@ -613,6 +626,7 @@ static void urban_port_song_subgenre(int delta) {
     int v=((int)s->subgenre+delta)%4;
     if(v<0)v+=4;
     s->subgenre=(uint8_t)v;
+    s->scale_manual=0u; /* new substyle loads its authored scale palette */
     p->rt.ui.subgenre=(uint8_t)v;
     for(unsigned i=0;i<URBAN_TRACKS;i++)
         if(!p->overridden[i] && !s->tracks[i].locked)
@@ -722,9 +736,8 @@ static void urban_port_editor_write(int id,int delta) {
         urban_port_editor_refresh_notes();
     } else if(id==UC_SCALE) {
         s->scale=(uint8_t)value;
-        for(unsigned bar=0;bar<4u;bar++)
-            s->progression[bar]=urban_scale_intervals[s->scale]
-                                                    [s->chord_degrees[bar]];
+        s->scale_manual=1u; /* SAVE must NOT silently undo user tuning */
+        urban_song_harmony(s); /* remap chord roots for 5..12 degrees */
         urban_port_editor_refresh_notes();
     } else if(id==UC_COMPLEX) {
         s->complexity=(uint8_t)value;
@@ -955,12 +968,9 @@ static void urban_port_copy_text(char dst[24],const char *src) {
 }
 static void urban_port_editor_value_text(int id,char buf[24]) {
     int v=urban_port_editor_value(id);
-    static const char *const scale_name[URBAN_SCALE_COUNT]={
-        "MINOR","PHRYG","DORIAN","HARM MIN","MAJOR",
-        "MIXOLYD","PHRYG DOM","LYDIAN","MEL MIN","LOCRIAN"
-    };
+    /* All registry names are available on the same hardware LCD. */
     if(id==UC_KEY)urban_port_copy_text(buf,EN_NOTE_NAME[(unsigned)v%12u]);
-    else if(id==UC_SCALE)urban_port_copy_text(buf,scale_name[(unsigned)v%URBAN_SCALE_COUNT]);
+    else if(id==UC_SCALE)urban_port_copy_text(buf,urban_scale_names[(unsigned)v%URBAN_SCALE_COUNT]);
     else if(id==UC_COMPLEX) {
         buf[0]=(char)('0'+v);buf[1]=0;
     } else if(id>=UC_GATE16 && id<=UC_REPEAT8)
