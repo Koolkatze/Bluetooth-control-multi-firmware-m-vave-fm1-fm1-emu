@@ -52,11 +52,26 @@ def main() -> None:
     # retriggers *after* reading the six authored pattern lanes. These
     # unscored hits sound like glitches in URBAN-1, where all fills and
     # ratchets must come from the subgenre's explicit drum score.
-    # Keep the kit's tone, drive, crusher and decay: disable ONLY its
-    # autonomous stochastic chop for this URBAN-1 integration.
-    replace_once(root / "firmware/src/dsp/amb.c",
+    # HYP Break has a permanently crushed (0.6) and overdriven (2.5)
+    # kick even when P_DRIVE=0. URBAN's ordinary hip-hop explicitly
+    # chooses clean Break kick tone and envelope. Lo-fi alone may
+    # select the mild distortion path with P_DRIVE > 35.
+    dsp = root / "firmware/src/dsp/amb.c"
+    replace_once(dsp,
         'const float chop = KK->chop * (0.4f + 0.6f * evolve);',
         'const float chop = 0.0f; /* URBAN: no stochastic kit retriggers */')
+    replace_once(dsp,
+        'const float dk = drive_k * KK->k_drive, drop = KK->k_drop, cka = KK->k_click, rum = KK->k_rumble;',
+        'const float dk = drive_k * (KK == &KITS[4] ? (par[P_DRIVE] <= 35 ? 0.65f : 0.90f) : KK->k_drive), drop = KK->k_drop, cka = (KK == &KITS[4] && par[P_DRIVE] <= 35 ? 0.16f : KK->k_click), rum = KK->k_rumble;')
+    replace_once(dsp,
+        '    if (KK->crush > 0.0f) {                      /* breakcore: the drums crushed (what they add, held and stepped) */',
+        '    const float urban_crush = (KK == &KITS[4] && par[P_DRIVE] <= 35) ? 0.0f : KK->crush;\n    if (urban_crush > 0.0f) { /* deliberate lo-fi/breakcore crusher */')
+    replace_once(dsp,
+        '(uint32_t)(KK->crush * 4.0f)',
+        '(uint32_t)(urban_crush * 4.0f)')
+    replace_once(dsp,
+        'const float c = KK->crush, q = 24.0f;',
+        'const float c = urban_crush, q = 24.0f;')
     # One shared port implementation in both the FM-1 and HYP-1 host simulator.
     replace_once(root / "firmware/src/main.c",
         '#include "app/main_fm1.c"',
