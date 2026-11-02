@@ -613,16 +613,26 @@ static void urban_port_play(void) {
     p->rt.ui.song.playing=(uint8_t)!p->rt.ui.song.playing;
     if(!p->rt.ui.song.playing) {
         urban_port_release();
-        en_play(0);
+        if(p->tape_enabled) {
+            p->tape_stop_at=plat_ms()+
+                      60000u/(p->rt.ui.song.tempo?p->rt.ui.song.tempo:120u);
+            p->tape_stop_pending=1u;
+            en_fx(p->editor.performance_mask|(1u<<FX_STOP));
+        } else en_play(0);
     } else {
-        /* HYP play_start(1) resets its DSP sixteenth to zero. A stale
-         * URBAN transport step causes audible phase shifts on resume. */
+        if(p->tape_stop_pending) {
+            p->tape_stop_pending=0u;
+            en_fx(p->editor.performance_mask);
+            en_play(0);
+        }
         urban_runtime_reset_clock(&p->rt);
         p->staged_for_bar=UINT32_MAX;
         p->last_sixteenth=en_bars;
+        p->rec_clock_started=0u;
         urban_port_stage_pattern();
         urban_port_section_mix();
         en_play(1);
+        if(p->tape_enabled)urban_tape_start_trigger();
     }
 }
 static void urban_port_queue(int n) {
@@ -648,7 +658,14 @@ static void urban_port_set_mode(int automatic) {
 static void urban_port_restart(void) {
     UrbanHypPort *p=&urban_port;
     if(!p->rt.ui.song.song_mode)return;
+    if(p->tape_stop_pending) {
+        p->tape_stop_pending=0u;
+        en_fx(p->editor.performance_mask);
+        en_play(0);
+    }
     urban_port_set_mode(1);
+    if(!p->rt.ui.song.playing)urban_port_play();
+    else if(p->tape_enabled)urban_tape_start_trigger();
 }
 
 static void urban_port_init(uint32_t seed) {
