@@ -15,10 +15,11 @@
 #include "urban/urban_mix.h"
 #include "urban/urban_fx.h"
 #include "urban_editor.h"
+#include "urban/urban_drum_sync.h"
 
 typedef struct {
     UrbanRuntime rt;
-    uint32_t last_sixteenth, held_buttons;
+    uint32_t last_sixteenth, held_buttons, staged_for_bar;
     uint8_t held[3], note[3], left[3];
     uint8_t chord_notes[4], chord_count, chord_left;
     uint8_t previous_chord[4], previous_chord_count;
@@ -103,6 +104,12 @@ static void urban_port_stage_pattern(void) {
     UrbanSong *s=&p->rt.ui.song;
     uint8_t bank,section;
     unsigned bar;
+    /* P_PATTERN is consumed asynchronously by the HYP audio renderer.
+     * Preparing the next bank at step 15 risks missing the next downbeat
+     * (or writing across a bank switch) whenever the Android UI stalls.
+     * Allow edits early in the bar; defer late edits to the next one. */
+    if(s->playing && en_playing && !urban_drum_can_stage(en_bars))
+        return;
     if(!s->playing) {
         bank=0u; section=s->current; bar=s->section_bar;
     } else {
@@ -113,6 +120,8 @@ static void urban_port_stage_pattern(void) {
     urban_port_pattern(section,bar,bank);
     p->bank=bank;
     urban_port_set(P_PATTERN,bank);
+    if(s->playing && en_playing)
+        p->staged_for_bar=urban_drum_bar_id(en_bars);
 }
 /* Match HYP-1's actual DSP with genre-specific sound palette.
  * The shared song genre selects groove/effects, but each track's genre
@@ -247,6 +256,7 @@ static void urban_port_generate(void) {
         urban_port_release();
         p->rt.transport.step=0;
         p->rt.transport.tick=0;
+        p->staged_for_bar=UINT32_MAX;
         p->last_sixteenth=en_bars;
     }
     urban_port_sound_profile();
@@ -345,14 +355,16 @@ static void urban_port_step(void) {
             p->held[i]=0u;
         }
     }
-    /* Stage the next bar before its HYP DSP switch, not after it. */
-    if(cstep==URBAN_STEPS-1u)
-        urban_port_stage_pattern();
     urban_runtime_tick(&p->rt,&frame);
     for(t=1;t<URBAN_TICKS_PER_STEP;t++) {
         UrbanMidiFrame unused;
         urban_runtime_tick(&p->rt,&unused);
     }
+    /* Prepare NEXT bar as early as the first processed 16th, allowing
+     * up to 13 steps of latency margin. If UI missed that downbeat,
+     * still stage within the safe window instead of replaying old bars. */
+    if(urban_drum_should_stage(en_bars,p->staged_for_bar))
+        urban_port_stage_pattern();
     for(i=2;i<=3;i++)
         urban_port_note(i,frame.event[i],frame.glide[i]);
 }
@@ -374,6 +386,7 @@ static void urban_port_poll(void) {
          * snapshot. Wrap/reset is NOT thousands of missing steps. */
         urban_port_release();
         p->last_sixteenth=now>0u?now-1u:now;
+        p->staged_for_bar=UINT32_MAX;
         p->active_mix_section=255u;
     }
     steps=now-p->last_sixteenth;
@@ -385,11 +398,8 @@ static void urban_port_poll(void) {
              * song/loop mode; await the following fresh 16th tick. */
             p->last_sixteenth=now-1u;
         } else {
-            for(unsigned skip=0;skip<missed;skip++) {
-                if(p->rt.transport.step==URBAN_STEPS-1u)
-                    urban_port_stage_pattern();
+            for(unsigned skip=0;skip<missed;skip++)
                 urban_port_advance_score();
-            }
             p->last_sixteenth+=missed;
         }
         p->active_mix_section=255u;
@@ -406,6 +416,10 @@ static void urban_port_play(void) {
         urban_port_release();
         en_play(0);
     } else {
+        /* HYP play_start(1) resets its DSP sixteenth to zero. A stale
+         * URBAN transport step causes audible phase shifts on resume. */
+        urban_runtime_reset_clock(&p->rt);
+        p->staged_for_bar=UINT32_MAX;
         p->last_sixteenth=en_bars;
         urban_port_stage_pattern();
         urban_port_section_mix();
@@ -424,6 +438,7 @@ static void urban_port_set_mode(int automatic) {
     urban_ui_song_mode(&p->rt.ui,automatic);
     p->rt.transport.tick=0;
     p->rt.transport.step=0;
+    p->staged_for_bar=UINT32_MAX;
     p->last_sixteenth=en_bars;
     p->active_mix_section=255u;
     urban_port_stage_pattern();
@@ -441,6 +456,7 @@ static void urban_port_init(uint32_t seed) {
     UrbanHypPort *p=&urban_port;
     memset(p,0,sizeof(*p));
     p->active_mix_section=255u;
+    p->staged_for_bar=UINT32_MAX;
     urban_runtime_init(&p->rt,seed);
     // HYP-1 ui_init() starts its engine by default. Stop it explicitly so
     // URBAN-1's STOPPED display agrees with the actual audio transport.
