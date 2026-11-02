@@ -33,17 +33,21 @@ static void urban_runtime_init(UrbanRuntime *rt,uint32_t seed) {
     urban_generate_song(&rt->ui.song,seed);
     for(unsigned i=0;i<URBAN_TRACKS;i++) urban_runtime_refresh_track(rt,i);
 }
-static void urban_runtime_generate(UrbanRuntime *rt) {
+static void urban_runtime_generate_entropy(UrbanRuntime *rt,
+                                           uint32_t entropy) {
     if(rt->ui.page==URBAN_PAGE_TRACKS) {
         unsigned track=rt->ui.selected_track;
         if(rt->ui.song.tracks[track].locked) return;
-        urban_ui_generate(&rt->ui);
+        urban_ui_generate_entropy(&rt->ui,entropy);
         urban_runtime_refresh_track(rt,track);
     } else {
-        urban_ui_generate(&rt->ui);
+        urban_ui_generate_entropy(&rt->ui,entropy);
         for(unsigned i=0;i<URBAN_TRACKS;i++)
             if(!rt->ui.song.tracks[i].locked) urban_runtime_refresh_track(rt,i);
     }
+}
+static void urban_runtime_generate(UrbanRuntime *rt) {
+    urban_runtime_generate_entropy(rt,0u);
 }
 /* Keep the first bar as the recognizable theme; bars 2-4 answer,
  * develop and turn around that theme. Four bars repeat identically in
