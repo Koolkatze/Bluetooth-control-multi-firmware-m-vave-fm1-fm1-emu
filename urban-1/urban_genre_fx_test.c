@@ -87,4 +87,46 @@ static void test_all(void) {
     printf("URBAN-1: 56 substyle modes, >21 modal distinctions, all-wet FX and "
            "%u vocal/bass-first + %u lead-forward takes verified\n",leadless,present);
 }
-int main(void){test_all();return 0;}
+static void test_per_instrument_fx_is_independent(void) {
+    for(unsigned g=0;g<URBAN_GENRES;g++) {
+        UrbanSong s;
+        urban_init(&s,170u+g);
+        s.genre=(uint8_t)g;
+        s.subgenre=0u;
+        for(unsigned t=0;t<URBAN_TRACKS;t++) {
+            s.tracks[t].genre=(uint8_t)g;
+            s.tracks[t].subgenre=0u;
+        }
+        urban_generate_song(&s,0x7411u+g);
+        UrbanFxPlan old=urban_fx_plan(&s);
+        s.tracks[2].subgenre=1u;
+        UrbanFxPlan bass=urban_fx_plan(&s);
+        assert(bass.bass_lfo_rate!=old.bass_lfo_rate ||
+               bass.bass_lfo_depth!=old.bass_lfo_depth);
+        assert(bass.lead_env==old.lead_env);
+        assert(bass.pad_lfo_depth==old.pad_lfo_depth);
+        s.tracks[2].subgenre=0u;
+        s.tracks[3].subgenre=1u;
+        UrbanFxPlan lead=urban_fx_plan(&s);
+        assert(lead.lead_env!=old.lead_env ||
+               lead.lead_decay!=old.lead_decay);
+        assert(lead.pad_lfo_depth==old.pad_lfo_depth);
+        s.tracks[3].subgenre=0u;
+        s.tracks[4].subgenre=1u;
+        UrbanFxPlan pad=urban_fx_plan(&s);
+        assert(pad.pad_lfo_depth!=old.pad_lfo_depth ||
+               pad.pad_lfo_rate!=old.pad_lfo_rate);
+        assert(pad.lead_env==old.lead_env);
+        s.tracks[4].subgenre=0u;
+        s.tracks[0].subgenre=1u;
+        UrbanFxPlan drum=urban_fx_plan(&s);
+        assert(drum.kick_decay!=old.kick_decay ||
+               drum.snare_decay!=old.snare_decay);
+        s.tracks[0].subgenre=0u;
+        s.tracks[5].subgenre=1u;
+        UrbanFxPlan ambience=urban_fx_plan(&s);
+        assert(ambience.noise_tone!=old.noise_tone);
+        assert(ambience.pad_lfo_depth==old.pad_lfo_depth);
+    }
+}
+int main(void){test_all();test_per_instrument_fx_is_independent();return 0;}
