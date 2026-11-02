@@ -28,7 +28,10 @@ int main(void) {
  assert(rt.ui.song.current==2);
  urban_runtime_tick(&rt,&f);
  assert(f.sequence==2);
- assert(f.event[2].note==rt.bass.seq[2].steps[0].note);
+ UrbanBassStep expected=urban_bass_bar_score(&rt.ui.song,&rt.bass,
+     rt.ui.song.current,urban_phrase_bar(&rt.ui.song),0u);
+ assert(f.event[2].note==urban_harmonize_note(&rt.ui.song,
+                                            expected.note,0u));
  /* A transport restart must never inherit the previous off-grid step. */
  rt.transport.tick=URBAN_TICKS_PER_STEP*7u+9u;
  rt.transport.step=7u;
