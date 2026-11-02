@@ -1,4 +1,4 @@
-# URBAN-1 — Hip-hop production audit (v0.3.7)
+# URBAN-1 — Hip-hop production audit (v0.3.7–0.3.8)
 
 This audit applies to **Hip-hop** (Boom Bap, Jazz Rap, G-Funk, Lo-fi)
 and **Underground Hip-hop** (Raw/Dusty, Jazz Underground, Experimental,
@@ -39,6 +39,37 @@ sixteenth positions (2 and 4). This does **not** generate extra drum hits.
 
 All styles retain four-bar harmonically synchronized phrases, independent
 track patch choices, and headroom-controlled mixing.
+
+## v0.3.8 — Kick/snares corrected against the Trip-hop reference
+
+The user specified that hip-hop kicks should sound like Trip-hop, with
+the sole permitted exception of distorted Lo-fi kicks, and that Boom Bap
+should have snares without **any** clap. These are implemented **in the
+DSP route**, not merely in the genre descriptions.
+
+- `urban_kick_kit` maps Hip-hop (3) and Underground Hip-hop (5)
+  to the same native HYP Break kick kit used by **Bristol Trip-hop**
+  (genre 4, substyle 0). G-Funk keeps its independently selected 808
+  snare but now uses the rounded Trip-hop kick.
+- For those styles other than Lo-fi Hip-hop, kick gain is 70,
+  `P_DRIVE = 17`, decay 44 and tune 0, matching the Bristol
+  reference. They keep independent kick *rhythms* and pads/bass.
+- **Lo-fi Hip-hop** (genre 3, substyle 3) retains the Break kick,
+  with a longer decay 64, lane gain 74 and `P_DRIVE = 34`.
+  The HYP engine uses `P_DRIVE` only in `render_drums`'s **kick**
+  branch, so this does not add distortion to the snare or other tracks.
+- **Boom Bap** (genre 3, substyle 0) forces the clap lane's
+  entire 16-step mask to **zero after all arrangement and fill
+  transformations**, and sets the clap lane's gain to 0. Its
+  separately selected snare engine and backbeat remain intact.
+- These rules inspect the actual **drum track** genre and subgenre,
+  so they still apply when a user mixes a Hip-hop drum track into
+  a song with a different overall genre.
+
+The new regression assertions run across 128 seeded arrangements and
+all eight sections/four phrase bars, comparing the actual kick parameter
+plan against Bristol Trip-hop and verifying all Boom Bap clap masks
+remain zero through complexity changes and mixed-track overrides.
 
 ## What this does not claim
 
