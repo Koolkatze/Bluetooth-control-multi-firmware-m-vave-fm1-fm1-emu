@@ -14,7 +14,7 @@ expect urbanroot1 1
 expect urbandrumkick 2689
 spin K3 1
 expect urbansub 2
-expect urbanscale 0
+expect urbanscale 85
 expect urbanroot1 3
 expect urbandrumkick 257
 spin K3 1
