@@ -74,8 +74,11 @@ static UrbanSfxEvent urban_sfx_event(const UrbanSong *s,
     switch(section%URBAN_SEQUENCES) {
       case URBAN_INTRO:   if(bar%4u!=3u || step!=12u)return ev;secondary=1u;break;
       case URBAN_VERSE_A: if(bar%4u!=1u || step!=12u)return ev;break;
-      case URBAN_HOOK:    if(bar%4u==0u && step==0u)break;
-                          if(bar%4u!=3u || step!=12u)return ev;secondary=1u;break;
+      case URBAN_HOOK:
+          if(bar%4u==0u && step==0u)break;
+          if(bar%4u!=3u || step!=12u)return ev;
+          secondary=1u;
+          break;
       case URBAN_VERSE_B: if(bar%4u!=3u || step!=14u)return ev;break;
       case URBAN_BRIDGE:  if(bar%4u!=3u || step!=8u)return ev;secondary=1u;break;
       case URBAN_DROP:    if(bar%4u!=0u || step!=0u)return ev;break;
