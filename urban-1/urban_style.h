@@ -77,7 +77,7 @@ static const UrbanStylePatch urban_style_patches[URBAN_GENRES][4]={
  /* Horrorcore: Memphis, cinematic, industrial, dark */
  { {8,2,7,7,4,51,47,29,25,35},
    {8,13,11,7,5,41,81,65,19,39},
-   {3,2,7,6,6,73,55,35,33,52},
+   {2,2,7,6,6,73,55,35,33,52},
    {9,9,7,7,6,62,73,68,20,31} },
  /* Reggaeton: dembow, perreo, romantic, futuro */
  { {9,4,6,3,3,34,19,16,56,52},
