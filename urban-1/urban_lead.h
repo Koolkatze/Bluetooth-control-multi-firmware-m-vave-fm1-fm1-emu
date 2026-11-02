@@ -30,6 +30,22 @@ static const UrbanLeadStyle urban_lead_styles[URBAN_GENRES]={
  /* Trnc */ {0x0880,0x8888,0x8888, 5, 1, 0x7,0xf, 87},
  /* Liqd */ {0x0841,0x2a49,0x2a49, 6, 0, 0x7,0xf, 77}
 };
+/* Trance uses deliberately quantized, distinctive scores.
+ * Offbeat eighths occupy 2/6/10/14, not the late 16ths in 0x8888.
+ * Keep these masks untouched by random "weak note" toggles. */
+static const uint16_t urban_trance_masks[4][3]={
+    {0x0444u,0x4444u,0x4444u}, /* Progressive: sparse offbeats */
+    {0x0044u,0x4544u,0x4444u}, /* Uplifting: climbing answer */
+    {0x1111u,0x5555u,0x5555u}, /* Psytrance: repeated pulse */
+    {0x0101u,0x1111u,0x5151u}  /* Tech trance: quarter-note stabs */
+};
+static const int8_t urban_trance_contour[4][8]={
+    {0,2,4,2,0,2,4,2},
+    {0,2,4,5,4,2,4,0},
+    {0,4,0,4,0,4,2,4},
+    {0,2,0,4,2,0,4,0}
+};
+static const uint8_t urban_trance_gates[4]={3u,5u,2u,2u};
 /* Genre-tailored HYP ACID envelope/gesture parameters. This changes
  * the actual synth's filter/envelopes (not just the note names):
  * trap = mellow short pluck, goth = dark long tail, reggaeton = bright
@@ -146,6 +162,11 @@ static uint16_t urban_lead_bar_mask(const UrbanSong *s,unsigned section,
     const UrbanLeadStyle *p=&urban_lead_styles[t->genre%URBAN_GENRES];
     uint16_t mask=section==URBAN_HOOK?p->hook:
                   section==URBAN_DROP?p->drop:p->verse;
+    if(t->genre==12u) {
+        unsigned sub=t->subgenre%4u;
+        unsigned col=section==URBAN_HOOK?1u:section==URBAN_DROP?2u:0u;
+        return urban_trance_masks[sub][col];
+    }
     if(t->genre==3u || t->genre==5u) {
         /* Different hip-hop parts: G-Funk can sustain a lead,
          * boom-bap / jazz / lo-fi leave room for an MC. */
@@ -191,7 +212,9 @@ static UrbanNote urban_lead_score(const UrbanSong *s,unsigned section,
     /* Strong onsets outline chord functions; weak onsets use a genuine
      * genre contour, whose pitches live within the selected mode. */
     unsigned contour_pos=(step/2u+(s->melodic_variant%8u))%8u;
-    int relative=(int)urban_lead_degrees[g][contour_pos] +
+    int relative=g==12u?
+           (int)urban_trance_contour[t->subgenre%4u][contour_pos]:
+           (int)urban_lead_degrees[g][contour_pos] +
            (int)urban_substyle_lead_steps[t->subgenre%4u][contour_pos];
     /* Some styles explicitly repeat their tonic to let bass/voice carry
      * the harmony; jazz / trance styles are more chord-tone mobile. */
@@ -208,6 +231,13 @@ static UrbanNote urban_lead_score(const UrbanSong *s,unsigned section,
     input.note=(uint8_t)pitch;
     input.velocity=(uint8_t)(p->velocity+(r%11u));
     input.gate=(uint8_t)(p->gate+(t->subgenre%3u));
+    if(g==12u) {
+        unsigned sub=t->subgenre%4u;
+        input.gate=urban_trance_gates[sub];
+        input.velocity=(uint8_t)((sub>=2u?74u:80u)+(r%5u));
+        while(input.note>88u)input.note-=12u;
+        while(input.note<60u)input.note+=12u;
+    }
     if(input.gate>12u)input.gate=12u;
     return input;
 }
