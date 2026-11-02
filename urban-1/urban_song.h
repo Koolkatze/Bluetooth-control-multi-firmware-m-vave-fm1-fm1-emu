@@ -138,7 +138,17 @@ static uint32_t urban_rng(uint32_t *x) {
 static void urban_song_harmony(UrbanSong *s) {
     unsigned g=s->genre%URBAN_GENRES;
     s->scale=urban_genre_scale[g];
-    for(unsigned i=0;i<4u;i++) s->progression[i]=urban_progressions[g][i];
+    for(unsigned i=0;i<4u;i++) {
+        s->progression[i]=urban_progressions[g][i];
+        s->chord_degrees[i]=0;
+        for(unsigned d=0;d<7u;d++) {
+            if(urban_scale_intervals[s->scale][d]==s->progression[i]) {
+                s->chord_degrees[i]=(uint8_t)d;
+                break;
+            }
+        }
+        s->chord_colors[i]=urban_chord_palettes[g][i];
+    }
 }
 /* 56 bars, 14 complete 4-bar phrases: intro, verse, hook, second verse, hook reprise,
  * bridge, drop, breakdown, outro. All 8 A-H sections appear.
