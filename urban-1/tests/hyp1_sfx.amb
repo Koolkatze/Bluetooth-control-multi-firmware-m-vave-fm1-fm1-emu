@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Confirm actual HYP audio DSP executes scored SFX, not only an LCD
+# menu or a generated MIDI note that the 6-voice engine cannot play.
+expect urbansfxrendered 0
+tap FX
+expect urbanview 1
+spin ALGO 7
+expect urbantarget 7
+expect urbansfxlevel 100
+spin K1 1
+spin K2 -15
+expect urbansfxlevel 85
+spin K3 -10
+expect urbansfxlength 90
+shot editor-sound-fx-track.png
+tap FX
+expect urbanview 0
+tap PLAY
+wait 9500
+expect urbansfxrendered >0
+shot sfx-playing.png
+tap PLAY
+expect playing 0
