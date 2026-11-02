@@ -60,10 +60,10 @@ static const UrbanStylePatch urban_style_patches[URBAN_GENRES][4]={
    {9,4,2,7,5,16,67,39,23,52} },
  /* Hip-hop: dry break/Rhodes, upright-like jazz, smooth G-Funk, dusty lo-fi.
   * HYP synthesizes these colours: no misleading 'sampled' instrument. */
- { {1,15,0,4,4,15,12, 8,31,24},
-   {7,15,0,4,4,10,19,11,36,25},
+ { {1,15,0,4,4,18,12, 8,31,24},
+   {7,15,0,4,4,18,19,11,36,25},
    {1, 5,4,7,7,19,15, 9,40,38},
-   {1,15,0,4,4, 8,29,14,25,18} },
+   {1,15,0,4,4,40,29,14,25,18} },
  /* Trip-hop: Bristol, downtempo, abstract, dub */
  { {8,15,7,4,4,29,61,54,28,31},
    {1,4,5,4,5,19,68,45,36,35},
@@ -117,6 +117,18 @@ static const UrbanStylePatch urban_style_patches[URBAN_GENRES][4]={
 };
 static UrbanStylePatch urban_style_patch(unsigned genre,unsigned subgenre){
     return urban_style_patches[genre%URBAN_GENRES][subgenre%4u];
+}
+
+/* Drum kick is selected independently from snare, hats and percussion.
+ * Boom Bap, Jazz Rap, G-Funk and Underground inherit the *actual* Bristol
+ * Trip-hop kick synthesis model (HYP Break kit 4), even when their snare
+ * uses another kit. Lo-fi keeps that model but has its own drive profile.
+ * This changes timbre, not the genre's authored kick rhythm. */
+static uint8_t urban_kick_kit(unsigned genre,unsigned subgenre){
+    unsigned g=genre%URBAN_GENRES;
+    if(g==3u || g==5u)
+        return urban_style_patches[4][0].drum_kit;
+    return urban_style_patch(g,subgenre).drum_kit;
 }
 
 static const char *const urban_substyle[URBAN_GENRES][4]={
