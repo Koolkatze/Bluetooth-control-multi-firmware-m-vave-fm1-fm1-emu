@@ -21,5 +21,6 @@ typedef struct {
 } UrbanTranceGrid;
 void urban_trance_publish(const UrbanTranceGrid *grid);
 extern volatile uint32_t urban_trance_audio_onsets;
+extern volatile uint32_t urban_trance_offgrid_onsets;
 extern volatile uint32_t urban_trance_audio_last_step;
 #endif
