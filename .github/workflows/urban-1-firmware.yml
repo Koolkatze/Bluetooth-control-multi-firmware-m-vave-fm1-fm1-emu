@@ -73,6 +73,7 @@ jobs:
           hyp1/build/host/amb_host urban-1/tests/hyp1_trance_clock.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_recorder.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_tape_transport.amb hyp1/build/urban
+          hyp1/build/host/amb_host urban-1/tests/hyp1_style_fx_reset.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_fx_edit.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_echo_wet.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_polychords.amb hyp1/build/urban
