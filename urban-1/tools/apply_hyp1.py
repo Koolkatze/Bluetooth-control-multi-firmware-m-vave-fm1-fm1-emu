@@ -105,9 +105,9 @@ def main() -> None:
     replace_once(dsp,
         'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];',
         'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];\n'
+        '#include "../app/urban_lead_lfo_engine.h"\n'
         '#include "../app/urban_jazz_engine.h"\n'
-        '#include "../app/urban_echo_engine.h"\n'
-        '#include "../app/urban_lead_lfo_engine.h"')
+        '#include "../app/urban_echo_engine.h"')
     replace_once(dsp,
         'static void render_pad(uint32_t n)\n{',
         'static void render_pad(uint32_t n)\n{\n'
