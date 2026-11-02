@@ -787,6 +787,14 @@ static uint32_t urban_port_screen_signature(const UrbanHypPort *p) {
     UI_ACC(p->rt.ui.generation_serial);
     UI_ACC(t->genre);UI_ACC(t->subgenre);
     UI_ACC(t->locked);UI_ACC(t->muted);UI_ACC(t->solo);
+    UI_ACC(p->editor.view);UI_ACC(p->editor.target);UI_ACC(p->editor.bank);
+    if(p->editor.view) {
+        unsigned nb=0u;
+        const UrbanEditorBank *eb=urban_editor_bank(&p->editor,&nb);
+        if(eb)for(unsigned k=0;k<4u;k++)
+            if(eb->param[k]!=URBAN_EDITOR_NO_PARAM)
+                UI_ACC(urban_port_editor_value(eb->param[k]));
+    }
 #undef UI_ACC
     return v;
 }
@@ -803,6 +811,68 @@ static const char *urban_port_instrument_name(const UrbanSong *s,
     if(track==4u)return urban_pad_names[ip.patch.pad];
     if(track==0u||track==1u)return urban_kit_names[ip.patch.drum_kit];
     return urban_noise_names[ip.noise_color];
+}
+static void urban_port_editor_value_text(int id,char buf[24]) {
+    int v=urban_port_editor_value(id);
+    static const char *const scale_name[URBAN_SCALE_COUNT]={
+        "MINOR","PHRYG","DORIAN","HARM MIN","MAJOR",
+        "MIXOLYD","PHRYG DOM","LYDIAN","MEL MIN","LOCRIAN"
+    };
+    if(id==UC_KEY)strcpy(buf,EN_NOTE_NAME[(unsigned)v%12u]);
+    else if(id==UC_SCALE)strcpy(buf,scale_name[(unsigned)v%URBAN_SCALE_COUNT]);
+    else if(id==UC_COMPLEX) {
+        buf[0]=(char)('0'+v);buf[1]=0;
+    } else if(id>=UC_GATE16 && id<=UC_REPEAT8)
+        strcpy(buf,v?"ON":"OFF");
+    else if(id==UC_TEMPO)en_param_text(P_TEMPO,v,buf);
+    else if(id>=0 && id<P_NPARAMS)en_param_text(id,v,buf);
+    else strcpy(buf,"--");
+}
+static void urban_port_editor_upper(uint16_t orange,uint16_t dim) {
+    const UrbanEditor *e=&urban_port.editor;
+    unsigned nb=0u;
+    const UrbanEditorBank *bank=urban_editor_bank(e,&nb);
+    urban_port_screen_text(9,&FONT_B,e->view==URBAN_EDITOR_FX?
+                             "URBAN-1 FX":"URBAN-1 EDIT",orange);
+    urban_port_screen_text(36,&FONT_S,e->target==0u?
+                             "MASTER - ALL TRACKS":
+                             urban_track_name[e->target-1u],C_WHITE);
+    if(!bank) {
+        urban_port_screen_text(72,&FONT_S,"RESERVED TRACK",orange);
+        urban_port_screen_text(98,&FONT_S,"NO HYP AUDIO ENGINE",dim);
+        urban_port_screen_text(127,&FONT_S,"NO ACTIVE DSP PARAMS",dim);
+        return;
+    }
+    urban_port_screen_text(56,&FONT_S,bank->title,dim);
+    for(unsigned i=0;i<4u;i++) {
+        int id=bank->param[i];
+        if(id==URBAN_EDITOR_NO_PARAM)continue;
+        char value[24];
+        char line[4]="K1";
+        line[1]=(char)('1'+i);
+        int yy=76+(int)i*17;
+        cv_text(10,yy,&FONT_S,line,orange);
+        cv_text(36,yy,&FONT_S,urban_editor_label(id),C_WHITE);
+        urban_port_editor_value_text(id,value);
+        int right=235-text_w(&FONT_S,value);
+        if(right<154)right=154;
+        cv_text(right,yy,&FONT_S,value,orange);
+    }
+}
+static void urban_port_editor_lower(uint16_t orange,uint16_t dim) {
+    const UrbanEditor *e=&urban_port.editor;
+    unsigned nb=0u;
+    urban_editor_banks(e->view,e->target,&nb);
+    char pos[12]="PAGE 0/9";
+    char groups[12]="BANK 0/0";
+    pos[5]=(char)('0'+(e->target+1u));
+    groups[5]=(char)('0'+(nb?e->bank%nb+1u:0u));
+    groups[7]=(char)('0'+nb);
+    urban_port_screen_text(7,&FONT_S,pos,orange);
+    urban_port_screen_text(23,&FONT_S,groups,orange);
+    urban_port_screen_text(42,&FONT_S,"ALGORITHM: MASTER/TRACK",C_WHITE);
+    urban_port_screen_text(59,&FONT_S,"PRESET/SELECT: NEXT BANK",C_WHITE);
+    urban_port_screen_text(77,&FONT_S,"K1-K4 EDIT  HOME/SEQ EXIT",dim);
 }
 static void urban_port_frame(void) {
     UrbanHypPort *p=&urban_port;
@@ -838,6 +908,9 @@ static void urban_port_frame(void) {
 
         /* Upper off-screen band: one DMA, no exposed intermediate black. */
         cv_begin(240,144,background);
+        if(p->editor.view) {
+            urban_port_editor_upper(orange,dim);
+        } else {
         urban_port_screen_text(9,&FONT_B,"URBAN-1",orange);
         if(p->rt.ui.page==URBAN_PAGE_SONG) {
             urban_port_screen_text(42,&FONT_S,
@@ -859,9 +932,10 @@ static void urban_port_frame(void) {
             urban_port_screen_text(108,&FONT_S,
                 urban_style_name(t->genre,t->subgenre),dim);
             urban_port_screen_text(126,&FONT_S,
-                t->locked?"LOCKED - EDIT":
-                t->muted?"MUTED - FX":
+                t->locked?"LOCKED - ENV":
+                t->muted?"MUTED - LFO":
                 t->solo?"SOLO - GLO":"READY",orange);
+        }
         }
         cv_blit(0,0);
 
@@ -869,7 +943,9 @@ static void urban_port_frame(void) {
          * after sending the upper band: the previous content stays valid
          * until this second DMA is ready. */
         cv_begin(240,96,background);
-        if(p->rt.ui.page==URBAN_PAGE_SONG) {
+        if(p->editor.view) {
+            urban_port_editor_lower(orange,dim);
+        } else if(p->rt.ui.page==URBAN_PAGE_SONG) {
             urban_port_screen_text(4,&FONT_S,take,orange);
             if(s->song_mode) {
                 cv_rect(15,24,210,5,RGB(49,55,70));
@@ -887,7 +963,7 @@ static void urban_port_frame(void) {
                 urban_port_instrument_name(s,p->rt.ui.selected_track),orange);
             urban_port_screen_text(36,&FONT_S,"SAVE: REGENERATE TRACK",dim);
             urban_port_screen_text(57,&FONT_S,"K1 TRACK  K2 GENRE",C_WHITE);
-            urban_port_screen_text(79,&FONT_S,"HOME: SONG   EDIT: LOCK",dim);
+            urban_port_screen_text(79,&FONT_S,"FX/EDIT PAGES ENV LOCK LFO MUTE",dim);
         }
         cv_blit(0,144);
         lcd_sync();
@@ -895,7 +971,9 @@ static void urban_port_frame(void) {
         p->ui_drawn=1u;
     }
     plat_leds((s->playing?1u<<B_PLAY:0u)|
-              (p->rt.ui.page==URBAN_PAGE_SONG?
+              (p->editor.view==URBAN_EDITOR_FX?1u<<B_FX:
+               p->editor.view==URBAN_EDITOR_EDIT?1u<<B_EDIT:
+               p->rt.ui.page==URBAN_PAGE_SONG?
                (1u<<B_HOME)|(s->song_mode?1u<<B_ARP:0u):
                (1u<<B_SEQ)),0u);
 }
