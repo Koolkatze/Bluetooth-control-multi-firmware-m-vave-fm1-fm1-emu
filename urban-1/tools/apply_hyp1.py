@@ -56,6 +56,8 @@ def main() -> None:
                     root / "firmware/src/app/urban_trance_engine.h")
     shutil.copyfile(HERE / "integrations/urban_piano_roll_engine.h",
                     root / "firmware/src/app/urban_piano_roll_engine.h")
+    shutil.copyfile(HERE / "integrations/urban_jazz_engine.h",
+                    root / "firmware/src/app/urban_jazz_engine.h")
     # HYP-1's Break kit applies random ghost kicks/snares and 32nd-roll
     # retriggers *after* reading the six authored pattern lanes. These
     # unscored hits sound like glitches in URBAN-1, where all fills and
@@ -80,6 +82,38 @@ def main() -> None:
     replace_once(dsp,
         'const float c = KK->crush, q = 24.0f;',
         'const float c = urban_crush, q = 24.0f;')
+    # Real Jazz instrument voices in the same HYP audio callback.
+    # HYP's note_cmd and scheduled chord rolls trigger these at sample precision.
+    replace_once(dsp,
+        'static void note_cmd(int voice, int key, int on)',
+        'static void urban_jazz_note_cmd(int voice,int key,int on);\n'
+        'static void urban_jazz_quiet(void);\n'
+        'static void note_cmd(int voice, int key, int on)')
+    replace_once(dsp,
+        '    if (voice == EN_V_PAD) {\n        pad_play(key, on);',
+        '    urban_jazz_note_cmd(voice,key,on);\n'
+        '    if (voice == EN_V_PAD) {\n        pad_play(key, on);')
+    replace_once(dsp,
+        '    notes_off();\n}',
+        '    urban_jazz_quiet();\n    notes_off();\n}')
+    replace_once(dsp,
+        'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];',
+        'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];\n'
+        '#include "../app/urban_jazz_engine.h"')
+    replace_once(dsp,
+        'static void render_pad(uint32_t n)\n{',
+        'static void render_pad(uint32_t n)\n{\n'
+        '    if(urban_jazz_chord_mode)return; /* use modelled keys instead */')
+    replace_once(dsp,
+        'static void render_acid(uint32_t n)\n{',
+        'static void render_acid(uint32_t n)\n{\n'
+        '    if(urban_jazz_lead_mode)return; /* use modelled flute/mallets */')
+    replace_once(dsp,
+        '    render_pad(n);\n    render_bass(n);',
+        '    urban_jazz_apply();\n    render_pad(n);\n    render_bass(n);')
+    replace_once(dsp,
+        '    render_acid(n);\n    render_noise(n);',
+        '    render_acid(n);\n    urban_jazz_render(n);\n    render_noise(n);')
     # New monophonic procedural SFX audio voice: 10 modelled transients.
     # The engine lives inside HYP's DSP mix; no stolen drum/lead lanes.
     # Include after the mixer buffers and sine oscillator have been defined.
@@ -165,6 +199,13 @@ def main() -> None:
         '    else if (!strcmp(what, "urbanpianorolls")) got = urban_piano_rolled_chords;\n'
         '    else if (!strcmp(what, "urbanpianonotes")) got = urban_piano_note_onsets;\n'
         '    else if (!strcmp(what, "urbantranceonsets"))')
+    replace_once(root / "host/amb_host.c",
+        '    else if (!strcmp(what, "urbanpianorolls"))',
+        '    else if (!strcmp(what, "urbanjazzchord")) got = urban_jazz_chord_mode;\n'
+        '    else if (!strcmp(what, "urbanjazzlead")) got = urban_jazz_lead_mode;\n'
+        '    else if (!strcmp(what, "urbanjazznotes")) got = urban_jazz_note_onsets;\n'
+        '    else if (!strcmp(what, "urbanjazzframes")) got = urban_jazz_rendered_frames;\n'
+        '    else if (!strcmp(what, "urbanpianorolls"))')
     # Expose the actual URBAN-1 song transport to host regression scripts.
     replace_once(root / "host/amb_host.c",
         '    else if (!strcmp(what, "sixteenths"))',
