@@ -60,7 +60,7 @@ static const UrbanStylePatch urban_style_patches[URBAN_GENRES][4]={
    {9,4,2,7,5,16,67,39,23,52} },
  /* Hip-hop: dry break/Rhodes, upright-like jazz, smooth G-Funk, dusty lo-fi.
   * HYP synthesizes these colours: no misleading 'sampled' instrument. */
- { {1,15,0,4,4,15,12, 6,31,24},
+ { {1,15,0,4,4,15,12, 8,31,24},
    {7,15,0,4,4,10,19,11,36,25},
    {1, 5,4,7,7,19,15, 9,40,38},
    {1,15,0,4,4, 8,29,14,25,18} },
