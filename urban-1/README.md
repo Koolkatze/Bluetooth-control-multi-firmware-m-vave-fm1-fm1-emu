@@ -104,6 +104,33 @@ reconstruction or a trained music model. More accurate per-substyle
 programming, richer chord voicings and multi-voice instrument synthesis
 remain ongoing tasks.
 
+## Trance composition and clock-sync correction (v0.4.2)
+
+Progressive Trance, Uplifting, Psytrance and Tech Trance now have four
+separate rhythmic grammars, melodic figures and real HYP ACID/PAD tone
+banks. The previous **0x8888** pattern placed a note on sixteenth
+steps **3, 7, 11, 15**, just before every quarter note. This is
+replaced by deliberate **offbeat eighths on steps 2, 6, 10, 14** for
+Progressive/Uplifting, a straight eighth root/fifth pulse for Psy and
+short quarter-note stabs for Tech. Melodic development follows each
+four-bar progression; random weak-note insertions and arbitrary
+rotation of the entire Trance motif have been removed.
+
+Most importantly, Trance notes no longer wait for UI/WebView polling:
+a precomputed, double-buffered phrase score is consumed directly in
+the HYP-1 **audio tick that triggers the drums**. It releases and
+restarts notes at audio clock edges in both Song Mode and manual Loop
+Mode, with no LCD frame quantization, while respecting the lead track
+genre, mute and solo. The score is refreshed when a musical parameter
+changes. Progressive is softer, Uplifting more open, Psy rhythmic and
+short, and Tech staccato. These are synthesized melodies, not recorded
+Trance loops; subjective musical evaluation on the user's emulator
+remains necessary.
+
+Validation includes 384 seeded takes, distinct masks and note range
+checks, plus host audio tests observing actual DSP Trance note-on
+events and zero off-grid onsets.
+
 ## Build and verification
 
 ```sh
