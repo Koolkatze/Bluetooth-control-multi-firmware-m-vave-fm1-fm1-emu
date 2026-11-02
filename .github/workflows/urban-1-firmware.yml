@@ -52,21 +52,21 @@ jobs:
         run: |
           python3 urban-1/tools/apply_hyp1.py --hyp-root hyp1
           cd hyp1
-          ./build.sh --release 0.2.0
-          test -s build/amb-0.2.0.fwsc
-          cp build/amb-0.2.0.fwsc build/URBAN-1-v0.2.0-SONG4-LOOP.fwsc
+          ./build.sh --release 0.3.0
+          test -s build/amb-0.3.0.fwsc
+          cp build/amb-0.3.0.fwsc build/URBAN-1-v0.3.0-COMPOSER.fwsc
       - name: Verify package with HYP-1 updater tests
         run: |
           cd hyp1
           cc -o build/ota_test tests/ota_test.c
-          build/ota_test build/amb-0.2.0.fwsc
+          build/ota_test build/amb-0.3.0.fwsc
           python3 tests/install_test.py
       - name: Publish untested experimental firmware as artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: URBAN-1-v0.2.0-firmware-only
-          path: hyp1/build/URBAN-1-v0.2.0-SONG4-LOOP.fwsc
+          name: URBAN-1-v0.3.0-firmware-only
+          path: hyp1/build/URBAN-1-v0.3.0-COMPOSER.fwsc
           if-no-files-found: error
 
       - name: Publish permanent firmware-only download (GitHub Releases)
@@ -76,17 +76,17 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -eu
-          fw="hyp1/build/URBAN-1-v0.2.0-SONG4-LOOP.fwsc"
+          fw="hyp1/build/URBAN-1-v0.3.0-COMPOSER.fwsc"
           test -s "$fw"
-          (cd hyp1/build && sha256sum URBAN-1-v0.2.0-SONG4-LOOP.fwsc > SHA256SUMS-URBAN1-v0.2.0.txt)
-          tag="urban1-firmware-v0.2.0"
-          notes="Firmware-only release for M-VAVE FM-1 and the existing Android FM-1 emulator. No APK update needed. Song Mode: 56 bars and four-bar A-H phrases (64 sixteenths per phrase); LOOP: repeat current four-bar phrase indefinitely and change A-H at the next one-bar boundary; KNOB3 picks the song subgenre (SELECT picks key); 56 genre-specific synth/drum/FX patches, 14 grooves, harmony and section-aware orchestration. Experimental GPL-3.0 HYP-1-based firmware: 8 logical tracks but only HYP-1's existing drum, bass, lead and pad audio engines; 16-step drum timing cannot represent hi-hat subdivisions faster than 16ths. Validated by host integration, native C tests, cross-compile and updater package checks; not physically tested. Import the .fwsc into the emulator firmware picker."
+          (cd hyp1/build && sha256sum URBAN-1-v0.3.0-COMPOSER.fwsc > SHA256SUMS-URBAN1-v0.3.0.txt)
+          tag="urban1-firmware-v0.3.0"
+          notes="FIRMWARE ONLY: Update All in FM-1 Mobile downloads this firmware from the master catalog; no APK is rebuilt or installed. v0.3.0 Composer: 10 scales/modes, 56 diatonic genre progression templates and six chord colours; genuine polyphonic 2-4-note PAD chords with inversion/voice-leading; contour-based lead motifs, varied onsets, fresh per-take syncopated bass and drum scores. 448 generated test takes (32 each of 14 genres) had distinct musical fingerprints, not just distinct seeds. Song Mode 56 bars, four-bar A-H phrases (64 steps), looping mode changes sections at the next bar boundary. Song genre/subgenre and 56 patches across all available 16 DRONE bass, 16 ACID lead, 16 PAD timbres and 8 built-in HYP drum kits. Important: this does NOT yet port TRIBE, X0X or ChoralRoot synthesis engines. Eight logical tracks, HYP's existing three melodic engine types and four PAD polyphony; 16th-note timing cannot generate genuine 32nd/64th trap hat rolls. Host/C/compiler/OTA tested, not yet tested on physical FM-1 or your Android phone. GPL-3.0-only firmware derived from HYP-1."
           if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
-            gh release upload "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.2.0.txt --repo "$GH_REPO" --clobber
+            gh release upload "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.3.0.txt --repo "$GH_REPO" --clobber
           else
-            gh release create "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.2.0.txt \
+            gh release create "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.3.0.txt \
               --repo "$GH_REPO" --target "$GITHUB_SHA" \
-              --title "URBAN-1 firmware v0.2.0 – Song 4-bar + Loop + genre patches" \
+              --title "URBAN-1 firmware v0.3.0 – COMPOSER (10 modes, real poly chords, new songs)" \
               --notes "$notes" --prerelease
           fi
           gh release view "$tag" --repo "$GH_REPO" --json assets,url \
@@ -101,5 +101,5 @@ jobs:
           # release:published events; this is required for cross-workflow
           # updates of master/web/firmwares.json when GitHub Actions creates
           # the firmware release.
-          gh workflow run sync-urban1-firmware.yml --repo "$GH_REPO" --ref master -f tag=urban1-firmware-v0.2.0
+          gh workflow run sync-urban1-firmware.yml --repo "$GH_REPO" --ref master -f tag=urban1-firmware-v0.3.0
           echo "Triggered updater-catalog sync on master (APK untouched)."
