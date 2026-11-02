@@ -29,6 +29,25 @@ int main(void) {
  urban_runtime_tick(&rt,&f);
  assert(f.sequence==2);
  assert(f.event[2].note==rt.bass.seq[2].steps[0].note);
+ /* A transport restart must never inherit the previous off-grid step. */
+ rt.transport.tick=URBAN_TICKS_PER_STEP*7u+9u;
+ rt.transport.step=7u;
+ rt.ui.song.song_mode=1u;
+ rt.ui.song.arrangement_pos=19u;
+ rt.ui.song.section_bar=7u;
+ urban_runtime_reset_clock(&rt);
+ assert(rt.transport.tick==0u && rt.transport.step==0u);
+ assert(rt.ui.song.arrangement_pos==0u);
+ assert(rt.ui.song.section_bar==0u);
+ assert(rt.ui.song.current==rt.ui.song.arrangement[0]);
+ rt.ui.song.song_mode=0u;
+ rt.ui.song.queued=URBAN_DROP;
+ rt.ui.song.section_bar=3u;
+ rt.transport.tick=99u;rt.transport.step=4u;
+ urban_runtime_reset_clock(&rt);
+ assert(rt.transport.tick==0u && rt.transport.step==0u);
+ assert(rt.ui.song.current==URBAN_DROP);
+ assert(rt.ui.song.section_bar==0u);
  puts("URBAN-1 runtime integration tests passed");
  return 0;
 }
