@@ -21,6 +21,7 @@
  * separate object. Both need the same exported DSP entry points. */
 void urban_sfx_trigger(unsigned type,unsigned level,unsigned length);
 void urban_sfx_silence(void);
+extern volatile uint32_t urban_sfx_rendered_events;
 
 typedef struct {
     UrbanRuntime rt;
