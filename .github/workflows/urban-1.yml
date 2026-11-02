@@ -39,6 +39,7 @@ jobs:
           hyp1/build/host/amb_host urban-1/tests/hyp1_sfx.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_pianist.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_jazz_instruments.amb hyp1/build/urban
+          hyp1/build/host/amb_host urban-1/tests/hyp1_jazz_modulation.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_jazz_bass.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_ambient_chords.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_trance_clock.amb hyp1/build/urban
