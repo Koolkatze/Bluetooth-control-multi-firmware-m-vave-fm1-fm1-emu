@@ -106,8 +106,12 @@ static void check_fresh_compositions(void) {
         uint32_t seen[40];
         unsigned distinct=0u;
         for(unsigned take=0;take<40u;take++) {
+            uint8_t previous_chords=rt.ui.song.harmony_variant;
+            uint8_t previous_contour=rt.ui.song.melodic_variant;
             urban_runtime_generate_entropy(&rt,(take%3u)*77u);
             const UrbanSong *s=&rt.ui.song;
+            assert(s->harmony_variant!=previous_chords);
+            assert(s->melodic_variant!=previous_contour);
             assert(s->genre==g && s->subgenre==g%4u);
             assert(s->key==8u && s->tempo==105u);
             uint32_t audible=audible_score(&rt);
@@ -116,7 +120,7 @@ static void check_fresh_compositions(void) {
             seen[take]=audible;
             distinct+=(unsigned)!dup;
         }
-        assert(distinct>=39u); /* note-level changes, not unique seed labels */
+        assert(distinct==40u); /* every consecutive Generate must compose anew */
     }
 }
 static void check_track_regeneration(void) {
