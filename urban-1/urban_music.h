@@ -34,6 +34,26 @@ static const UrbanMelodyGrammar urban_melodic[URBAN_GENRES]={
     {0x8888,0x0101,0xaaaa,0x0101,51,82,5,1}, /* Trance: soaring offbeat/arps */
     {0x2a49,0x0101,0xaaaa,0x0101,47,77,6,0}  /* Liquid: flowing intervals */
 };
+/* Score-level melodic DNA: each genre shapes intervallic contour and
+ * phrasing independently of its rhythm grid. Signed shifts are diatonic
+ * scale degrees, not chromatic jumps, so new songs stay inside their mode.
+ * Variations are selected by song seed / melodic_variant. */
+static const int8_t urban_melodic_leaps[URBAN_GENRES][8]={
+ /* Trap: sparse minor pentatonic contours       */ { 0, 2,-2, 1,-1, 2,-2, 0},
+ /* Goth: descending Phrygian/suspensions        */ { 0,-1,-2, 1,-2, 1,-1, 0},
+ /* Sad: stepwise rise / falling sigh            */ { 0, 1,-1,-2, 2,-1, 1,-1},
+ /* Hip-hop: offbeat call-and-response           */ { 0, 2,-1, 1,-2, 2,-1,-1},
+ /* Trip-hop: languid, moody intervals           */ { 0,-1, 0, 2,-2, 1,-1, 0},
+ /* Underground: interval extensions             */ { 0, 2,-1, 3,-2, 1,-2, 1},
+ /* Horrorcore: tension and chromatic-like mode  */ { 0,-2, 1,-2, 1,-1,-2, 0},
+ /* Reggaeton: singable tresillo motif           */ { 0, 2,-1, 1, 1,-2, 1,-1},
+ /* DnB: agile angular movement                  */ { 0, 3,-2, 1, 2,-3, 2,-1},
+ /* Dubstep: sparse root/fifth and drops         */ { 0,-2, 2, 1,-2, 2,-1, 0},
+ /* Techno: tiny repetitive hypnotic figures    */ { 0, 0, 1, 0,-1, 0, 1,-1},
+ /* Hardcore: repetitive octaves and fifths     */ { 0, 2,-2, 0, 2,-2, 0, 0},
+ /* Trance: ascending hook and release          */ { 0, 1, 2, 1,-1, 2,-2,-1},
+ /* Liquid jungle: jazz/soul melodic contours   */ { 0, 2,-1, 2,-2, 1, 2,-2}
+};
 static uint8_t urban_density(uint8_t genre,unsigned track) {
     unsigned d=urban_melodic[genre%URBAN_GENRES].density;
     if(track==2u)d=d/2u;
@@ -109,6 +129,11 @@ static void urban_generate_voice(const UrbanSong *song,unsigned track,
                  contour==5?(int)(r%3u)-1:
                  contour==6?(int)(r%5u)-2:
                  (i%2u?2:-2);
+        /* Genre interval grammar adds motion without erasing the selected
+         * song's distinct contour. A repeated hook reuses this motif. */
+        step+=urban_melodic_leaps[cfg->genre%URBAN_GENRES][i];
+        if(step>4)step=4;
+        if(step< -4)step= -4;
         int next=(int)motif[i-1]+step;
         if(next<0)next+=7;
         motif[i]=(uint8_t)(next%7);
@@ -117,7 +142,8 @@ static void urban_generate_voice(const UrbanSong *song,unsigned track,
         UrbanPhrase *phrase=&out->sequence[section];
         uint32_t rng=urban_mix_seed(seed ^
             ((section+1u)*0x85ebca6bu) ^
-            ((uint32_t)cfg->subgenre*0xc2b2ae35u));
+            ((uint32_t)cfg->subgenre*0xc2b2ae35u) ^
+            ((uint32_t)song->harmony_variant*0x7f4a7c15u));
         phrase->seed=rng;
         uint16_t base=track<=1u?0u:track==3u?g->lead:
             track==4u?g->chord:track==5u?g->texture:g->arp;
