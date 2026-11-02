@@ -34,6 +34,19 @@ static void urban_runtime_init(UrbanRuntime *rt,uint32_t seed) {
     urban_generate_song(&rt->ui.song,seed);
     for(unsigned i=0;i<URBAN_TRACKS;i++) urban_runtime_refresh_track(rt,i);
 }
+/* HYP play_start(1) restarts its sixteenth counter at zero.
+ * Its UI-side song clock MUST restart on the same downbeat. Preserve
+ * manual LOOP's chosen section, but reset its phrase to bar 1. */
+static void urban_runtime_reset_clock(UrbanRuntime *rt) {
+    rt->transport.tick=0u;
+    rt->transport.step=0u;
+    if(rt->ui.song.song_mode)
+        urban_song_set_mode(&rt->ui.song,1);
+    else {
+        rt->ui.song.current=rt->ui.song.queued;
+        rt->ui.song.section_bar=0u;
+    }
+}
 static void urban_runtime_generate_entropy(UrbanRuntime *rt,
                                            uint32_t entropy) {
     if(rt->ui.page==URBAN_PAGE_TRACKS) {
