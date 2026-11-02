@@ -48,6 +48,8 @@ def main() -> None:
                     root / "firmware/src/app/urban_editor.h")
     shutil.copyfile(HERE / "integrations/urban_hyp_port.h",
                     root / "firmware/src/app/urban_hyp_port.h")
+    shutil.copyfile(HERE / "integrations/urban_sfx_engine.h",
+                    root / "firmware/src/app/urban_sfx_engine.h")
     # HYP-1's Break kit applies random ghost kicks/snares and 32nd-roll
     # retriggers *after* reading the six authored pattern lanes. These
     # unscored hits sound like glitches in URBAN-1, where all fills and
@@ -72,6 +74,15 @@ def main() -> None:
     replace_once(dsp,
         'const float c = KK->crush, q = 24.0f;',
         'const float c = urban_crush, q = 24.0f;')
+    # New monophonic procedural SFX audio voice: 10 modelled transients.
+    # The engine lives inside HYP's DSP mix; no stolen drum/lead lanes.
+    # Include after the mixer buffers and sine oscillator have been defined.
+    replace_once(dsp,
+        'static void render_drums(uint32_t n)',
+        '#include "../app/urban_sfx_engine.h"\\nstatic void render_drums(uint32_t n)')
+    replace_once(dsp,
+        '    duck_env = fm_flush(de);',
+        '    urban_sfx_render(n); /* dedicated SFX voice, mixed before master FX */\\n    duck_env = fm_flush(de);')
     # One shared port implementation in both the FM-1 and HYP-1 host simulator.
     replace_once(root / "firmware/src/main.c",
         '#include "app/main_fm1.c"',
