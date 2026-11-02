@@ -18,6 +18,7 @@ typedef struct {
     uint32_t last_sixteenth, held_buttons;
     uint8_t held[3], note[3], left[3];
     uint8_t chord_notes[4], chord_count, chord_left;
+    uint8_t previous_chord[4], previous_chord_count;
     uint8_t overridden[URBAN_TRACKS];
     uint8_t bank;
 } UrbanHypPort;
@@ -55,6 +56,7 @@ static void urban_port_release(void) {
         en_note(EN_V_PAD,urban_port.chord_notes[i],0);
     urban_port.chord_count=0u;
     urban_port.chord_left=0u;
+    urban_port.previous_chord_count=0u;
 }
 /* Never edit the pattern currently read by the audio ISR. The inactive
  * HYP drum slot acts as the next-bar buffer. The two URBAN drum tracks
@@ -245,22 +247,25 @@ static void urban_port_chord_off(void) {
 static void urban_port_chord(unsigned color,unsigned gate) {
     UrbanHypPort *p=&urban_port;
     const UrbanSong *s=&p->rt.ui.song;
-    uint8_t next[4]={0},prev[4]={0};
-    unsigned old=p->chord_count;
-    for(unsigned i=0;i<old;i++)prev[i]=p->chord_notes[i];
+    uint8_t next[4]={0};
+    /* Retain the LAST voiced chord even when its gate has been released.
+     * Voice-leading across rhythmic gaps requires that memory. */
+    const uint8_t *prev=p->previous_chord_count?p->previous_chord:0;
     urban_port_chord_off();
     uint8_t solo=0u;
     for(unsigned i=0;i<URBAN_TRACKS;i++)solo|=s->tracks[i].solo;
     if(s->tracks[4].muted || (solo && !s->tracks[4].solo))
         return;
     unsigned count=urban_build_chord_colored(s,urban_phrase_bar(s),
-                            color,old?prev:0,next);
+                            color,prev,next);
     if(count>EN_NPAD)count=EN_NPAD;
     for(unsigned i=0;i<count;i++) {
         if(!next[i])continue;
         en_note(EN_V_PAD,next[i],1);
         p->chord_notes[p->chord_count++]=next[i];
+        p->previous_chord[i]=next[i];
     }
+    p->previous_chord_count=p->chord_count;
     p->chord_left=(uint8_t)(gate?gate:1u);
 }
 static void urban_port_step(void) {
