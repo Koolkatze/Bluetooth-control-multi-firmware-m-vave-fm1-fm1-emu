@@ -1009,8 +1009,8 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
         }
     } else if(r->mod_page==0u && r->state==UR_REC_EDIT) {
         d=plat_enc(EN_K1);
-        if(d)r->position=(uint16_t)
-          (((int)r->position+2*d+(int)urban_rec_length(r)*32)%
+        if(d)r->edit_cursor=(uint16_t)
+          (((int)r->edit_cursor+2*d+(int)urban_rec_length(r)*32)%
            (int)urban_rec_length(r));
         d=plat_enc(EN_K2);
         if(d) {
@@ -1023,7 +1023,7 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
             r->edit_velocity=(uint8_t)(v<1?1:v>127?127:v);
         }
         d=plat_enc(EN_K4);
-        if(d)urban_rec_toggle_note(r,r->position,r->edit_note);
+        if(d)urban_rec_toggle_note(r,r->edit_cursor,r->edit_note);
     } else if(r->mod_page!=0u &&
              (r->state==UR_REC_RECORD||r->state==UR_REC_EDIT)) {
         const UrbanEditorBank *bank=urban_port_rec_mod_bank();
@@ -1225,6 +1225,12 @@ static uint32_t urban_port_screen_signature(const UrbanHypPort *p) {
     UI_ACC(t->genre);UI_ACC(t->subgenre);
     UI_ACC(t->locked);UI_ACC(t->muted);UI_ACC(t->solo);
     UI_ACC(p->editor.view);UI_ACC(p->editor.target);UI_ACC(p->editor.bank);
+    UI_ACC(p->rec_screen);UI_ACC(p->recorder.state);
+    UI_ACC(p->recorder.mod_page);UI_ACC(p->recorder.count);
+    UI_ACC(p->recorder.position);UI_ACC(p->recorder.edit_cursor);
+    UI_ACC(p->recorder.track);UI_ACC(p->recorder.bars);
+    UI_ACC(p->recorder.quant);UI_ACC(p->recorder.overdub);
+    UI_ACC(p->recorder.edit_note);UI_ACC(p->tape_enabled);
     if(p->editor.view) {
         unsigned nb=0u;
         const UrbanEditorBank *eb=urban_editor_bank(&p->editor,&nb);
@@ -1299,6 +1305,93 @@ static void urban_port_editor_value_text(int id,char buf[24]) {
     else if(id>=0 && id<P_NPARAMS)en_param_text(id,v,buf);
     else urban_port_copy_text(buf,"--");
 }
+
+static void urban_port_rec_upper(uint16_t orange,uint16_t dim) {
+    const UrbanRecorder *r=&urban_port.recorder;
+    char label[24]="REC MIDI  0/8 BARS";
+    label[10]=(char)('0'+r->bars);
+    urban_port_screen_text(2,&FONT_B,"URBAN-1 MIDI",orange);
+    urban_port_screen_text(23,&FONT_S,label,dim);
+    /* Piano-roll: real recorded note-on events (not a decorative grid).
+     * Shows 1 bar at a time on 32nd slots, up to 12 MIDI pitches. */
+    unsigned current_bar=r->state==UR_REC_EDIT?
+                (r->edit_cursor/32u):(r->position/32u);
+    unsigned first=(r->state==UR_REC_EDIT?
+                 r->edit_note:r->edit_note)/12u*12u;
+    if(first>84u)first=84u;
+    for(unsigned col=0u;col<32u;col++) {
+        uint16_t bg=(col%8u==0u)?RGB(45,51,66):RGB(25,30,41);
+        cv_rect(16+(int)col*6,37,5,94,bg);
+    }
+    for(unsigned i=0u;i<r->count;i++) {
+        const UrbanRecEvent *e=&r->event[i];
+        if(e->kind!=UR_REC_NOTE_ON||e->pos/32u!=current_bar)
+            continue;
+        if(e->note<first||e->note>=first+12u)continue;
+        int x=16+(int)(e->pos%32u)*6;
+        int y=37+(int)(11u-(e->note-first))*8;
+        cv_rect(x,y,5,7,orange);
+    }
+    unsigned cursor=(r->state==UR_REC_EDIT?
+                     r->edit_cursor:r->position)%32u;
+    cv_rect(16+(int)cursor*6,34,3,3,C_WHITE);
+    char note[24]="NOTE 060   LOOP 0/8";
+    unsigned n=r->edit_note;
+    note[5]=(char)('0'+(n/100u)%10u);
+    note[6]=(char)('0'+(n/10u)%10u);
+    note[7]=(char)('0'+n%10u);
+    note[16]=(char)('0'+current_bar%10u);
+    urban_port_screen_text(131,&FONT_S,note,dim);
+}
+static void urban_port_rec_lower(uint16_t orange,uint16_t dim) {
+    const UrbanRecorder *r=&urban_port.recorder;
+    char state[24]="REC ARM";
+    if(r->state==UR_REC_RECORD)
+        state=r->overdub?"REC OVERDUB":"REC FIRST PASS";
+    else if(r->state==UR_REC_EDIT)state="MIDI EDIT / LOOP";
+    urban_port_screen_text(1,&FONT_S,state,orange);
+    if(r->mod_page) {
+        const UrbanEditorBank *bank=urban_port_rec_mod_bank();
+        if(bank) {
+            urban_port_screen_text(17,&FONT_S,bank->title,orange);
+            for(unsigned i=0u;i<4u;i++) {
+                int id=bank->param[i];
+                if(id==URBAN_EDITOR_NO_PARAM)continue;
+                char digits[8]="K1";
+                digits[1]=(char)('1'+i);
+                cv_text(6,33+(int)i*15,&FONT_S,digits,dim);
+                cv_text(34,33+(int)i*15,&FONT_S,
+                        urban_editor_label(id),C_WHITE);
+                char value[24];
+                urban_port_editor_value_text(id,value);
+                int x=239-text_w(&FONT_S,value);
+                cv_text(x<175?175:x,33+(int)i*15,&FONT_S,value,orange);
+            }
+            return;
+        }
+    }
+    if(r->state==UR_REC_ARM) {
+        char info[24]="INST CHORDS  BARS 4";
+        if(r->track==2u)info="INST BASS  BARS 4";
+        else if(r->track==3u)info="INST LEAD  BARS 4";
+        /* Print value separately, no dynamic text allocation. */
+        urban_port_screen_text(17,&FONT_S,info,orange);
+        urban_port_screen_text(35,&FONT_S,"K1 INST   K2 BARS",C_WHITE);
+        urban_port_screen_text(53,&FONT_S,"K3 QUANT ON/OFF",C_WHITE);
+        urban_port_screen_text(71,&FONT_S,"K4 GRID  REC START",dim);
+    } else if(r->state==UR_REC_RECORD) {
+        urban_port_screen_text(18,&FONT_S,"PLAY THE 27 KEYS",C_WHITE);
+        urban_port_screen_text(38,&FONT_S,"SEL/ENV/LFO: MOD PAGE",C_WHITE);
+        urban_port_screen_text(59,&FONT_S,"K1-K4: REC AUTOMATION",orange);
+        urban_port_screen_text(79,&FONT_S,"REC STOP -> MIDI EDIT",dim);
+    } else {
+        urban_port_screen_text(18,&FONT_S,"K1 STEP  K2 NOTE",C_WHITE);
+        urban_port_screen_text(39,&FONT_S,"K3 VELOCITY  K4 TOGGLE",C_WHITE);
+        urban_port_screen_text(60,&FONT_S,"SEL: MOD PAGE / KEYS",orange);
+        urban_port_screen_text(79,&FONT_S,"REC DUB  SAVE KEEP LOOP",dim);
+    }
+}
+
 static void urban_port_editor_upper(uint16_t orange,uint16_t dim) {
     const UrbanEditor *e=&urban_port.editor;
     unsigned nb=0u;
@@ -1381,7 +1474,9 @@ static void urban_port_frame(void) {
 
         /* Upper off-screen band: one DMA, no exposed intermediate black. */
         cv_begin(240,144,background);
-        if(p->editor.view) {
+        if(p->rec_screen) {
+            urban_port_rec_upper(orange,dim);
+        } else if(p->editor.view) {
             urban_port_editor_upper(orange,dim);
         } else {
         urban_port_screen_text(9,&FONT_B,"URBAN-1",orange);
@@ -1416,7 +1511,9 @@ static void urban_port_frame(void) {
          * after sending the upper band: the previous content stays valid
          * until this second DMA is ready. */
         cv_begin(240,96,background);
-        if(p->editor.view) {
+        if(p->rec_screen) {
+            urban_port_rec_lower(orange,dim);
+        } else if(p->editor.view) {
             urban_port_editor_lower(orange,dim);
         } else if(p->rt.ui.page==URBAN_PAGE_SONG) {
             urban_port_screen_text(4,&FONT_S,take,orange);
@@ -1430,19 +1527,20 @@ static void urban_port_frame(void) {
                 s->song_mode?"K2 GENRE  K3 SUBGENRE":"K4 NEXT A-H  K3 SUB",C_WHITE);
             urban_port_screen_text(60,&FONT_S,
                 s->song_mode?"SAVE GENERATE  ARP LOOP":"ARP AUTO  SAVE GENERATE",C_WHITE);
-            urban_port_screen_text(79,&FONT_S,"SEQ TRACKS   SELECT KEY",dim);
+            urban_port_screen_text(79,&FONT_S,"REC MIDI   LONG PLAY INTRO",dim);
         } else {
             urban_port_screen_text(14,&FONT_S,
                 urban_port_instrument_name(s,p->rt.ui.selected_track),orange);
             urban_port_screen_text(36,&FONT_S,"SAVE: REGENERATE TRACK",dim);
             urban_port_screen_text(57,&FONT_S,"K1 TRACK  K2 GENRE",C_WHITE);
-            urban_port_screen_text(79,&FONT_S,"FX/EDIT PAGES ENV LOCK LFO MUTE",dim);
+            urban_port_screen_text(79,&FONT_S,"ENV/LFO MOD  SEL+ENV LOCK",dim);
         }
         cv_blit(0,144);
         lcd_sync();
         p->ui_signature=sig;
         p->ui_drawn=1u;
     }
+    plat_play_red(p->recorder.state==UR_REC_RECORD);
     plat_leds((s->playing?1u<<B_PLAY:0u)|
               (p->editor.view==URBAN_EDITOR_FX?1u<<B_FX:
                p->editor.view==URBAN_EDITOR_EDIT?1u<<B_EDIT:
