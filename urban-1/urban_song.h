@@ -6,6 +6,7 @@
 #ifndef URBAN_SONG_H
 #define URBAN_SONG_H
 #include <stdint.h>
+#include "urban_scales.h"
 #if !defined(URBAN_EMBEDDED)
 #include <string.h>
 #endif
@@ -15,7 +16,7 @@
 #define URBAN_BARS_PER_PHRASE 4u
 #define URBAN_ARRANGEMENT 64
 #define URBAN_GENRES 14u
-#define URBAN_SCALE_COUNT 10u
+/* Scale count is defined by the 12-TET named-scale registry. */
 
 enum { URBAN_INTRO, URBAN_VERSE_A, URBAN_HOOK, URBAN_VERSE_B,
        URBAN_BRIDGE, URBAN_DROP, URBAN_BREAK, URBAN_OUTRO };
@@ -40,6 +41,7 @@ typedef struct {
     uint8_t harmony_variant, melodic_variant, drum_variant, chord_colors[4];
     uint8_t chord_degrees[4];
     uint8_t song_mode, arrangement_pos, section_bar; /* song_mode=1 AUTO, 0 LOOP */
+    uint8_t scale_manual; /* preserve explicit EDIT scale through SAVE */
 } UrbanSong;
 
 static const uint8_t urban_genre_bpm[URBAN_GENRES] = {
@@ -67,42 +69,41 @@ static const uint8_t urban_progressions[URBAN_GENRES][4] = {
     {0,8,3,10},  /* trance: i-VI-III-VII */
     {0,5,3,10}   /* liquid: i-iv-III-VII */
 };
-/* Scales are diatonic collections, in semitones from the tonic. Each
- * genre can choose musically related modes on each Generate press.
- * Any track can have its own groove/timbre while sharing the song's
- * selected scale and chord progression.
- */
-static const uint8_t urban_scale_intervals[URBAN_SCALE_COUNT][7]={
-  {0,2,3,5,7,8,10},   /* Aeolian */
-  {0,1,3,5,7,8,10},   /* Phrygian */
-  {0,2,3,5,7,9,10},   /* Dorian */
-  {0,2,3,5,7,8,11},   /* Harmonic minor */
-  {0,2,4,5,7,9,11},   /* Ionian */
-  {0,2,4,5,7,9,10},   /* Mixolydian */
-  {0,1,4,5,7,8,10},   /* Phrygian dominant */
-  {0,2,4,6,7,9,11},   /* Lydian */
-  {0,2,3,5,7,9,11},   /* Melodic minor */
-  {0,1,3,5,6,8,10}    /* Locrian */
-};
-/* Each named subgenre has one deliberately selected modal centre,
- * rather than choosing scale from four unrelated alternatives per take.
- * Major/lydian can appear in uplifting/romantic styles; vocal trap
- * prefers Aeolian; witch house Phrygian; jazz rap/liquid Dorian. */
+/* True genre/substyle musical affinity. The first mode is the
+ * default; the other two are coherent optional colours, selected by
+ * SAVE's harmony variation. All 56 styles have independent choices;
+ * no random unrestricted choice of chromatic or experimental modes. */
 static const uint8_t urban_genre_mode_options[URBAN_GENRES][4]={
- /* Trap: classic, drill, ambient, rolled hats */        {0,1,0,3},
- /* Goth: witch, industrial, darkwave, cloud */          {1,1,0,3},
- /* Sad: emo, piano, lo-fi, guitar */                   {0,0,2,0},
- /* Hip-hop: boom bap, jazz, G-funk, lo-fi */            {0,2,5,0},
- /* Trip-hop: Bristol, downbeat, abstract, dub */        {0,2,1,2},
- /* Underground: dusty, jazz, experimental, break */     {0,2,8,5},
- /* Horrorcore: Memphis, cinematic, industrial, dark */  {1,3,1,6},
- /* Reggaeton: dembow, perreo, romantic, future */       {0,0,4,2},
- /* DnB: neurofunk, jump-up, darkstep, techstep */       {1,0,1,9},
- /* Dubstep: UK 140, deep, riddim, brostep */            {0,0,1,1},
- /* Techno: Detroit, hypnotic, dub, minimal */          {2,0,2,0},
- /* Hardcore: gabber, industrial, frenchcore, uptempo */ {0,1,0,0},
- /* Trance: progressive, uplifting, psy, tech */         {0,4,6,2},
- /* Liquid: soulful, atmospheric, jazz, deep */          {2,0,2,0}
+  /* Trap */ {  0,  1, 85,  3},
+  /* Goth Trap */ {  1, 35,  0, 85},
+  /* Sad Trap */ {  0,  4,  2, 85},
+  /* Hip-hop */ { 85,  2,  5,101},
+  /* Trip-hop */ {  0,  2,  9,  1},
+  /* Underground */ {101,  2,  8,  5},
+  /* Horrorcore */ {  1, 28, 35, 70},
+  /* Reggaeton */ {  0,  6,  4,  2},
+  /* Drum & Bass */ {  1,  0,  9,110},
+  /* Dubstep */ {  0, 85,  1,  3},
+  /* Techno */ {  2,  0,  5, 85},
+  /* Hardcore */ {  1,  9,  3,  0},
+  /* Trance */ {  0,  4,  6,  2},
+  /* Liquid */ {  2,  7,114, 85}
+};
+static const uint8_t urban_style_scale_alternatives[URBAN_GENRES][4][2]={
+  /* 0 */ {{85,101},{49,35},{0,90},{8,35}},
+  /* 1 */ {{49,28},{110,9},{2,3},{90,88}},
+  /* 2 */ {{85,3},{84,107},{8,101},{101,90}},
+  /* 3 */ {{0,101},{114,8},{94,100},{85,2}},
+  /* 4 */ {{3,85},{8,106},{102,111},{6,85}},
+  /* 5 */ {{85,0},{114,101},{20,77},{100,85}},
+  /* 6 */ {{49,35},{70,3},{110,9},{77,49}},
+  /* 7 */ {{85,2},{3,28},{84,7},{5,8}},
+  /* 8 */ {{9,35},{85,101},{111,49},{102,20}},
+  /* 9 */ {{85,1},{2,101},{9,110},{28,35}},
+  /* 10 */ {{8,5},{85,2},{17,102},{91,84}},
+  /* 11 */ {{35,9},{110,49},{35,28},{1,85}},
+  /* 12 */ {{2,3},{7,84},{28,3},{8,5}},
+  /* 13 */ {{114,8},{84,4},{112,2},{0,101}}
 };
 /* 56 substyle-specific four-bar chord progressions as modal DEGREES.
  * Each subgenre gets its own functional harmony. This is not a table of
@@ -189,7 +190,11 @@ static uint32_t urban_rng(uint32_t *x) {
 static void urban_song_harmony(UrbanSong *s) {
     unsigned g=s->genre%URBAN_GENRES;
     unsigned sub=s->subgenre%4u;
-    s->scale=urban_genre_mode_options[g][sub];
+    if(!s->scale_manual) {
+        unsigned variation=s->harmony_variant%4u;
+        s->scale=variation<2u?urban_genre_mode_options[g][sub]:
+            urban_style_scale_alternatives[g][sub][variation-2u];
+    }
     for(unsigned bar=0;bar<4u;bar++) {
         unsigned deg=urban_chord_degrees[g][sub][bar];
         /* Four coherent cadence variants within this same subgenre:
@@ -198,8 +203,11 @@ static void urban_song_harmony(UrbanSong *s) {
             deg=urban_chord_degrees[g][sub][1u];
         if((s->harmony_variant&2u) && bar==2u)
             deg=urban_chord_degrees[g][sub][0u];
-        s->chord_degrees[bar]=(uint8_t)deg;
-        s->progression[bar]=urban_scale_intervals[s->scale][deg];
+        /* Project 7-degree genre cadences onto the chosen scale's actual
+         * cardinality, including pentatonic, hexatonic and octatonic modes. */
+        unsigned root=urban_scale_root_degree(s->scale,deg);
+        s->chord_degrees[bar]=(uint8_t)root;
+        s->progression[bar]=(uint8_t)urban_scale_pc(s->scale,root);
         unsigned color=urban_substyle_chord_colors[g][sub][bar];
         /* Revoicing one phrase-end chord varies new songs without
          * destroying the selected style's harmonic identity. */
@@ -242,6 +250,7 @@ static void urban_init(UrbanSong *s, uint32_t seed) {
 }
 static void urban_song_set_genre(UrbanSong *s,uint8_t genre) {
     s->genre=(uint8_t)(genre%URBAN_GENRES);
+    s->scale_manual=0u;
     urban_song_harmony(s);
 }
 static void urban_song_set_mode(UrbanSong *s,int song_mode) {
