@@ -53,19 +53,19 @@ jobs:
           cd hyp1
           ./build.sh --release 0.2.0
           test -s build/amb-0.2.0.fwsc
-          cp build/amb-0.1.0.fwsc build/URBAN-1-v0.2.0-SONG4-LOOP.fwsc
+          cp build/amb-0.2.0.fwsc build/URBAN-1-v0.2.0-SONG4-LOOP.fwsc
       - name: Verify package with HYP-1 updater tests
         run: |
           cd hyp1
           cc -o build/ota_test tests/ota_test.c
-          build/ota_test build/amb-0.1.0.fwsc
+          build/ota_test build/amb-0.2.0.fwsc
           python3 tests/install_test.py
       - name: Publish untested experimental firmware as artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: URBAN-1-v0.2.0-firmware-only
-          path: hyp1/build/URBAN-1-0.1.0-EXPERIMENTAL.fwsc
+          path: hyp1/build/URBAN-1-v0.2.0-SONG4-LOOP.fwsc
           if-no-files-found: error
 
       - name: Publish permanent firmware-only download (GitHub Releases)
