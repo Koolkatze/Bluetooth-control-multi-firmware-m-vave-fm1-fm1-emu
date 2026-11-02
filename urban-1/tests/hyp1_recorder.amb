@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Device keyboard + MIDI editor + non-destructive overdub + real LFO
+expect urbanrecstate 0
+tap REC
+expect urbanrecscreen 1
+expect urbanrecstate 1
+expect urbanrectrack 4
+spin K2 -2
+expect urbanrecbars 1
+spin K3 1
+expect urbanrecquant 0
+spin K4 3
+expect urbanrecquant 2
+tap REC
+expect urbanrecstate 2
+expect playing 1
+tapkey 7
+wait 2200
+expect urbanrecdub 1
+expect urbanrecevents >1
+tap LFO
+expect urbanrecmod 2
+spin K2 30
+expect urbanrecevents >2
+shot urban-rec-lfo.png
+tap REC
+expect urbanrecstate 3
+spin SELECT -2
+expect urbanrecmod 0
+spin K2 3
+spin K4 1
+expect urbanrecevents >2
+shot urban-rec-midi-editor.png
+tap REC
+expect urbanrecstate 2
+expect urbanrecdub 1
+tap HOME
+expect urbanrecscreen 0
+expect playing 1
+tap PLAY
+expect playing 0
