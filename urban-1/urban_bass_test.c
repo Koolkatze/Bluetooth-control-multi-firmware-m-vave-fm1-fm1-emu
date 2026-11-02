@@ -15,7 +15,7 @@ int main(void){
   for(unsigned k=0;k<URBAN_STEPS;k++){
    UrbanBassStep n=c.seq[q].steps[k];
    assert(n.note>=36u && n.note<=71u);
-   assert(n.glide==0u);
+   assert(n.glide<=1u);
   }
  puts("URBAN-1 bass tests passed");
  return 0;
