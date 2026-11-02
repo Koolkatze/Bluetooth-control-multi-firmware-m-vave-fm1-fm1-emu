@@ -289,50 +289,51 @@ static void urban_port_chord(unsigned color,unsigned gate) {
     p->previous_chord_count=p->chord_count;
     p->chord_left=(uint8_t)(gate?gate:1u);
 }
+static void urban_port_advance_score(void) {
+    UrbanHypPort *p=&urban_port;
+    UrbanMidiFrame unused;
+    for(unsigned i=0;i<URBAN_TICKS_PER_STEP;i++)
+        urban_runtime_tick(&p->rt,&unused);
+}
 static void urban_port_step(void) {
     UrbanHypPort *p=&urban_port;
     UrbanMidiFrame frame;
     unsigned i,t;
-    /* Chord partitura: each genre has an actual rhythmic score, with
-     * voiced triads/7ths/9ths/sus/power chords, not one eternal pad chord
-     * triggered only at bar 1. Chord changes still follow the song's
-     * four-bar harmonic plan. */
     unsigned cstep=p->rt.transport.step;
-    if(cstep==0u)urban_port_chord_off();
+    /* HYP's drum tick has already advanced its 16th counter by one.
+     * Update the chord/voice mix on THIS bar's first 16th, not on
+     * the preceding bar's last 16th (the prior code changed section
+     * timbre a beat early and sounded out of tempo). */
+    if(cstep==0u) {
+        if(p->active_mix_section!=p->rt.ui.song.current) {
+            urban_port_section_mix();
+            p->active_mix_section=p->rt.ui.song.current;
+        } else urban_port_mix_levels();
+        urban_port_chord_off();
+    }
     if(p->chord_left && --p->chord_left==0u)
         urban_port_chord_off();
     UrbanChordScore cs=urban_chord_score(&p->rt.ui.song,
-                          p->rt.ui.song.current,
-                          urban_phrase_bar(&p->rt.ui.song));
+                           p->rt.ui.song.current,
+                           urban_phrase_bar(&p->rt.ui.song));
     if((cs.onsets>>cstep)&1u)
         urban_port_chord(cs.color,cs.gate);
-    /* A gate lasts N sixteenth notes. */
     for(i=0;i<3;i++) if(p->held[i] && p->left[i]) {
         if(--p->left[i]==0u) {
             en_note((int)i,urban_hyp_key(i,p->note[i]),0);
             p->held[i]=0u;
         }
     }
-    /* Stage the NEXT bar on the last sixteenth, before the transport
-     * advances the song arrangement and before HYP's pattern boundary. */
-    if(p->rt.transport.step==URBAN_STEPS-1u)
+    /* Stage the next bar before its HYP DSP switch, not after it. */
+    if(cstep==URBAN_STEPS-1u)
         urban_port_stage_pattern();
-    uint8_t previous=p->rt.ui.song.current;
-    unsigned previous_bar=urban_phrase_bar(&p->rt.ui.song);
     urban_runtime_tick(&p->rt,&frame);
-    /* URBAN's 96 PPQN clock is advanced 24 ticks per HYP sixteenth;
-     * capture the initial event before its empty intermediate ticks. */
     for(t=1;t<URBAN_TICKS_PER_STEP;t++) {
         UrbanMidiFrame unused;
         urban_runtime_tick(&p->rt,&unused);
     }
-    /* Bass and lead are monophonic engines. Chord track 4 is handled
-     * by the four-voice polyphonic score above, not this retrigger loop. */
     for(i=2;i<=3;i++)
         urban_port_note(i,frame.event[i],frame.glide[i]);
-    if(p->rt.ui.song.current!=previous)urban_port_section_mix();
-    else if(urban_phrase_bar(&p->rt.ui.song)!=previous_bar)
-        urban_port_mix_levels();
 }
 static void urban_port_poll(void) {
     UrbanHypPort *p=&urban_port;
@@ -342,16 +343,39 @@ static void urban_port_poll(void) {
         p->last_sixteenth=now;
         return;
     }
-    /* After a long stall do not flood HYP's 256-entry command queue. */
-    steps=now-p->last_sixteenth;
-    if(steps>32u) {
+    /* Audio callback is the clock authority. After a slow UI frame,
+     * NEVER fire 2..32 lead notes simultaneously: that causes the
+     * out-of-tempo bursts described by the user. Fast-forward the
+     * score without emitting old MIDI notes, then play only the latest
+     * 16th. This keeps the lead on the same drum sixteenth. */
+    if(now<p->last_sixteenth) {
+        /* HYP play_start() reset its counter, unlike URBAN's previous
+         * snapshot. Wrap/reset is NOT thousands of missing steps. */
         urban_port_release();
-        p->last_sixteenth=now-1u;
-        steps=1u;
+        p->last_sixteenth=now>0u?now-1u:now;
+        p->active_mix_section=255u;
     }
-    while(steps--) {
+    steps=now-p->last_sixteenth;
+    if(steps>1u) {
+        unsigned missed=steps-1u;
+        urban_port_release();
+        if(missed>512u) {
+            /* Bounded recovery: no giant MIDI burst, preserve current
+             * song/loop mode; await the following fresh 16th tick. */
+            p->last_sixteenth=now-1u;
+        } else {
+            for(unsigned skip=0;skip<missed;skip++) {
+                if(p->rt.transport.step==URBAN_STEPS-1u)
+                    urban_port_stage_pattern();
+                urban_port_advance_score();
+            }
+            p->last_sixteenth+=missed;
+        }
+        p->active_mix_section=255u;
+    }
+    if(p->last_sixteenth!=now) {
         urban_port_step();
-        p->last_sixteenth++;
+        p->last_sixteenth=now;
     }
 }
 static void urban_port_play(void) {
@@ -380,6 +404,7 @@ static void urban_port_set_mode(int automatic) {
     p->rt.transport.tick=0;
     p->rt.transport.step=0;
     p->last_sixteenth=en_bars;
+    p->active_mix_section=255u;
     urban_port_stage_pattern();
     urban_port_section_mix();
     if(was)en_play(1);
@@ -394,6 +419,7 @@ static void urban_port_init(uint32_t seed) {
     unsigned i;
     UrbanHypPort *p=&urban_port;
     memset(p,0,sizeof(*p));
+    p->active_mix_section=255u;
     urban_runtime_init(&p->rt,seed);
     // HYP-1 ui_init() starts its engine by default. Stop it explicitly so
     // URBAN-1's STOPPED display agrees with the actual audio transport.
