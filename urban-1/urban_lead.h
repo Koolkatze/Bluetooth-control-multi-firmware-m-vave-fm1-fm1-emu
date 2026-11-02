@@ -76,6 +76,17 @@ static const int8_t urban_lead_degrees[URBAN_GENRES][8]={
     {0,1,2,4,5,4,2,1},      /* trance */
     {2,1,3,2,0,-1,2,1}      /* liquid */
 };
+/* Named substyles also alter melodic fingering, not just the patch:
+ * classic = chord anchors, second = chromatic-feel modal neighbour
+ * (still diatonic), atmospheric = more held/descending, fourth =
+ * freer call/response. The same 8-cell figure is repeated consistently
+ * inside one take and changes on SAVE with melodic_variant. */
+static const int8_t urban_substyle_lead_steps[4][8]={
+    { 0, 0, 0,-1, 0, 1, 0, 0},
+    { 0,-1, 1, 0,-2, 1, 0, 1},
+    { 0, 0,-1,-1, 0, 1, 1,-1},
+    { 0, 2, 0,-1, 2,-2, 1, 0}
+};
 /* Probability of there being a separate foreground lead AT ALL.
  * A beat can be complete with its bass, drums and pad alone.
  * Substyles without foreground leads retain their character rather
@@ -166,7 +177,10 @@ static UrbanNote urban_lead_score(const UrbanSong *s,unsigned section,
     /* Strong onsets outline chord functions; weak onsets use a genuine
      * genre contour, whose pitches live within the selected mode. */
     unsigned contour_pos=(step/2u+(s->melodic_variant%8u))%8u;
-    int relative=urban_lead_degrees[g][contour_pos];
+    int relative=(int)urban_lead_degrees[g][contour_pos] +
+           (int)urban_substyle_lead_steps[t->subgenre%4u][contour_pos];
+    /* Some styles explicitly repeat their tonic to let bass/voice carry
+     * the harmony; jazz / trance styles are more chord-tone mobile. */
     if((step%4u)==0u && (g==0u||g==1u||g==2u||g==9u))
         relative=0;
     int degree=(int)s->chord_degrees[bar%4u]+relative;
