@@ -170,10 +170,12 @@ static void urban_port_sound_profile(void) {
     urban_port_set(P_KIT_SNARE,d.drum_kit);
     urban_port_set(P_KIT_HAT,h.hat_kit);
     urban_port_set(P_KIT_PERC,h.drum_kit);
-    /* HYP SWING delays percussion but not our lead MIDI notes.
-     * Straight 16ths keep ALL parts on one shared timing grid;
-     * genre syncopation is already encoded in groove masks. */
-    urban_port_set(P_SWING,0);
+    /* Hip-hop's laid-back feel requires timing, not just a mask.
+     * HYP swing delays ONLY off-sixteenth drum triggers by up to 0.5
+     * steps; keep the 2/4 snare fixed and pad/bass on the harmonic grid.
+     * Style.swing is 7..33 = roughly 9..42 ms at 90 BPM, not extra hits. */
+    UrbanGroove swing_groove=urban_groove(d.genre,d.subgenre);
+    urban_port_set(P_SWING,(d.genre==3u||d.genre==5u)?swing_groove.swing:0);
     /* 56 named FX palettes: HYP has SHARED wet echo/reverb but
      * independent lead/filter envelopes, bass/pad LFO and 6 drum decays. */
     UrbanFxPlan fx=urban_fx_plan(s);
