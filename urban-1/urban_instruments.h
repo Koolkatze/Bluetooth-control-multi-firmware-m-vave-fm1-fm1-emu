@@ -45,6 +45,42 @@ static const uint8_t urban_alt_sounds[URBAN_GENRES][3][3]={
   {{5,12,6},            {8,10,3},    {9,10,14}},/* trance */
   {{1,7,9},             {15,11,8},   {0,1,5}}   /* liquid */
 };
+/* Bass timbres must be selected INSIDE the subgenre's sound palette:
+ * previously a single generic genre-wide 3-preset pool overrode the
+ * subgenre patch on 75% of Generate presses, making drill, cloud,
+ * neuro and jump-up effectively share the same bass.
+ * 4 real HYP DRONE programs per named substyle; the per-style
+ * filter, envelope, octave, LFO and actual note score also change. */
+static const uint8_t urban_subgenre_bass_sounds[URBAN_GENRES][4][4]={
+ /* trap: 808 / drill / ambient / rolled */
+ {{9,10,8,9},{9,3,2,8},{9,1,8,7},{10,9,5,8}},
+ /* goth: witch / industrial / darkwave / cloud */
+ {{8,9,3,8},{3,2,13,11},{5,1,8,7},{9,8,1,6}},
+ /* sad: emo / piano / lo-fi / guitar */
+ {{9,1,8,9},{1,9,7,1},{1,7,9,8},{1,9,5,7}},
+ /* hip-hop: boom-bap / jazz / G-funk / lo-fi */
+ {{1,7,5,1},{7,1,6,12},{5,10,12,7},{1,7,9,5}},
+ /* trip-hop: Bristol / down / abstract / dub */
+ {{8,9,2,6},{1,8,9,7},{6,13,2,9},{8,9,1,4}},
+ /* underground: dusty / jazz / experimental / breaks */
+ {{2,1,7,5},{7,1,6,12},{6,13,14,2},{2,5,9,4}},
+ /* horror: Memphis / cinematic / industrial / dark */
+ {{8,9,3,8},{9,8,1,7},{3,13,2,11},{8,9,11,4}},
+ /* reggaeton: dembow / perreo / romantic / future */
+ {{9,10,1,9},{10,9,5,6},{1,7,9,1},{6,5,14,9}},
+ /* DnB: neuro / jump-up / darkstep / techstep */
+ {{4,14,2,4},{11,15,4,11},{8,3,4,13},{14,4,2,15}},
+ /* dubstep: 140 / deep / riddim / brostep */
+ {{4,11,9,4},{9,8,1,9},{11,4,14,3},{4,13,14,11}},
+ /* techno: Detroit / hypnotic / dub / minimal */
+ {{5,0,6,5},{0,1,5,7},{1,8,9,5},{5,0,1,5}},
+ /* hardcore: gabber / industrial / frenchcore / uptempo */
+ {{11,13,14,11},{13,3,14,2},{11,13,15,14},{14,11,13,3}},
+ /* trance: progressive / uplifting / psy / tech */
+ {{5,12,6,5},{12,5,14,12},{6,14,4,15},{14,5,13,6}},
+ /* liquid: soulful / atmosphere / jazz / deep */
+ {{1,7,9,1},{9,1,8,7},{7,6,1,12},{9,1,8,9}}
+};
 typedef struct {
     UrbanStylePatch patch;
     uint8_t noise_color,noise_amount,program_variant;
@@ -63,9 +99,12 @@ static UrbanInstrumentProgram urban_instrument_program(
     unsigned variation=(seed>>5)&3u;
     unsigned column=track==2u?0u:track==3u?1u:2u;
     p.program_variant=(uint8_t)variation;
-    if(variation) {
+    if(track==2u) {
+        /* The bass sound is now chosen from the named SUBGENRE, never
+         * from the old genre-global alternative pool. */
+        p.patch.bass=urban_subgenre_bass_sounds[genre][t->subgenre%4u][variation];
+    } else if(variation) {
         unsigned alt=urban_alt_sounds[genre][column][variation-1u];
-        if(track==2u)p.patch.bass=(uint8_t)alt;
         if(track==3u)p.patch.lead=(uint8_t)alt;
         if(track==4u)p.patch.pad=(uint8_t)alt;
     }
