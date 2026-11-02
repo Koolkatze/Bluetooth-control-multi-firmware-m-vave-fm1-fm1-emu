@@ -42,6 +42,11 @@ mod android {
             callback: Option<unsafe extern "C" fn(*mut AAudioStream, *mut c_void, *mut c_void, i32) -> i32>,
             user: *mut c_void,
         );
+        fn AAudioStreamBuilder_setErrorCallback(
+            builder: *mut AAudioStreamBuilder,
+            callback: Option<unsafe extern "C" fn(*mut AAudioStream, *mut c_void, i32)>,
+            user: *mut c_void,
+        );
         fn AAudioStreamBuilder_openStream(
             builder: *mut AAudioStreamBuilder, output: *mut *mut AAudioStream
         ) -> ResultCode;
@@ -81,6 +86,19 @@ mod android {
         CALLBACK_CONTINUE
     }
 
+    // AAudio_ERROR_DISCONNECTED (-899) is delivered while Android switches
+    // speaker/Bluetooth/USB outputs. The callback is on an AAudio-owned thread:
+    // NEVER call AAudioStream_close/stop/open here. The Java route monitor
+    // sees this atomic via nativeStats() and rebuilds the stream off-thread.
+    unsafe extern "C" fn stream_error_callback(
+        _stream: *mut AAudioStream, user: *mut c_void, error: i32,
+    ) {
+        if !user.is_null() && error != AAUDIO_OK {
+            let shared = &*(user as *const Shared);
+            shared.audio_disconnected.store(true, Ordering::Release);
+        }
+    }
+
     struct EngineState {
         shared: Arc<Shared>,
         commands: mpsc::Sender<Cmd>,
@@ -89,17 +107,40 @@ mod android {
     }
 
     impl EngineState {
+        fn close_stream(&mut self) {
+            if self.stream == 0 { return; }
+            let ptr = self.stream as *mut AAudioStream;
+            // Detach the old callback BEFORE the Shared Arc can be freed.
+            // The callback only reads the Arc held by this EngineState.
+            self.stream = 0;
+            unsafe {
+                let _ = AAudioStream_requestStop(ptr);
+                let _ = AAudioStream_close(ptr);
+            }
+        }
+
+        fn recover_audio(&mut self) -> Result<u32, String> {
+            // This is called on a Java background worker, NOT from an
+            // AAudio callback or the WebView. The firmware worker and all
+            // flash/MIDI state remain alive while only the stream changes.
+            self.close_stream();
+            let (stream, hz) = open_audio(&self.shared)?;
+            self.shared.output_sample_rate.store(hz, Ordering::Release);
+            let rc = unsafe { AAudioStream_requestStart(stream) };
+            if rc != AAUDIO_OK {
+                unsafe { let _ = AAudioStream_close(stream); }
+                // Keep the engine; a later route-change/retry can reopen it.
+                return Err(format!("AAudio route restart: {rc}"));
+            }
+            self.stream = stream as usize;
+            self.shared.audio_disconnected.store(false, Ordering::Release);
+            Ok(hz)
+        }
+
         fn stop(mut self) {
             self.shared.quit.store(true, Ordering::Release);
             let _ = self.commands.send(Cmd::Stop);
-            if self.stream != 0 {
-                let ptr = self.stream as *mut AAudioStream;
-                unsafe {
-                    AAudioStream_requestStop(ptr);
-                    // close waits until callbacks have left and no longer access shared
-                    AAudioStream_close(ptr);
-                }
-            }
+            self.close_stream();
             if let Some(worker) = self.worker.take() { let _ = worker.join(); }
         }
     }
@@ -122,6 +163,9 @@ mod android {
             AAudioStreamBuilder_setSharingMode(builder, AAUDIO_SHARING_MODE_SHARED);
             AAudioStreamBuilder_setDataCallback(
                 builder, Some(pcm_callback), Arc::as_ptr(shared) as *mut c_void,
+            );
+            AAudioStreamBuilder_setErrorCallback(
+                builder, Some(stream_error_callback), Arc::as_ptr(shared) as *mut c_void,
             );
         }
         let mut stream = ptr::null_mut();
@@ -184,6 +228,7 @@ mod android {
             Ok(v) => v,
             Err(e) => return respond(&mut env, &format!("ERROR:{e}")),
         };
+        shared.output_sample_rate.store(sample_rate, Ordering::Release);
         let saved = PathBuf::from(save_dir).join(format!("fm1-native-{identity}.bin"));
         let (tx, rx) = mpsc::channel();
         let worker_shared = shared.clone();
@@ -218,6 +263,28 @@ mod android {
             shared, commands: tx, worker: Some(worker), stream: stream as usize,
         });
         respond(&mut env, &format!("OK:{sample_rate}"))
+    }
+
+    /// Rebind ONLY the output route. No firmware boot, no song reset, no
+    /// flash restore/reload. Called by Android AudioDeviceCallback and by
+    /// the route watchdog when AAudio reports DISCONNECTED. Recoverable
+    /// failure leaves EngineState intact for another retry.
+    #[no_mangle]
+    pub extern "system" fn Java_com_koolkatze_fm1offline_NativeSynth_recoverAudio(
+        mut env: JNIEnv, _: JClass,
+    ) -> jstring {
+        let mut guard = match state().lock() {
+            Ok(guard) => guard,
+            Err(_) => return respond(&mut env, "ERROR:Bloqueo del motor de audio"),
+        };
+        let Some(engine) = guard.as_mut() else {
+            return respond(&mut env, "ERROR:No hay firmware iniciado");
+        };
+        let result = engine.recover_audio();
+        match result {
+            Ok(rate) => respond(&mut env, &format!("OK:{rate}")),
+            Err(error) => respond(&mut env, &format!("ERROR:{error}")),
+        }
     }
 
     #[no_mangle]
@@ -317,7 +384,8 @@ mod android {
                 let underruns = s.ring.underruns.load(Ordering::Relaxed).min(u32::MAX as u64);
                 let bits = if s.ready.load(Ordering::Acquire) { 1u64 } else { 0 }
                     | if s.playing.load(Ordering::Acquire) { 2 } else { 0 }
-                    | if s.halted.load(Ordering::Acquire) { 4 } else { 0 };
+                    | if s.halted.load(Ordering::Acquire) { 4 } else { 0 }
+                    | if s.audio_disconnected.load(Ordering::Acquire) { 8 } else { 0 };
                 return ((underruns << 3) | bits) as jlong;
             }
         }
