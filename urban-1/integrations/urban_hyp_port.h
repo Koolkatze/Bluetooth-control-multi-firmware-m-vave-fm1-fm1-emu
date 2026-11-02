@@ -25,7 +25,9 @@ void urban_sfx_silence(void);
 extern volatile uint32_t urban_sfx_rendered_events;
 void urban_piano_roll_arm(const uint8_t *notes,unsigned count,unsigned gap_ms);
 void urban_piano_roll_stop(void);
-void urban_jazz_programs(unsigned chord,unsigned lead);
+void urban_jazz_programs(unsigned chord,unsigned lead,unsigned bass);
+extern uint8_t urban_jazz_bass_mode;
+extern volatile uint32_t urban_jazz_bass_onsets,urban_jazz_bass_rendered_frames;
 extern uint8_t urban_jazz_chord_mode,urban_jazz_lead_mode;
 extern volatile uint32_t urban_jazz_note_onsets,urban_jazz_rendered_frames;
 extern volatile uint32_t urban_piano_note_onsets;
@@ -200,7 +202,7 @@ static void urban_port_sound_profile(void) {
     UrbanInstrumentProgram atmosphere=urban_instrument_program(s,5u,s->current);
     UrbanStylePatch bass=bp.patch,lead=lp.patch,pad=pp.patch;
     /* Select actual new DSP engine on each independent jazz track. */
-    urban_jazz_programs(pp.jazz_voice,lp.jazz_voice);
+    urban_jazz_programs(pp.jazz_voice,lp.jazz_voice,bp.jazz_bass);
     /* HYP only exposes seven diatonic modes. Every selected scale
      * (including 5/6/8/12-note scales) is nonetheless rendered by
      * URBAN's explicit note and chord score. For HYP's display and
@@ -984,7 +986,9 @@ static void urban_port_screen_text(int32_t y,const felucca_font_t *font,
 static const char *urban_port_instrument_name(const UrbanSong *s,
                                                  unsigned track) {
     UrbanInstrumentProgram ip=urban_instrument_program(s,track,s->current);
-    if(track==2u)return urban_bass_names[ip.patch.bass];
+    if(track==2u)return ip.jazz_bass==1u?"Upright Bass":
+                            ip.jazz_bass==2u?"Finger Bass":
+                            urban_bass_names[ip.patch.bass];
     if(track==3u)return urban_lead_names[ip.patch.lead];
     if(track==4u)return urban_pad_names[ip.patch.pad];
     if(track==0u||track==1u)return urban_kit_names[ip.patch.drum_kit];
