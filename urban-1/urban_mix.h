@@ -22,9 +22,9 @@ static const UrbanGenreBalance urban_balance[URBAN_GENRES]={
  /* trap       */ {74,72,34,40, 3,78,36},
  /* goth trap  */ {62,68,29,44,10,70,32},
  /* sad trap   */ {61,66,30,51, 5,69,34},
- /* hip-hop    */ {69,62,40,46, 4,76,39},
+ /* hip-hop    */ {73,70,24,52, 3,80,30},
  /* trip-hop   */ {62,63,33,49,10,70,35},
- /* underground*/ {69,64,38,43, 6,75,40},
+ /* underground*/ {72,69,25,51, 4,80,33},
  /* horrorcore */ {70,72,30,38,10,76,36},
  /* reggaeton  */ {76,66,39,41, 2,82,42},
  /* dnb        */ {75,70,41,38, 5,83,42},
@@ -69,6 +69,16 @@ static UrbanMixPlan urban_mix_plan(const UrbanSong *s,
     m.chords=urban_mix_cap((unsigned)b->chords*dynamics[section][3]/100u,55);
     m.noise=urban_mix_cap((unsigned)b->noise*dynamics[section][4]/100u,13);
     if(!urban_lead_active(s,section,bar))m.lead=0u;
+    if(s->genre==3u || s->genre==5u) {
+        /* G-Funk makes room for the rare held mono analog lead;
+         * in boom-bap and lo-fi the harmony is the main pitched layer. */
+        if(s->subgenre%4u==2u && m.lead)
+            m.lead=urban_mix_cap((unsigned)m.lead+13u,53u);
+        if(s->subgenre%4u==3u) {
+            m.lead=(uint8_t)(m.lead*3u/4u);
+            m.noise=urban_mix_cap((unsigned)m.noise+2u,13u);
+        }
+    }
     uint8_t solo=0u;
     for(unsigned t=0;t<URBAN_TRACKS;t++)solo|=s->tracks[t].solo;
     if(s->tracks[0].muted||((solo!=0u)&&!s->tracks[0].solo))
@@ -97,6 +107,18 @@ static UrbanMixPlan urban_mix_plan(const UrbanSong *s,
     m.drive=urban_mix_cap(fx.drive,60);
     m.reverb=urban_mix_cap(fx.reverb,62);
     m.echo=urban_mix_cap(fx.echo,53);
+    if(s->genre==3u || s->genre==5u) {
+        /* Dry vinyl/break-kit emphasis. HYP's native synth drum
+         * clap is not a sampled snare, so don't stack it at full gain. */
+        m.snare=urban_mix_cap((unsigned)b->kick*86u/100u,70u);
+        m.clap=urban_mix_cap((unsigned)b->kick*20u/100u,18u);
+        m.hat=urban_mix_cap(b->hat,35u);
+        m.open=urban_mix_cap(b->hat*60u/100u,25u);
+        m.perc=urban_mix_cap(b->hat*55u/100u,24u);
+        m.drive=urban_mix_cap(fx.drive,27u);
+        m.reverb=urban_mix_cap(fx.reverb,38u);
+        m.echo=urban_mix_cap(fx.echo,30u);
+    }
     /* Strong compression in hardcore / neuro is a *deliberate* colour,
      * but kick + hat + clap should not all operate at 100% gain. */
     return m;
