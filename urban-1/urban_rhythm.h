@@ -139,6 +139,36 @@ static void urban_drum_lanes(const UrbanSong *s,unsigned section,unsigned sectio
         out[2]|=g.snare;
         if(section==URBAN_DROP)out[0]|=0x0101u;
     }
+    /* Four-bar phrase development: bar 1 establishes the riff, bar 2
+     * answers the beat, bar 3 varies percussion/hat placement, bar 4
+     * performs a controlled turnaround or fill. All 6 lanes participate.
+     * Important: no random rearrangement of kick/snare backbeat anchors.
+     */
+    unsigned phrase_bar=section_bar%URBAN_BARS_PER_PHRASE;
+    if(s->complexity && section!=URBAN_INTRO &&
+       section!=URBAN_BREAK && section!=URBAN_OUTRO) {
+        if(phrase_bar==1u) {
+            switch(d->genre%URBAN_GENRES) {
+            case 0: case 1: case 2: case 6: /* trap / horror */
+                out[3]|=0x0808u; break;
+            case 3: case 4: case 5: /* boom bap / trip hop */
+                out[5]|=0x0080u; break;
+            case 7: /* dembow response */
+                out[2]|=0x0080u; break;
+            case 8: case 13: /* breaks */
+                out[0]|=0x0200u; break;
+            case 9: /* dubstep: half-time space */
+                out[4]|=0x0400u; break;
+            default: /* four on the floor */
+                out[4]|=0x4444u; break;
+            }
+        } else if(phrase_bar==2u && s->complexity>=2u) {
+            if(d->genre<=2u || d->genre==9u)out[3]|=0x8080u;
+            else if(d->genre==7u)out[5]|=0x0404u;
+            else if(d->genre==8u || d->genre==13u)out[1]|=0x0020u;
+            else out[5]|=0x2020u;
+        }
+    }
     if(s->complexity>0u && section_bar%4u==3u &&
        section!=URBAN_INTRO && section!=URBAN_OUTRO) {
         /* fill one bar in four, with genre-specific probabilities */
