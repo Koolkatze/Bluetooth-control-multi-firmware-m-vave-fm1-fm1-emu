@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Test the REAL HYP-1 host audio engine, not a simulated button diagram.
+# FX/EDIT pages must change native DSP parameters with live persistence.
+expect urbanview 0
+tap FX
+expect urbanview 1
+expect urbantarget 0
+expect urbanbank 0
+expect urbanfxecho >0
+spin K1 5
+expect urbanfxoverride 1
+shot editor-fx-master.png
+# PRESET moves through sets of four real hardware FX parameters.
+spin PRESET 1
+expect urbanbank 1
+spin K2 1
+expect urbanfxmask >0
+# Algorithm navigates Master/Drums/Hats/Bass/Lead/Pad/Atmos/Extra1/Extra2.
+spin ALGO 3
+expect urbantarget 3
+expect urbanbank 0
+spin K1 4
+expect urbanbassoverride 1
+shot editor-fx-bass.png
+tap PLAY
+wait 4200
+expect playing 1
+expect urbanbassoverride 1
+expect urbanfxoverride 1
+# Change the view without stopping the song. EDIT always starts at Master.
+tap EDIT
+expect urbanview 2
+expect urbantarget 0
+expect urbanbank 0
+spin K1 2
+expect urbanedittempo 144
+spin K2 2
+expect urbaneditkey 2
+spin K3 1
+expect urbaneditmode 1
+shot editor-edit-master.png
+# A separate EDIT page for the lead and all of its envelope controls.
+spin ALGO 4
+expect urbantarget 4
+spin PRESET 1
+expect urbanbank 1
+spin K1 6
+expect urbanleaddecayedit 1
+shot editor-edit-lead.png
+# And a separate polyphonic pad envelope + LFO editor.
+spin ALGO 1
+expect urbantarget 5
+spin PRESET 1
+expect urbanbank 1
+spin K1 6
+expect urbanpadattackedit 1
+spin PRESET 1
+expect urbanbank 2
+shot editor-edit-pad-lfo.png
+# Tracks 6/7 have no independent HYP DSP; must not fake controls.
+spin ALGO 2
+expect urbantarget 7
+expect urbanbank 0
+spin K1 20
+expect urbanpadattackedit 1
+shot editor-no-extra-voice.png
+# Home and Seq return to music pages; FX and EDIT are always accessible.
+tap HOME
+expect urbanview 0
+expect urbanpage 0
+tap SEQ
+expect urbanpage 1
+tap EDIT
+expect urbanview 2
+tap FX
+expect urbanview 1
+tap FX
+expect urbanview 0
+tap PLAY
+expect playing 0
