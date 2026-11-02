@@ -9,7 +9,6 @@ on:
       - "tools/check_offline_android.mjs"
       - "tools/build_android_native.sh"
       - "web/**"
-      - "urban-1/**"
       - "crates/**"
       - "Cargo.toml"
       - "Cargo.lock"
