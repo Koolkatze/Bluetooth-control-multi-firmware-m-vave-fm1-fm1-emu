@@ -1,7 +1,7 @@
 CC ?= cc
 CFLAGS ?= -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function -pedantic
 .PHONY: test clean
-test: urban_test urban_ui_test urban_panel_test urban_transport_test urban_music_test urban_runtime_test urban_rhythm_test urban_bass_test urban_audio_test urban_arrangement_test urban_style_test
+test: urban_test urban_ui_test urban_panel_test urban_transport_test urban_music_test urban_runtime_test urban_rhythm_test urban_bass_test urban_audio_test urban_arrangement_test urban_style_test urban_composer_test
 	./urban_test
 	./urban_ui_test
 	./urban_panel_test
@@ -13,6 +13,7 @@ test: urban_test urban_ui_test urban_panel_test urban_transport_test urban_music
 	./urban_audio_test
 	./urban_arrangement_test
 	./urban_style_test
+	./urban_composer_test
 urban_test: urban_test.c urban_song.h
 	$(CC) $(CFLAGS) -o $@ urban_test.c
 urban_ui_test: urban_ui_test.c urban_ui.h urban_song.h
@@ -44,5 +45,8 @@ urban_arrangement_test: urban_arrangement_test.c urban_runtime.h urban_music.h u
 
 urban_style_test: urban_style_test.c urban_style.h urban_rhythm.h urban_bass.h urban_song.h
 	$(CC) $(CFLAGS) -o $@ urban_style_test.c
+
+urban_composer_test: urban_composer_test.c urban_runtime.h urban_harmony.h urban_music.h urban_rhythm.h urban_bass.h urban_song.h
+	$(CC) $(CFLAGS) -o $@ urban_composer_test.c
 clean:
-	rm -f urban_ui_test urban_test urban_panel_test urban_transport_test urban_music_test urban_runtime_test urban_rhythm_test urban_bass_test urban_audio_test urban_arrangement_test urban_style_test
+	rm -f urban_ui_test urban_test urban_panel_test urban_transport_test urban_music_test urban_runtime_test urban_rhythm_test urban_bass_test urban_audio_test urban_arrangement_test urban_style_test urban_composer_test
