@@ -522,25 +522,163 @@ static void urban_port_song_key(int delta) {
         if(!s->tracks[i].locked)
             urban_runtime_refresh_track(&p->rt,i);
 }
+/* View 0 is the existing transport; FX and EDIT are overlays, not
+ * extra song modes. ALGORITHM selects MASTER / track, PRESET and SELECT
+ * select groups of four controls and K1..K4 change parameter values.
+ */
+static int urban_port_editor_value(int id) {
+    const UrbanSong *s=&urban_port.rt.ui.song;
+    const UrbanEditor *ed=&urban_port.editor;
+    if(id==UC_TEMPO)return s->tempo;
+    if(id==UC_KEY)return s->key;
+    if(id==UC_SCALE)return s->scale;
+    if(id==UC_COMPLEX)return s->complexity;
+    int bit=urban_editor_special_bit(id);
+    if(bit>=0)return (int)((ed->performance_mask>>(unsigned)bit)&1u);
+    if(id>=0 && id<P_NPARAMS)
+        return ed->valid[id]?ed->live[id]:en_param_info(id)->def;
+    return 0;
+}
+static void urban_port_editor_open(unsigned view) {
+    UrbanEditor *e=&urban_port.editor;
+    if(e->view==view)e->view=0u;
+    else {
+        e->view=(uint8_t)view;
+        e->target=0u;
+        e->bank=0u;
+    }
+    urban_port.ui_drawn=0u;
+}
+static void urban_port_editor_bank_delta(int delta) {
+    UrbanEditor *e=&urban_port.editor;
+    unsigned count=0u;
+    urban_editor_banks(e->view,e->target,&count);
+    e->bank=(uint8_t)urban_editor_page_next(e->bank,delta,count);
+}
+static void urban_port_editor_target_delta(int delta) {
+    UrbanEditor *e=&urban_port.editor;
+    e->target=(uint8_t)urban_editor_page_next(e->target,delta,
+                                               URBAN_EDITOR_PAGE_COUNT);
+    e->bank=0u;
+}
+static void urban_port_editor_refresh_notes(void) {
+    UrbanHypPort *p=&urban_port;
+    urban_port_release();
+    for(unsigned t=0;t<URBAN_TRACKS;t++)
+        if(!p->rt.ui.song.tracks[t].locked)
+            urban_runtime_refresh_track(&p->rt,t);
+    urban_port_sound_profile();
+    urban_port_mix_levels();
+    urban_port_stage_pattern();
+}
+static void urban_port_editor_write(int id,int delta) {
+    UrbanEditor *ed=&urban_port.editor;
+    UrbanSong *s=&urban_port.rt.ui.song;
+    if(id==URBAN_EDITOR_NO_PARAM || !delta)return;
+    int old=urban_port_editor_value(id),lo=0,hi=100;
+    if(id>=0 && id<P_NPARAMS) {
+        const en_param_t *info=en_param_info(id);
+        lo=info->lo;hi=info->hi;
+        /* The FM-1 is a fixed-gain summing synth. Avoid clipping when
+         * the user turns up several faders during a dense drop. */
+        if(id==P_PAD || id==P_ACID)hi=65;
+        else if(id==P_BASS)hi=80;
+        else if(id==P_PULSE)hi=85;
+        else if(id==P_NOISE)hi=25;
+    } else if(id==UC_TEMPO){lo=70;hi=190;}
+    else if(id==UC_KEY){hi=11;}
+    else if(id==UC_SCALE){hi=URBAN_SCALE_COUNT-1;}
+    else if(id==UC_COMPLEX){hi=3;}
+    else if(urban_editor_special_bit(id)>=0){hi=1;}
+    int value=old+delta;
+    if(value<lo)value=lo;
+    if(value>hi)value=hi;
+    if(value==old)return;
+    if(id>=0 && id<P_NPARAMS) {
+        ed->changed[id]=1u;
+        ed->override[id]=(int16_t)value;
+        urban_port_set(id,value);
+    } else if(id==UC_TEMPO) {
+        s->tempo=(uint8_t)value;
+        urban_port_set(P_TEMPO,value);
+    } else if(id==UC_KEY) {
+        s->key=(uint8_t)value;
+        urban_port_editor_refresh_notes();
+    } else if(id==UC_SCALE) {
+        s->scale=(uint8_t)value;
+        for(unsigned bar=0;bar<4u;bar++)
+            s->progression[bar]=urban_scale_intervals[s->scale]
+                                                    [s->chord_degrees[bar]];
+        urban_port_editor_refresh_notes();
+    } else if(id==UC_COMPLEX) {
+        s->complexity=(uint8_t)value;
+        urban_port_editor_refresh_notes();
+    } else {
+        int bit=urban_editor_special_bit(id);
+        if(bit>=0) {
+            uint32_t b=1u<<(unsigned)bit;
+            if(value)ed->performance_mask|=b;
+            else ed->performance_mask&=~b;
+            en_fx(ed->performance_mask);
+        }
+    }
+    urban_port.ui_drawn=0u;
+}
+static void urban_port_editor_input(void) {
+    UrbanEditor *ed=&urban_port.editor;
+    int d=plat_enc(EN_ALGO);
+    if(d)urban_port_editor_target_delta(d);
+    d=plat_enc(EN_PRESET);
+    if(d)urban_port_editor_bank_delta(d);
+    d=plat_enc(EN_SELECT);
+    if(d)urban_port_editor_bank_delta(d);
+    unsigned count=0u;
+    const UrbanEditorBank *bank=urban_editor_bank(ed,&count);
+    const int enc[4]={EN_K1,EN_K2,EN_K3,EN_K4};
+    for(unsigned i=0;i<4u;i++) {
+        d=plat_enc(enc[i]);
+        if(d && bank)urban_port_editor_write(bank->param[i],d);
+    }
+    urban_port_poll();
+}
 static void urban_port_input(void) {
     UrbanHypPort *p=&urban_port;
     UrbanSong *s=&p->rt.ui.song;
     uint32_t b=plat_buttons(),down=b&~p->held_buttons;
     int32_t d;
     p->held_buttons=b;
-    if(down&(1u<<B_HOME))urban_ui_page(&p->rt.ui,URBAN_PAGE_SONG);
-    if(down&(1u<<B_SEQ))urban_ui_page(&p->rt.ui,URBAN_PAGE_TRACKS);
+    if(down&(1u<<B_HOME)) {
+        p->editor.view=0u;
+        urban_ui_page(&p->rt.ui,URBAN_PAGE_SONG);
+    }
+    if(down&(1u<<B_SEQ)) {
+        p->editor.view=0u;
+        urban_ui_page(&p->rt.ui,URBAN_PAGE_TRACKS);
+    }
+    if(down&(1u<<B_FX))urban_port_editor_open(URBAN_EDITOR_FX);
+    if(down&(1u<<B_EDIT))urban_port_editor_open(URBAN_EDITOR_EDIT);
     if(down&(1u<<B_PLAY))urban_port_play();
+    if(p->editor.view) {
+        /* SAVE never silently generates a new song while browsing FX. */
+        urban_port_editor_input();
+        return;
+    }
     if(down&(1u<<B_SAVE))urban_port_generate();
     if(p->rt.ui.page==URBAN_PAGE_SONG) {
         if(down&(1u<<B_ARP))urban_port_set_mode(!s->song_mode);
         if(down&(1u<<B_REC))urban_port_restart();
     } else {
         UrbanTrack *t=&s->tracks[p->rt.ui.selected_track];
-        if(down&(1u<<B_EDIT))t->locked=(uint8_t)!t->locked;
-        if(down&(1u<<B_FX))t->muted=(uint8_t)!t->muted;
+        /* FX / EDIT now ALWAYS open their dedicated editor pages.
+         * Existing track Lock and Mute move to ENV and LFO;
+         * GLO remains solo, so no sequencing capability is lost. */
+        if(down&(1u<<B_ENV))t->locked=(uint8_t)!t->locked;
+        if(down&(1u<<B_LFO))t->muted=(uint8_t)!t->muted;
         if(down&(1u<<B_GLO))t->solo=(uint8_t)!t->solo;
-        if(down&((1u<<B_FX)|(1u<<B_GLO)))urban_port_stage_pattern();
+        if(down&((1u<<B_LFO)|(1u<<B_GLO))) {
+            urban_port_stage_pattern();
+            urban_port_mix_levels();
+        }
     }
     d=plat_enc(EN_K1);
     if(d) {
