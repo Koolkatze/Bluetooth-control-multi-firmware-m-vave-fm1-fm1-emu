@@ -42,6 +42,7 @@ jobs:
           hyp1/build/host/amb_host urban-1/tests/hyp1_jazz_bass.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_ambient_chords.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_trance_clock.amb hyp1/build/urban
+          hyp1/build/host/amb_host urban-1/tests/hyp1_echo_wet.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_polychords.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_display_stable.amb hyp1/build/urban
           python3 - <<'PY'
