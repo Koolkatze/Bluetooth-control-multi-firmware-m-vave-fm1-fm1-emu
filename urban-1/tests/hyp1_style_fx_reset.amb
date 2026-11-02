@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# New genre/subgenre gives new patch/FX/EDIT, not stale manual values.
+expect urbanfxoverride 0
+expect urbantapeon 1
+tap FX
+spin K1 16
+expect urbanfxoverride 1
+spin PRESET 1
+spin K2 1
+expect urbanfxmask >0
+tap HOME
+spin K3 1
+expect urbansub 1
+expect urbanfxoverride 0
+expect urbanfxmask 0
+expect urbantapeon 1
+tap FX
+spin K1 4
+expect urbanfxoverride 1
+tap HOME
+spin K2 3
+expect urbanfxoverride 0
+shot style-reset-fx.png
