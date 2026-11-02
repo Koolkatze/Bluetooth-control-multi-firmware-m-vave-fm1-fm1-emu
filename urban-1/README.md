@@ -75,12 +75,49 @@ voice plays at a time to stay within the FM-1's resources. SFX timing
 is tied to the HYP audio transport; the native FM-1 host and emulator
 still need subjective listening validation on the user's device.
 
+## Expanded scale engine (v0.4.3)
+
+URBAN-1 now offers **124 named scale entries** across the 12-tone
+equal-tempered system, not merely its original 10 seven-note scales.
+The catalogue covers Western major modes, harmonic and melodic minor
+families and all their rotations, harmonic major, double harmonic,
+Hungarian, Romanian, Neapolitan, Persian and Enigmatic mode families;
+major/minor/suspended and Japanese-derived **pentatonic** forms;
+**six-note** blues, whole-tone and augmented scales; **eight-note**
+diminished and bebop scales; Messiaen modes and the **12-note**
+chromatic scale. Several traditional names denote equivalent pitch
+collections, so the 124 *named entries* are not 124 unique pitch sets.
+
+Every **56 subgenres** has an independently assigned **primary scale
+plus two genre-compatible alternatives**. Selecting a genre/subgenre
+explicitly restores its primary musical centre; pressing SAVE may
+choose one of its related alternatives for a new take, while keeping
+the four-bar chord framework. All bass, chord, lead, voice-leading
+and harmonization routines now use the chosen scale's actual count of
+degrees per octave (5–12) rather than silently assuming seven.
+Every note is generated from scale pitch classes; pattern timing is
+separate from theory and is not affected.
+
+To explore the full catalogue manually:
+**EDIT → ALGORITHM: MASTER → SONG THEORY → K3: SCALE**.
+The LCD displays each selected scale name. User-selected scales survive
+SAVE; explicitly switching song genre/subgenre restores that style's
+curated scale selection.
+
+**Scope / limitation:** this library uses 12-tone equal temperament.
+It is **not** a complete index of every scale or tuning system in world
+music; that would be unbounded and would require microtonal pitch,
+unequal intervals, melodic ascent/descent rules and ornamentation
+for many traditions (e.g. maqamat, ragas and gamelan). Japanese-derived
+scale names here represent standard piano-note approximations and
+must not be mistaken for faithful traditional intonation.
+
 ## Genre implementation (14 genre families, four named substyles each)
 
 Trap, Goth Trap, Sad Trap, Hip-hop, Trip-hop, Underground Hip-hop,
 Horrorcore, Reggaeton, Drum and Bass, Dubstep, Techno, Hardcore Techno,
 Trance, Liquid Jungle. Every genre has a specific:
-- BPM suggestion, minor / Phrygian / Dorian / harmonic minor palette
+- BPM suggestion and three scale palettes per named subgenre, with 124 available named 12-TET choices
 - four-bar chord progression, sixteen steps **per bar** and six drum lane
   mapping, for **64 steps per A–H phrase** with tonal and rhythmic variation
 - lead rhythmic grammar, articulation and section-specific variations
