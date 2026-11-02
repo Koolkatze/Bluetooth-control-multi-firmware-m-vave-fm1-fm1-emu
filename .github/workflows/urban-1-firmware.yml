@@ -68,21 +68,21 @@ jobs:
       - name: Apply URBAN-1 and compile actual FM-1 package
         run: |
           cd hyp1
-          ./build.sh --release 0.3.2
-          test -s build/amb-0.3.2.fwsc
-          cp build/amb-0.3.2.fwsc build/URBAN-1-v0.3.2-GENRE-SYNC-FX.fwsc
+          ./build.sh --release 0.3.3
+          test -s build/amb-0.3.3.fwsc
+          cp build/amb-0.3.3.fwsc build/URBAN-1-v0.3.3-SUBGENRE-DRUM-BASS-HARMONY.fwsc
       - name: Verify package with HYP-1 updater tests
         run: |
           cd hyp1
           cc -o build/ota_test tests/ota_test.c
-          build/ota_test build/amb-0.3.2.fwsc
+          build/ota_test build/amb-0.3.3.fwsc
           python3 tests/install_test.py
       - name: Publish untested experimental firmware as artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: URBAN-1-v0.3.2-firmware-only
-          path: hyp1/build/URBAN-1-v0.3.2-GENRE-SYNC-FX.fwsc
+          name: URBAN-1-v0.3.3-firmware-only
+          path: hyp1/build/URBAN-1-v0.3.3-SUBGENRE-DRUM-BASS-HARMONY.fwsc
           if-no-files-found: error
 
       - name: Publish permanent firmware-only download (GitHub Releases)
@@ -92,17 +92,17 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -eu
-          fw="hyp1/build/URBAN-1-v0.3.2-GENRE-SYNC-FX.fwsc"
+          fw="hyp1/build/URBAN-1-v0.3.3-SUBGENRE-DRUM-BASS-HARMONY.fwsc"
           test -s "$fw"
-          (cd hyp1/build && sha256sum URBAN-1-v0.3.2-GENRE-SYNC-FX.fwsc > SHA256SUMS-URBAN1-v0.3.2.txt)
-          tag="urban1-firmware-v0.3.2"
-          notes="FIRMWARE ONLY v0.3.2: genre/subgenre-specific modal scales, genuinely distinct diatonic chord-tone lead contours, optional full-song lead silence for vocal/bass-first styles, 14 lead families and 56 substyle probabilities. Corrected HYP tempo: removed independent percussion-only swing, stopped legacy melodic ornaments from undoing lead rests, eliminated burst-playback of missed 16ths, applied section voices and effects on the actual downbeat. All 56 substyles have nonzero echo/reverb, controlled drive, genre-dependent echo time and size, pad LFO/detune, bass LFO/resonance, lead filter/slide/envelope and distinct six drum decay parameters. HYP uses one shared wet-effects bus; it cannot independently route per-instrument reverb sends. Supports original 56-bar song, 4-bar sequences and manual loop; each Generate creates a fresh song. Runs native composition/lead/FX tests, real HYP host audio test and actual FM-1 cross-compile/OTA validation BEFORE publishing. Import automatically with FM-1 Mobile -> Firmware -> Actualizar todo. APK untouched. Experimental GPL-3.0 firmware; test on your phone or physical FM-1 before using at volume."
+          (cd hyp1/build && sha256sum URBAN-1-v0.3.3-SUBGENRE-DRUM-BASS-HARMONY.fwsc > SHA256SUMS-URBAN1-v0.3.3.txt)
+          tag="urban1-firmware-v0.3.3"
+          notes="FIRMWARE ONLY v0.3.3: authentic, separate six-lane drum partitures for 56 named subgenres; distinct subgenre bass note grammars (sliding 808/drill, low drones/ambient, walking jazz, rubber jump-up, Reese/neurofunk, offbeat techno and trance), durations, accents, octave motion and glides. Fix bass instrument selection: previously a generic genre-wide random pool overrode named substyle presets; now all 56 subgenres have their own curated four-sound HYP DRONE banks. 56 subgenre-specific four-bar chord progressions, colour/voicings, rhythmic chord placements and modal scales. KNOB3 immediately recomputes actual chord timeline, bass notes and drum patterns, not just an LCD label; individual track genre edits no longer replace the global song genre on next SAVE. Continues v0.3.2's genre-tailored leads, common rhythm grid, always-on FX and flicker-free LCD. Firmware .fwsc tested with 56-style/84-pair identity comparisons, host music/synthesis/UI regression and hardware cross-compiler; physical FM-1 not tested. Existing FM-1 Mobile -> Firmware -> Actualizar todo. NO APK changes. GPL-3.0-only."
           if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
-            gh release upload "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.3.2.txt --repo "$GH_REPO" --clobber
+            gh release upload "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.3.3.txt --repo "$GH_REPO" --clobber
           else
-            gh release create "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.3.2.txt \
+            gh release create "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.3.3.txt \
               --repo "$GH_REPO" --target "$GITHUB_SHA" \
-              --title "URBAN-1 firmware v0.3.2 – Genre scales, synchronized leads and always-on FX" \
+              --title "URBAN-1 v0.3.3 – Subgenre Drums, Bass and Harmony" \
               --notes "$notes" --prerelease
           fi
           gh release view "$tag" --repo "$GH_REPO" --json assets,url \
@@ -117,5 +117,5 @@ jobs:
           # release:published events; this is required for cross-workflow
           # updates of master/web/firmwares.json when GitHub Actions creates
           # the firmware release.
-          gh workflow run sync-urban1-firmware.yml --repo "$GH_REPO" --ref master -f tag=urban1-firmware-v0.3.2
+          gh workflow run sync-urban1-firmware.yml --repo "$GH_REPO" --ref master -f tag=urban1-firmware-v0.3.3
           echo "Triggered updater-catalog sync on master (APK untouched)."
