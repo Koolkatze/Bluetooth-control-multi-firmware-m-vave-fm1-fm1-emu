@@ -112,6 +112,44 @@ for many traditions (e.g. maqamat, ragas and gamelan). Japanese-derived
 scale names here represent standard piano-note approximations and
 must not be mistaken for faithful traditional intonation.
 
+## Groove realism: four-bar bass, pianist chords and drums (v0.4.4)
+
+**Bass:** each of the **56 named subgenres** now has four authored bar
+rhythms, rather than the former one-bar bass mask repeated four times
+under a new chord. The 16th-step note-on grid remains synced to the
+same song clock as the kick/snare. Chord-root transposition, modal
+passing tones and pitch/slide articulations are handled independently
+from the attack pattern, so Jazz Rap walking bass, G-Funk pocket,
+Reggaeton tumbao, Neuro DnB syncopation, Psytrance root pulse,
+Dubstep half-time, Minimal Techno and ambient drones differ in
+real scores rather than only a new synth patch. SAVE still makes
+deterministic new takes, never unpredictable per-frame hits.
+
+**Chords:** natural piano/jazz accompaniment deliberately plays
+open seventh/ninth chords for longer than EDM stabs. Jazz Rap,
+Underground Jazz, Jazzy Liquid and Sad Piano do **not** trigger all
+piano keys at precisely the same instant: ascending or descending
+voicings are pressed 14–24 ms apart by HYP's **audio callback**
+(sample-level scheduling, not WebView/LCD polling). Soul/funk
+accompaniments use subtler, faster 7–11 ms spreads. Other genres
+retain their purposeful short rhythmic stabs/pulsing patterns.
+**Ambient/darkwave/cloud/downtempo/deep/dub atmospheric pads remain
+long, simultaneous block chords**, with no artificial strum.
+
+**Drums:** kick/snare and hat/perc tracks keep their own independent
+subgenre settings. The common random kick edits, generic eighth-hat
+overlays and automatic clap doubling have been removed. Each named
+style has authored four-bar kick replies, snare ghosts, hi-hat
+responses and turnaround fills while retaining the kick/backbeat
+identity. Boom Bap still has **zero clap-lane events**, and the
+clean normal Hip-hop kick patch stays uncrushed.
+
+**Limitations:** piano realism is produced from HYP's synthesized pad
+timbres and multi-note timing, not multisampled acoustic recordings.
+Rhythms are 16th-grid based except the humanized intra-chord
+press spacing. FM-1 physical device performance and subjective
+mix quality must still be judged by listening on the target emulator.
+
 ## Genre implementation (14 genre families, four named substyles each)
 
 Trap, Goth Trap, Sad Trap, Hip-hop, Trip-hop, Underground Hip-hop,
