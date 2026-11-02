@@ -591,6 +591,11 @@ static void urban_port_init(uint32_t seed) {
     urban_port_set(P_KIT_SNARE,7);
     urban_port_set(P_KIT_HAT,7);
     for(i=0;i<URBAN_TRACKS;i++) p->rt.ui.song.tracks[i].genre=0;
+    /* First boot shows the CURRENT style's primary scale, not a random
+     * variation from the constructor's internal seed. SAVE opens up
+     * its two related alternate modes. */
+    p->rt.ui.song.harmony_variant=0u;
+    urban_song_harmony(&p->rt.ui.song);
     for(i=0;i<URBAN_TRACKS;i++) urban_runtime_refresh_track(&p->rt,i);
     urban_song_set_mode(&p->rt.ui.song,1); /* SONG MODE by default */
     urban_port_sound_profile();
