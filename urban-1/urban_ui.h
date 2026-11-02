@@ -29,6 +29,9 @@ static void urban_ui_set_genre(UrbanUI *ui, uint8_t genre, uint8_t subgenre) {
         ui->genre=(uint8_t)(genre%URBAN_GENRES);
         ui->subgenre=(uint8_t)(subgenre%4u);
         ui->song.subgenre=ui->subgenre;
+        /* Choosing a style explicitly previews its primary mode.
+         * Only SAVE may vary into the other compatible scale colours. */
+        ui->song.harmony_variant=0u;
         urban_song_set_genre(&ui->song,ui->genre);
     }
 }
