@@ -16,7 +16,7 @@ static volatile uint32_t urban_sfx_command;
 /* Called from UI/transport thread. New transient replaces older transient
  * rather than queuing events and potentially blocking the audio interrupt.
  * Clearing the command on STOP prevents stray sounds on the next song. */
-static void urban_sfx_trigger(unsigned type,unsigned level,unsigned length) {
+void urban_sfx_trigger(unsigned type,unsigned level,unsigned length) {
     if(level==0u || type>=10u)return;
     if(level>100u)level=100u;
     if(length<1u)length=1u;
@@ -24,7 +24,7 @@ static void urban_sfx_trigger(unsigned type,unsigned level,unsigned length) {
     urban_sfx_command=1u+(uint32_t)type+
         ((uint32_t)level<<8)+((uint32_t)length<<16);
 }
-static void urban_sfx_silence(void) {
+void urban_sfx_silence(void) {
     urban_sfx_command=0u;
     urban_sfx_voice.left=0u;
 }
