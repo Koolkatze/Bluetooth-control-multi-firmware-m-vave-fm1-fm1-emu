@@ -99,7 +99,6 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
             if(urban_rng(&riff)&1u)mask|=(uint16_t)(1u<<st);
             else mask&=(uint16_t)~(1u<<st);
         }
-        mask|=1u;
         /* Preserve characteristic offbeats in techno/trance (2,6,10,14)
          * rather than forcing a genre-agnostic tonic on step zero. */
         if(track->genre!=10u && track->genre!=12u)
@@ -119,7 +118,9 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
                        step%4u==0u?0u:(step%3u==0u?2u:4u);
                 break;
             case 2u: /* Jazz/walking: diatonic passing tones */
-                degree=(unsigned[]){0,2,4,5}[(step/4u+((v>>4)&1u))%4u];
+                degree=(step/4u+((v>>4)&1u))%4u==0u?0u:
+                       (step/4u+((v>>4)&1u))%4u==1u?2u:
+                       (step/4u+((v>>4)&1u))%4u==2u?4u:5u;
                 break;
             case 3u: /* Bouncy funk: roots, fifth and occasional octave */
                 degree=(step%4u==0u?0u:4u);
@@ -128,7 +129,9 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
                 degree=(step>=12u && v%7u==0u)?4u:0u;
                 break;
             case 5u: /* Reese/wobble: root, fourths, fifth, modal sevenths */
-                degree=(unsigned[]){0,4,2,6}[(step/4u+((v>>5)&1u))%4u];
+                degree=(step/4u+((v>>5)&1u))%4u==0u?0u:
+                       (step/4u+((v>>5)&1u))%4u==1u?4u:
+                       (step/4u+((v>>5)&1u))%4u==2u?2u:6u;
                 break;
             default: /* 808 or simple sub: tonic and tasteful fifth */
                 degree=(step%4u==0u)?0u:
