@@ -16,6 +16,7 @@
 #include "urban/urban_fx.h"
 #include "urban_editor.h"
 #include "urban/urban_drum_sync.h"
+#include "urban/urban_sfx.h"
 
 typedef struct {
     UrbanRuntime rt;
@@ -28,6 +29,8 @@ typedef struct {
     uint8_t bank;
     uint8_t active_mix_section;
     uint8_t ui_drawn;
+    int8_t sfx_type_override; /* -1: keep the chosen 56-style preset */
+    uint8_t sfx_level,sfx_length,sfx_density;
     uint32_t ui_signature;
 } UrbanHypPort;
 static UrbanHypPort urban_port;
@@ -57,7 +60,7 @@ static const char *const urban_genre_name[URBAN_GENRES] = {
     "Hard techno","Trance","Liquid jungle"
 };
 static const char *const urban_track_name[URBAN_TRACKS] = {
-    "Drums","Hats","Bass","Lead","Chords","Atmos","Extra 1","Extra 2"
+    "Drums","Hats","Bass","Lead","Chords","Atmos","Sound FX","Extra 2"
 };
 /* HYP1 treats played drone keys as key-24, acid keys as key-12. */
 static int urban_hyp_key(unsigned channel, uint8_t midi) {
@@ -84,6 +87,7 @@ static void urban_port_release(void) {
     urban_port.chord_count=0u;
     urban_port.chord_left=0u;
     urban_port.previous_chord_count=0u;
+    urban_sfx_silence();
 }
 /* Never edit the pattern currently read by the audio ISR. The inactive
  * HYP drum slot acts as the next-bar buffer. The two URBAN drum tracks
@@ -340,6 +344,8 @@ static void urban_port_step(void) {
     UrbanMidiFrame frame;
     unsigned i,t;
     unsigned cstep=p->rt.transport.step;
+    const unsigned sfx_section=p->rt.ui.song.current;
+    const unsigned sfx_bar=urban_phrase_bar(&p->rt.ui.song);
     /* HYP's drum tick has already advanced its 16th counter by one.
      * Update the chord/voice mix on THIS bar's first 16th, not on
      * the preceding bar's last 16th (the prior code changed section
@@ -376,6 +382,28 @@ static void urban_port_step(void) {
         urban_port_stage_pattern();
     for(i=2;i<=3;i++)
         urban_port_note(i,frame.event[i],frame.glide[i]);
+    /* Track 7 is a genuine separate procedural SFX voice. Its
+     * deterministic cue score follows the same song clock as drums and
+     * obeys track mute/solo. Editing a SFX track never changes bass,
+     * lead, pad, noise, or the authored drum patterns. */
+    const UrbanTrack *sf=&p->rt.ui.song.tracks[6];
+    uint8_t solo=0u;
+    for(i=0u;i<URBAN_TRACKS;i++)solo|=p->rt.ui.song.tracks[i].solo;
+    if(!sf->muted && (!solo || sf->solo) && p->sfx_level && p->sfx_density) {
+        UrbanSfxEvent cue=urban_sfx_event(&p->rt.ui.song,
+                                           sfx_section,sfx_bar,cstep);
+        uint32_t choice=urban_mix_seed(sf->seq[sfx_section].seed ^
+              ((uint32_t)sfx_bar*0x9e3779b9u) ^
+              ((uint32_t)cstep*0x85ebca6bu));
+        if(cue.level && choice%100u<p->sfx_density) {
+            unsigned sound=p->sfx_type_override>=0?
+                    (unsigned)p->sfx_type_override:cue.type;
+            unsigned level=(unsigned)cue.level*p->sfx_level/100u;
+            unsigned len=((unsigned)cue.length*p->sfx_length+50u)/100u;
+            if(len==0u)len=1u;
+            urban_sfx_trigger(sound,level,len);
+        }
+    }
 }
 static void urban_port_poll(void) {
     UrbanHypPort *p=&urban_port;
@@ -466,6 +494,10 @@ static void urban_port_init(uint32_t seed) {
     memset(p,0,sizeof(*p));
     p->active_mix_section=255u;
     p->staged_for_bar=UINT32_MAX;
+    p->sfx_type_override=-1;
+    p->sfx_level=100u;
+    p->sfx_length=100u;
+    p->sfx_density=100u;
     urban_runtime_init(&p->rt,seed);
     // HYP-1 ui_init() starts its engine by default. Stop it explicitly so
     // URBAN-1's STOPPED display agrees with the actual audio transport.
@@ -835,6 +867,12 @@ static const char *urban_port_instrument_name(const UrbanSong *s,
     if(track==3u)return urban_lead_names[ip.patch.lead];
     if(track==4u)return urban_pad_names[ip.patch.pad];
     if(track==0u||track==1u)return urban_kit_names[ip.patch.drum_kit];
+    if(track==6u) {
+        int selected=urban_port.sfx_type_override;
+        if(selected<0)selected=urban_sfx_styles[s->tracks[6].genre%URBAN_GENRES]
+                    [s->tracks[6].subgenre%4u].primary;
+        return urban_sfx_names[(unsigned)selected%URBAN_SFX_COUNT];
+    }
     return urban_noise_names[ip.noise_color];
 }
 /* JieLi's freestanding linker has no libc strcpy. The fixed-size
