@@ -84,11 +84,25 @@ static const uint8_t urban_scale_intervals[URBAN_SCALE_COUNT][7]={
   {0,2,3,5,7,9,11},   /* Melodic minor */
   {0,1,3,5,6,8,10}    /* Locrian */
 };
+/* Each named subgenre has one deliberately selected modal centre,
+ * rather than choosing scale from four unrelated alternatives per take.
+ * Major/lydian can appear in uplifting/romantic styles; vocal trap
+ * prefers Aeolian; witch house Phrygian; jazz rap/liquid Dorian. */
 static const uint8_t urban_genre_mode_options[URBAN_GENRES][4]={
-  {0,0,3,1}, {1,1,9,6}, {0,0,2,3}, {2,0,5,4},
-  {0,2,1,8}, {2,5,4,0}, {1,3,9,6}, {0,2,4,3},
-  {0,2,5,8}, {1,0,6,3}, {0,2,1,5}, {1,0,6,3},
-  {2,0,8,7}, {2,4,5,0}
+ /* Trap: classic, drill, ambient, rolled hats */        {0,1,0,3},
+ /* Goth: witch, industrial, darkwave, cloud */          {1,1,0,3},
+ /* Sad: emo, piano, lo-fi, guitar */                   {0,0,2,0},
+ /* Hip-hop: boom bap, jazz, G-funk, lo-fi */            {0,2,5,0},
+ /* Trip-hop: Bristol, downbeat, abstract, dub */        {0,2,1,2},
+ /* Underground: dusty, jazz, experimental, break */     {0,2,8,5},
+ /* Horrorcore: Memphis, cinematic, industrial, dark */  {1,3,1,6},
+ /* Reggaeton: dembow, perreo, romantic, future */       {0,0,4,2},
+ /* DnB: neurofunk, jump-up, darkstep, techstep */       {1,0,1,9},
+ /* Dubstep: UK 140, deep, riddim, brostep */            {0,0,1,1},
+ /* Techno: Detroit, hypnotic, dub, minimal */          {2,0,2,0},
+ /* Hardcore: gabber, industrial, frenchcore, uptempo */ {0,1,0,0},
+ /* Trance: progressive, uplifting, psy, tech */         {0,4,6,2},
+ /* Liquid: soulful, atmospheric, jazz, deep */          {2,0,2,0}
 };
 /* Scale-DEGREE (not arbitrary chromatic) chord root movements.
  * 14 genres * 4 alternative 4-chord progressions. Every root belongs
@@ -227,13 +241,10 @@ static void urban_generate_song(UrbanSong *s,uint32_t seed) {
     if(seed!=former_seed && s->harmony_variant==former_harmony)
         s->harmony_variant=(uint8_t)((former_harmony+1u+
                                  (urban_rng(&r)&1u))%4u);
-    /* The selected SUBGENRE now has its own preferred mode.
-     * Three out of four takes retain the chosen modal colour; other
-     * takes may borrow one of the genre's related scales. */
-    uint32_t mode_roll=urban_rng(&r);
-    unsigned mode_choice=(mode_roll%4u<3u)?
-              (unsigned)(s->subgenre%4u):(unsigned)(urban_rng(&r)%4u);
-    s->scale=urban_genre_mode_options[g][mode_choice];
+    /* The chosen subgenre defines its tonal identity. Generating a
+     * NEW song varies harmony, voicings and contour without randomly
+     * turning a romantic major Reggaeton tune into a Phrygian one. */
+    s->scale=urban_genre_mode_options[g][s->subgenre%4u];
     s->melodic_variant=(uint8_t)(urban_rng(&r)%8u);
     if(seed!=former_seed && s->melodic_variant==former_melody)
         s->melodic_variant=(uint8_t)((former_melody+1u+
