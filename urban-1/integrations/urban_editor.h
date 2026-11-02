@@ -15,9 +15,10 @@ enum {
     UC_TEMPO=P_NPARAMS, UC_KEY, UC_SCALE, UC_COMPLEX,
     UC_GATE16, UC_GATE8, UC_CRUSH, UC_THROW, UC_LOWPASS,
     UC_HIGHPASS, UC_REVERSE, UC_FILL, UC_STOP,
-    UC_REPEAT4, UC_REPEAT8
+    UC_REPEAT4, UC_REPEAT8, UC_SFX_SOUND, UC_SFX_LEVEL,
+    UC_SFX_LENGTH, UC_SFX_DENSITY
 };
-#define URBAN_EDITOR_CUSTOM_LAST UC_REPEAT8
+#define URBAN_EDITOR_CUSTOM_LAST UC_SFX_DENSITY
 typedef struct {
     const char *title;
     int16_t param[4];
@@ -62,6 +63,9 @@ static const UrbanEditorBank urban_fx_pad[] = {
 static const UrbanEditorBank urban_fx_noise[] = {
     {"NOISE SHAPING", {P_NZ_TONE,P_NZ_PUMP,P_NZ_COLOR,P_NOISE}}
 };
+static const UrbanEditorBank urban_fx_sfx[] = {
+    {"SFX PERFORMANCE", {UC_SFX_SOUND,UC_SFX_LEVEL,UC_SFX_LENGTH,UC_SFX_DENSITY}}
+};
 /* Master Edit: the real composition state is kept in URBAN's score.
  * Tempo / key / mode / complexity update the notes as well as HYP params.
  * Song-wide octaves and tuning are directly exposed by HYP-1. */
@@ -100,6 +104,9 @@ static const UrbanEditorBank urban_edit_pad[] = {
 static const UrbanEditorBank urban_edit_noise[] = {
     {"NOISE ENGINE", {P_NZ_COLOR,P_NZ_TONE,P_NZ_PUMP,P_NOISE}}
 };
+static const UrbanEditorBank urban_edit_sfx[] = {
+    {"SFX GENERATOR", {UC_SFX_SOUND,UC_SFX_LEVEL,UC_SFX_LENGTH,UC_SFX_DENSITY}}
+};
 #define UE_SIZE(a) ((unsigned)(sizeof(a)/sizeof((a)[0])))
 static const UrbanEditorBank *urban_editor_banks(
     unsigned view,unsigned target,unsigned *count) {
@@ -115,7 +122,8 @@ static const UrbanEditorBank *urban_editor_banks(
             UE_CASE(4,urban_fx_lead);
             UE_CASE(5,urban_fx_pad);
             UE_CASE(6,urban_fx_noise);
-            default: break; /* Extra 1 & Extra 2 have no audio engine */
+            UE_CASE(7,urban_fx_sfx);
+            default: break; /* Track 8 remains reserved */
         }
     } else if(view==URBAN_EDITOR_EDIT) {
         switch(target) {
@@ -126,6 +134,7 @@ static const UrbanEditorBank *urban_editor_banks(
             UE_CASE(4,urban_edit_lead);
             UE_CASE(5,urban_edit_pad);
             UE_CASE(6,urban_edit_noise);
+            UE_CASE(7,urban_edit_sfx);
             default: break;
         }
     }
@@ -171,6 +180,10 @@ static const char *urban_editor_label(int id) {
       case UC_STOP:return "STOP";
       case UC_REPEAT4:return "RPT 1/4";
       case UC_REPEAT8:return "RPT 1/8";
+      case UC_SFX_SOUND:return "SFX SOUND";
+      case UC_SFX_LEVEL:return "SFX LEVEL";
+      case UC_SFX_LENGTH:return "SFX LENGTH";
+      case UC_SFX_DENSITY:return "SFX DENSITY";
       default:return en_param_info(id)->name;
     }
 }
