@@ -78,10 +78,63 @@ static void check_harmonic_progression(void){
  }
  assert(rt.ui.song.current==URBAN_VERSE_A);
 }
+/* The A-H phrase is four bars, NOT a one-bar phrase multiplied by
+ * playback speed. The harmony and melodic ornaments progress over bars
+ * 1..4, and a repeat of verse B starts the same recognizable motif. */
+static void check_four_bar_phrase(void) {
+    UrbanRuntime rt;
+    UrbanMidiFrame first[4],second[4];
+    urban_runtime_init(&rt,0x12345678u);
+    urban_song_set_mode(&rt.ui.song,1);
+    rt.ui.song.playing=1;
+    for(unsigned bar=0;bar<12u;bar++) {
+        UrbanMidiFrame start;
+        urban_runtime_tick(&rt,&start);
+        if(bar>=4u && bar<8u)first[bar-4u]=start;
+        if(bar>=8u && bar<12u)second[bar-8u]=start;
+        for(unsigned t=1;t<384;t++)
+            urban_runtime_tick(&rt,&start);
+    }
+    for(unsigned i=0;i<4u;i++) {
+        assert(first[i].sequence==URBAN_VERSE_A);
+        assert(second[i].sequence==URBAN_VERSE_A);
+        assert(first[i].event[2].note==second[i].event[2].note);
+        assert(first[i].event[3].note==second[i].event[3].note);
+        assert(first[i].event[4].note==second[i].event[4].note);
+        assert(first[i].event[2].velocity==second[i].event[2].velocity);
+    }
+    assert(first[0].event[2].note!=first[1].event[2].note ||
+           first[1].event[2].note!=first[2].event[2].note);
+}
+static void check_manual_loop(void) {
+    UrbanSong s;
+    urban_init(&s,616u);
+    urban_song_set_mode(&s,0);
+    s.playing=1;
+    s.current=URBAN_HOOK;
+    s.queued=URBAN_HOOK;
+    for(unsigned bar=0;bar<20u;bar++) {
+        assert(urban_phrase_bar(&s)==bar%4u);
+        urban_sequence_boundary(&s);
+        assert(s.current==URBAN_HOOK && s.queued==URBAN_HOOK);
+    }
+    urban_queue_next(&s,3);
+    assert(s.current==URBAN_HOOK && s.queued==URBAN_DROP);
+    urban_sequence_boundary(&s); /* queued ONLY at end of this bar */
+    assert(s.current==URBAN_DROP);
+    assert(urban_phrase_bar(&s)==0u);
+    for(unsigned i=0;i<12;i++) {
+        urban_sequence_boundary(&s);
+        assert(s.current==URBAN_DROP);
+    }
+}
+
 int main(void) {
  check_song_form();
  check_genre_identity();
  check_harmonic_progression();
- puts("URBAN-1 56-bar arrangement, 14 genres and four-bar harmony tests passed");
+ check_four_bar_phrase();
+ check_manual_loop();
+ puts("URBAN-1 4-bar phrases, manual bar-quantized loop, 56-bar song and 14 genres passed");
  return 0;
 }
