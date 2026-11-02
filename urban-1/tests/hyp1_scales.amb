@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# 124 real scales are selectable in the native FM-1 editor. A manual
+# pentatonic scale must survive generating a new song, and choosing a
+# new genre must restore its professionally curated scale palette.
+expect urbanscale 0
+tap EDIT
+expect urbanview 2
+expect urbantarget 0
+expect urbaneditmode 0
+spin K3 85
+expect urbaneditmode 85
+shot editor-124-scales-minor-pentatonic.png
+tap HOME
+expect urbanscale 85
+tap SAVE
+expect urbanscale 85
+# Style choice resets the manual override to the new genre's default.
+spin K2 1
+expect urbanscale 1
+tap EDIT
+expect urbaneditmode 1
+shot editor-goth-phrygian.png
+tap EDIT
