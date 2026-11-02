@@ -86,6 +86,7 @@ typedef struct {
     UrbanStylePatch patch;
     uint8_t noise_color,noise_amount,program_variant;
     uint8_t jazz_voice; /* 0 = native HYP, 1..5 = real jazz DSP */
+    uint8_t jazz_bass;  /* 0 = HYP electronic DRONE, 1 = upright, 2 = finger bass */
 } UrbanInstrumentProgram;
 static UrbanInstrumentProgram urban_instrument_program(
     const UrbanSong *s,unsigned track,unsigned section) {
@@ -102,6 +103,15 @@ static UrbanInstrumentProgram urban_instrument_program(
     unsigned column=track==2u?0u:track==3u?1u:2u;
     p.program_variant=(uint8_t)variation;
     p.jazz_voice=0u;
+    p.jazz_bass=0u;
+    /* A warm drone is NOT an acoustic bass. Jazz subgenres require a
+     * distinct string-pluck instrument, never the Reese/FM/Organ bank.
+     * Only the bass track owns this program, so independent overrides work. */
+    if(track==2u && ((genre==3u && t->subgenre%4u==1u) ||
+                    (genre==5u && t->subgenre%4u==1u) ||
+                    (genre==13u && t->subgenre%4u==2u))) {
+        p.jazz_bass=(uint8_t)(genre==13u && variation==3u?2u:1u);
+    }
     /* Dedicated modelled instrument voices, NOT fake HYP sound IDs.
      * The lead and chord track each honour its own named subgenre. */
     if((track==3u||track==4u) &&
