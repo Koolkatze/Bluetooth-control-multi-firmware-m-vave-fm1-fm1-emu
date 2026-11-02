@@ -40,9 +40,9 @@ static SubSignature score_style(unsigned genre,unsigned sub,unsigned seed) {
     /* This checks the DIRECT knob path's recomposition primitive;
      * it must be independent of pressing SAVE or changing song seed. */
     for(unsigned bar=0;bar<4u;bar++) {
-        assert(s.chord_degrees[bar]==urban_chord_degrees[genre][sub][bar]);
-        assert(s.progression[bar]==urban_scale_intervals[s.scale]
-                                          [s.chord_degrees[bar]]);
+        assert(s.chord_degrees[bar]==urban_scale_root_degree(
+                    s.scale,urban_chord_degrees[genre][sub][bar]));
+        assert(s.progression[bar]==urban_scale_pc(s.scale,s.chord_degrees[bar]));
         assert(s.chord_colors[bar]==urban_substyle_chord_colors[genre][sub][bar]);
     }
     sig.scale=s.scale;
@@ -65,8 +65,8 @@ static SubSignature score_style(unsigned genre,unsigned sub,unsigned seed) {
         for(unsigned i=0;i<n;i++) {
             unsigned pc=(notes[i]+120u-s.key)%12u;
             unsigned in_scale=0u;
-            for(unsigned d=0;d<7u;d++)
-                if(pc==urban_scale_intervals[s.scale][d])
+            for(unsigned d=0;d<urban_scale_size(s.scale);d++)
+                if(pc==urban_scale_pc(s.scale,d))
                     in_scale=1u;
             assert(in_scale);
             sig.harmony=step_hash(sig.harmony,notes[i]);
