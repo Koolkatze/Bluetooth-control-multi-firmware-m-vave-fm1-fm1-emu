@@ -17,6 +17,7 @@
 #include "urban_editor.h"
 #include "urban/urban_drum_sync.h"
 #include "urban/urban_sfx.h"
+#include "urban/urban_recorder.h"
 #include "urban_trance_clock.h"
 /* The MCU builds HYP as a unity compilation; host builds amb.c as a
  * separate object. Both need the same exported DSP entry points. */
@@ -34,6 +35,10 @@ extern volatile uint32_t urban_echo_normal_input_frames;
 extern volatile uint32_t urban_echo_normal_tap_frames;
 extern volatile uint32_t urban_echo_throw_input_frames;
 extern volatile uint32_t urban_piano_note_onsets;
+void urban_tape_start_trigger(void);
+extern volatile uint32_t urban_tape_start_frames,urban_tape_start_completed;
+void urban_lead_lfo_config(unsigned rate,unsigned depth);
+extern volatile uint32_t urban_lead_lfo_frames;
 extern volatile uint32_t urban_piano_rolled_chords;
 
 typedef struct {
@@ -46,6 +51,11 @@ typedef struct {
     UrbanEditor editor;
     uint8_t bank;
     uint8_t active_mix_section;
+    UrbanRecorder recorder;
+    uint32_t play_press_ms,tape_stop_at,rec_step_ms;
+    uint32_t rec_last_keys;
+    uint8_t play_long_done,tape_enabled,tape_stop_pending;
+    uint8_t rec_clock_started,lead_lfo_rate,lead_lfo_depth;
     uint8_t ui_drawn;
     int8_t sfx_type_override; /* -1: keep the chosen 56-style preset */
     uint8_t sfx_level,sfx_length,sfx_density;
@@ -70,6 +80,17 @@ static void urban_port_set(int id,int value) {
         ed->live[id]=(int16_t)value;
     }
     en_set(id,value);
+}
+static void urban_port_style_reset(void) {
+    /* A new genre/subgenre is a NEW patch: clear all prior manual
+     * EDIT/FX overrides and stale live caches, but keep transport FX. */
+    UrbanEditor *e=&urban_port.editor;
+    memset(e->changed,0,sizeof(e->changed));
+    memset(e->valid,0,sizeof(e->valid));
+    urban_port.lead_lfo_rate=0u;
+    urban_port.lead_lfo_depth=0u;
+    urban_lead_lfo_config(0u,0u);
+    e->bank=0u;
 }
 
 static const char *const urban_genre_name[URBAN_GENRES] = {
@@ -597,6 +618,9 @@ static void urban_port_init(uint32_t seed) {
     p->active_mix_section=255u;
     p->staged_for_bar=UINT32_MAX;
     p->sfx_type_override=-1;
+    urban_rec_init(&p->recorder);
+    p->tape_enabled=1u;
+    urban_lead_lfo_config(0u,0u);
     p->sfx_level=100u;
     p->sfx_length=100u;
     p->sfx_density=100u;
@@ -653,6 +677,7 @@ static void urban_port_init(uint32_t seed) {
  * tracks and four-bar arrangement instead of generating a new song. */
 static void urban_port_restyle_song(void) {
     UrbanHypPort *p=&urban_port;
+    urban_port_style_reset();
     UrbanSong *s=&p->rt.ui.song;
     urban_song_harmony(s);
     for(unsigned i=0;i<URBAN_TRACKS;i++)
@@ -701,6 +726,9 @@ static int urban_port_editor_value(int id) {
     if(id==UC_SCALE)return s->scale;
     if(id==UC_COMPLEX)return s->complexity;
     if(id==UC_SFX_SOUND)return urban_port.sfx_type_override;
+    if(id==UC_TAPE_TRANSPORT)return urban_port.tape_enabled;
+    if(id==UC_LEAD_LFO_RATE)return urban_port.lead_lfo_rate;
+    if(id==UC_LEAD_LFO_DEPTH)return urban_port.lead_lfo_depth;
     if(id==UC_SFX_LEVEL)return urban_port.sfx_level;
     if(id==UC_SFX_LENGTH)return urban_port.sfx_length;
     if(id==UC_SFX_DENSITY)return urban_port.sfx_density;
@@ -760,6 +788,8 @@ static void urban_port_editor_write(int id,int delta) {
     else if(id==UC_KEY){hi=11;}
     else if(id==UC_SCALE){hi=URBAN_SCALE_COUNT-1;}
     else if(id==UC_COMPLEX){hi=3;}
+    else if(id==UC_TAPE_TRANSPORT){hi=1;}
+    else if(id==UC_LEAD_LFO_RATE||id==UC_LEAD_LFO_DEPTH){hi=100;}
     else if(id==UC_SFX_SOUND){lo=-1;hi=URBAN_SFX_COUNT-1;}
     else if(id==UC_SFX_LEVEL || id==UC_SFX_LENGTH ||
             id==UC_SFX_DENSITY){hi=100;}
@@ -786,6 +816,14 @@ static void urban_port_editor_write(int id,int delta) {
     } else if(id==UC_COMPLEX) {
         s->complexity=(uint8_t)value;
         urban_port_editor_refresh_notes();
+    } else if(id==UC_TAPE_TRANSPORT) {
+        urban_port.tape_enabled=(uint8_t)value;
+    } else if(id==UC_LEAD_LFO_RATE) {
+        urban_port.lead_lfo_rate=(uint8_t)value;
+        urban_lead_lfo_config(urban_port.lead_lfo_rate,urban_port.lead_lfo_depth);
+    } else if(id==UC_LEAD_LFO_DEPTH) {
+        urban_port.lead_lfo_depth=(uint8_t)value;
+        urban_lead_lfo_config(urban_port.lead_lfo_rate,urban_port.lead_lfo_depth);
     } else if(id==UC_SFX_SOUND) {
         urban_port.sfx_type_override=(int8_t)value;
     } else if(id==UC_SFX_LEVEL) {
@@ -1018,6 +1056,13 @@ static void urban_port_editor_value_text(int id,char buf[24]) {
     /* All registry names are available on the same hardware LCD. */
     if(id==UC_KEY)urban_port_copy_text(buf,EN_NOTE_NAME[(unsigned)v%12u]);
     else if(id==UC_SCALE)urban_port_copy_text(buf,urban_scale_names[(unsigned)v%URBAN_SCALE_COUNT]);
+    else if(id==UC_TAPE_TRANSPORT)
+        urban_port_copy_text(buf,v?"ON":"OFF");
+    else if(id==UC_LEAD_LFO_RATE||id==UC_LEAD_LFO_DEPTH) {
+        buf[0]=(char)('0'+(v/100)%10);
+        buf[1]=(char)('0'+(v/10)%10);
+        buf[2]=(char)('0'+v%10);buf[3]=0;
+    }
     else if(id==UC_COMPLEX) {
         buf[0]=(char)('0'+v);buf[1]=0;
     } else if(id>=UC_GATE16 && id<=UC_REPEAT8)
@@ -1043,7 +1088,9 @@ static void urban_port_editor_upper(uint16_t orange,uint16_t dim) {
     unsigned nb=0u;
     const UrbanEditorBank *bank=urban_editor_bank(e,&nb);
     urban_port_screen_text(9,&FONT_B,e->view==URBAN_EDITOR_FX?
-                             "URBAN-1 FX":"URBAN-1 EDIT",orange);
+        "URBAN-1 FX":e->view==URBAN_EDITOR_ENV?
+        "URBAN-1 ENV":e->view==URBAN_EDITOR_LFO?
+        "URBAN-1 LFO":"URBAN-1 EDIT",orange);
     urban_port_screen_text(36,&FONT_S,e->target==0u?
                              "MASTER - ALL TRACKS":
                              urban_track_name[e->target-1u],C_WHITE);
