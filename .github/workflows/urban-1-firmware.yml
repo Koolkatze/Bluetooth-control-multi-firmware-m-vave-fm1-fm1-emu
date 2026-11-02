@@ -8,6 +8,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  actions: write
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -90,3 +91,15 @@ jobs:
           fi
           gh release view "$tag" --repo "$GH_REPO" --json assets,url \
             --jq '.url, (.assets[] | .name + " " + .url)'
+
+      - name: Notify Android Update All catalog of new URBAN-1 firmware
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Workflow_dispatch may be invoked by GITHUB_TOKEN, unlike normal
+          # release:published events; this is required for cross-workflow
+          # updates of master/web/firmwares.json when GitHub Actions creates
+          # the firmware release.
+          gh workflow run sync-urban1-firmware.yml --repo "$GH_REPO" --ref master -f tag=urban1-firmware-v0.2.0
+          echo "Triggered updater-catalog sync on master (APK untouched)."
