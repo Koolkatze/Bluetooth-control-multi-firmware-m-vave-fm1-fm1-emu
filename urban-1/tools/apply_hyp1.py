@@ -79,10 +79,10 @@ def main() -> None:
     # Include after the mixer buffers and sine oscillator have been defined.
     replace_once(dsp,
         'static void render_drums(uint32_t n)',
-        '#include "../app/urban_sfx_engine.h"\\nstatic void render_drums(uint32_t n)')
+        '#include "../app/urban_sfx_engine.h"\nstatic void render_drums(uint32_t n)')
     replace_once(dsp,
         '    duck_env = fm_flush(de);',
-        '    urban_sfx_render(n); /* dedicated SFX voice, mixed before master FX */\\n    duck_env = fm_flush(de);')
+        '    urban_sfx_render(n); /* dedicated SFX voice, mixed before master FX */\n    duck_env = fm_flush(de);')
     # One shared port implementation in both the FM-1 and HYP-1 host simulator.
     replace_once(root / "firmware/src/main.c",
         '#include "app/main_fm1.c"',
