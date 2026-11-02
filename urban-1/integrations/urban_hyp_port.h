@@ -10,6 +10,7 @@
 #define URBAN_EMBEDDED 1
 #include "urban/urban_runtime.h"
 #include "urban/urban_style.h"
+#include "urban/urban_instruments.h"
 #include "urban/urban_chord_score.h"
 
 typedef struct {
@@ -100,12 +101,11 @@ static void urban_port_sound_profile(void) {
                                         s->tracks[0].subgenre);
     UrbanStylePatch h=urban_style_patch(s->tracks[1].genre,
                                         s->tracks[1].subgenre);
-    UrbanStylePatch bass=urban_style_patch(s->tracks[2].genre,
-                                           s->tracks[2].subgenre);
-    UrbanStylePatch lead=urban_style_patch(s->tracks[3].genre,
-                                           s->tracks[3].subgenre);
-    UrbanStylePatch pad=urban_style_patch(s->tracks[4].genre,
-                                          s->tracks[4].subgenre);
+    UrbanInstrumentProgram bp=urban_instrument_program(s,2u,s->current);
+    UrbanInstrumentProgram lp=urban_instrument_program(s,3u,s->current);
+    UrbanInstrumentProgram pp=urban_instrument_program(s,4u,s->current);
+    UrbanInstrumentProgram atmosphere=urban_instrument_program(s,5u,s->current);
+    UrbanStylePatch bass=bp.patch,lead=lp.patch,pad=pp.patch;
     /* Match HYP's mode controls where an equivalent exists. HYP does
      * not expose harmonic/melodic minor, Phrygian dominant or Locrian:
      * those are played correctly by our explicit MIDI chord/note score. */
@@ -134,9 +134,19 @@ static void urban_port_sound_profile(void) {
     en_set(P_KIT_HAT,h.hat_kit);
     en_set(P_KIT_PERC,h.drum_kit);
     en_set(P_SWING,urban_groove(s->genre,s->subgenre).swing);
-    en_set(P_DRIVE,overall.drive);
-    en_set(P_REVERB,overall.reverb);
+    /* Stable seed-dependent variations: every SAVE produces new sonic
+     * colour inside the same genre; no random kit switches per 16th. */
+    uint32_t color_rng=urban_mix_seed(s->seed ^ 0xaf2b4e13u);
+    int drv=(int)overall.drive+(int)(color_rng%13u)-6;
+    int rvb=(int)overall.reverb+(int)((color_rng>>8)%13u)-6;
+    if(drv<0)drv=0;if(drv>100)drv=100;
+    if(rvb<0)rvb=0;if(rvb>100)rvb=100;
+    en_set(P_DRIVE,drv);
+    en_set(P_REVERB,rvb);
     en_set(P_ECHO,overall.echo);
+    en_set(P_NZ_COLOR,atmosphere.noise_color);
+    en_set(P_NZ_TONE,s->genre<=2u?25:52);
+    en_set(P_NZ_PUMP,s->genre==8u||s->genre==10u?55:24);
     en_set(P_DR_INST,bass.bass);
     en_set(P_DR_CUT,bass.bass_cut);
     en_set(P_DR_RES,bass.bass==9u?20:51);
@@ -149,7 +159,7 @@ static void urban_port_sound_profile(void) {
     en_set(P_BRIGHT,brightness);
     en_set(P_PE_ATK,pad.pad==7u||pad.pad==3u?36:12);
     en_set(P_PE_REL,pad.pad==7u||pad.pad==3u?72:40);
-    en_set(P_NOISE,s->genre==1u||s->genre==4u||s->genre==6u?14:0);
+    en_set(P_NOISE,s->tracks[5].muted?0:atmosphere.noise_amount);
 }
 /* Song sections are actually orchestrated: the intro/bridge/break strip
  * layers, a hook raises melodic energy, and the drop restores full drums.
@@ -157,6 +167,9 @@ static void urban_port_sound_profile(void) {
  */
 static void urban_port_section_mix(void) {
     const UrbanSong *s=&urban_port.rt.ui.song;
+    /* Change timbres on section boundaries, not at every note.
+     * The eight-bar hook reprise uses the same seed and patch. */
+    urban_port_sound_profile();
     static const uint8_t levels[URBAN_SEQUENCES][4]={
         /* drums, bass, lead, pad */
         {30,39,25,55}, /* Intro */
