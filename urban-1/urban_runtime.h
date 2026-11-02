@@ -5,6 +5,7 @@
 #ifndef URBAN_RUNTIME_H
 #define URBAN_RUNTIME_H
 #include "urban_music.h"
+#include "urban_lead.h"
 #include "urban_bass.h"
 #include "urban_harmony.h"
 #include "urban_transport.h"
@@ -137,6 +138,12 @@ static void urban_runtime_tick(UrbanRuntime *rt, UrbanMidiFrame *frame) {
          * section-appropriate variations span 4x16 steps, not a one-bar
          * loop with an A-H label. Manual mode loops the same 4 bars. */
         unsigned bar=urban_phrase_bar(s);
+        /* The lead has its own genre score: intentional silent bars,
+         * section-aware motifs and genre-specific articulation.
+         * Never resurrect notes from a muted/unsoloed track. */
+        if(!s->tracks[3].muted && (!any_solo||s->tracks[3].solo))
+            frame->event[3]=urban_lead_score(s,s->current,bar,t->step,
+                                             frame->event[3]);
         for(unsigned i=2u;i<URBAN_TRACKS;i++) {
             UrbanNote *n=&frame->event[i];
             urban_runtime_bar_variation(s,i,s->current,bar,t->step,
