@@ -46,6 +46,11 @@ static void check_genre_identity(void) {
      identical++;
   }
   assert(identical==1u); /* 14 distinguishable drum signatures */
+  /* A canonical family progression is harmony_variant=0. Previous
+   * loop iterations generated new takes with other cadences. */
+  s.subgenre=0u;
+  s.harmony_variant=0u;
+  s.melodic_variant=0u;
   urban_song_set_genre(&s,(uint8_t)a);
   assert(s.scale==urban_genre_mode_options[a][0]);
   for(unsigned bar=0;bar<4u;bar++)
