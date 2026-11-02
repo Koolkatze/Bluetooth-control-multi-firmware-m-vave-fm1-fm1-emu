@@ -208,6 +208,11 @@ static void urban_drum_lanes(const UrbanSong *s,unsigned section,unsigned sectio
             if((urban_rng(&r)%100u)<hg.extras*s->complexity)out[3]|=(uint16_t)(1u<<step);
         }
     }
+    /* Boom Bap is SNARE ONLY on the backbeat, never the synthetic
+     * clap lane. Preserve this through hooks, drops, fills, complexity
+     * changes and independently selected drum-track subgenres. */
+    if(d->genre%URBAN_GENRES==3u && d->subgenre%4u==0u)
+        out[2]=0u;
     uint8_t solo=0;
     for(unsigned t=0;t<URBAN_TRACKS;t++)solo|=s->tracks[t].solo;
     if(d->muted || (solo&&!d->solo))
