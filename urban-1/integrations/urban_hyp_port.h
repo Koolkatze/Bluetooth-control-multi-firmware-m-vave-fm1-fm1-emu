@@ -432,12 +432,14 @@ static void urban_port_frame(void) {
     UrbanSong *s=&p->rt.ui.song;
     char seq[20]="NOW A   NEXT A";
     char bar[12]="BAR 01/56";
+    char phrase[20]="BAR 1/4 (LOOP)";
     char trnum[14]="TRACK 1/8";
     unsigned tr;
     urban_port_input();
     tr=p->rt.ui.selected_track;
     seq[4]=(char)('A'+s->current);
     seq[13]=(char)('A'+s->queued);
+    phrase[4]=(char)('1'+urban_phrase_bar(s));
     unsigned n=(unsigned)s->arrangement_pos+1u;
     bar[4]=(char)('0'+n/10u); bar[5]=(char)('0'+n%10u);
     trnum[6]=(char)('1'+tr);
@@ -455,12 +457,17 @@ static void urban_port_frame(void) {
               urban_style_name(s->genre,s->subgenre),C_WHITE,1);
         draw_text_box(0,148,240,&FONT_S,
               s->playing?"PLAYING":"STOPPED",RGB(255,165,110),1);
-        lcd_fill(15,168,210,5,RGB(49,55,70));
-        if(s->song_mode)
+        if(s->song_mode) {
+            lcd_fill(15,168,210,5,RGB(49,55,70));
             lcd_fill(15,168,(int)(210u*n/s->arrangement_len),5,RGB(255,165,110));
-        draw_text_box(0,182,240,&FONT_S,"K2 GENRE  K3 SUBGENRE",C_WHITE,1);
-        draw_text_box(0,202,240,&FONT_S,"SAVE: GENERATE  ARP: LOOP",C_WHITE,1);
-        draw_text_box(0,221,240,&FONT_S,"SEQ: TRACKS  SEL: KEY",C_WHITE,1);
+        } else {
+            draw_text_box(0,169,240,&FONT_S,phrase,RGB(255,165,110),1);
+        }
+        draw_text_box(0,186,240,&FONT_S,
+                      s->song_mode?"K2 GENRE  K3 SUBGENRE":"K4 NEXT A-H  K3 SUB",C_WHITE,1);
+        draw_text_box(0,204,240,&FONT_S,
+                      s->song_mode?"SAVE GENERATE  ARP LOOP":"ARP AUTO  SAVE GENERATE",C_WHITE,1);
+        draw_text_box(0,223,240,&FONT_S,"SEQ TRACKS   SELECT KEY",C_WHITE,1);
     } else {
         draw_text_box(0,41,240,&FONT_S,trnum,RGB(255,165,110),1);
         draw_text_box(0,65,240,&FONT_S,urban_track_name[tr],C_WHITE,1);
