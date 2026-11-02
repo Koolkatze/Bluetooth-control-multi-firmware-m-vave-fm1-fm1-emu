@@ -213,10 +213,20 @@ static void urban_generate_track(UrbanSong *s, unsigned track, uint32_t seed) {
  */
 static void urban_generate_song(UrbanSong *s,uint32_t seed) {
     uint8_t g=s->genre%URBAN_GENRES;
+    uint8_t former_harmony=s->harmony_variant;
+    uint8_t former_melody=s->melodic_variant;
+    uint32_t former_seed=s->seed;
     uint32_t r=urban_mix_seed(seed ^ ((uint32_t)g*0x9e3779b9u) ^
                               ((uint32_t)s->subgenre*0x85ebca6bu));
     s->seed=seed;
     s->harmony_variant=(uint8_t)(urban_rng(&r)%4u);
+    /* A fresh Generate MUST NOT silently return the last harmony or
+     * melodic contour again. Random reseeding alone cannot ensure this;
+     * force a meaningful musical change even on an unlucky random draw.
+     * The selected genre, subgenre, key, BPM and mode remain intact. */
+    if(seed!=former_seed && s->harmony_variant==former_harmony)
+        s->harmony_variant=(uint8_t)((former_harmony+1u+
+                                 (urban_rng(&r)&1u))%4u);
     /* The selected SUBGENRE now has its own preferred mode.
      * Three out of four takes retain the chosen modal colour; other
      * takes may borrow one of the genre's related scales. */
@@ -225,6 +235,9 @@ static void urban_generate_song(UrbanSong *s,uint32_t seed) {
               (unsigned)(s->subgenre%4u):(unsigned)(urban_rng(&r)%4u);
     s->scale=urban_genre_mode_options[g][mode_choice];
     s->melodic_variant=(uint8_t)(urban_rng(&r)%8u);
+    if(seed!=former_seed && s->melodic_variant==former_melody)
+        s->melodic_variant=(uint8_t)((former_melody+1u+
+                                   (urban_rng(&r)%3u))%8u);
     s->drum_variant=(uint8_t)(urban_rng(&r)%4u);
     for(unsigned bar=0;bar<4u;bar++) {
         unsigned deg=urban_chord_degrees[g][s->harmony_variant][bar];
