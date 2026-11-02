@@ -452,6 +452,7 @@ static void urban_port_chord(unsigned color,unsigned gate) {
 }
 /* Loop notes and parameter automation are replayed on the existing
  * HYP song clock without changing any unrelated track's generated score. */
+static void urban_port_editor_write(int id,int delta);
 static void urban_port_rec_timeline(void) {
     UrbanHypPort *p=&urban_port;
     UrbanRecorder *r=&p->recorder;
@@ -465,11 +466,17 @@ static void urban_port_rec_timeline(void) {
         if(r->state==UR_REC_RECORD && e->pass==r->pass)continue;
         if(e->pos!=pos && !(e->pos==(pos+1u)%len && !(pos&1u)))
             continue;
-        if(e->kind==UR_REC_PARAM && e->parameter<P_NPARAMS) {
-            UrbanEditor *ed=&p->editor;
-            ed->changed[e->parameter]=1u;
-            ed->override[e->parameter]=e->value;
-            urban_port_set(e->parameter,e->value);
+        if(e->kind==UR_REC_PARAM) {
+            if(e->parameter<P_NPARAMS) {
+                UrbanEditor *ed=&p->editor;
+                ed->changed[e->parameter]=1u;
+                ed->override[e->parameter]=e->value;
+                urban_port_set(e->parameter,e->value);
+            } else if(e->parameter==UC_LEAD_LFO_RATE||
+                      e->parameter==UC_LEAD_LFO_DEPTH) {
+                urban_port_editor_write(e->parameter,
+                    (int)e->value-urban_port_editor_value(e->parameter));
+            }
         } else if(e->kind==UR_REC_NOTE_ON||e->kind==UR_REC_NOTE_OFF) {
             int voice=urban_hyp_voice(r->track);
             if(voice>=0)
@@ -917,6 +924,124 @@ static void urban_port_editor_input(void) {
     }
     urban_port_poll();
 }
+
+/* Dedicated REC window (the FM-1 keyboard remains playable in every
+ * recording/edit/modulator page). Same loop timeline stores MIDI note
+ * on/off AND K1..K4 parameter automation. Knob values are real DSP
+ * controls, not visual placeholders. */
+static unsigned urban_port_rec_stamp(void) {
+    UrbanHypPort *p=&urban_port;
+    unsigned len=urban_rec_length(&p->recorder);
+    unsigned subtick=0u;
+    unsigned step_ms=60000u/
+       ((p->rt.ui.song.tempo?p->rt.ui.song.tempo:120u)*4u);
+    if(step_ms && plat_ms()-p->rec_step_ms>=step_ms/2u)
+        subtick=1u;
+    return len?(p->recorder.position+subtick)%len:0u;
+}
+static const UrbanEditorBank *urban_port_rec_mod_bank(void) {
+    UrbanHypPort *p=&urban_port;
+    UrbanEditor tmp=p->editor;
+    unsigned count=0u;
+    tmp.view=p->recorder.mod_page==1u?URBAN_EDITOR_ENV:
+             p->recorder.mod_page==2u?URBAN_EDITOR_LFO:URBAN_EDITOR_EDIT;
+    tmp.target=(uint8_t)(p->recorder.track+1u);
+    tmp.bank=p->recorder.mod_page==3u&&p->recorder.track==2u?1u:0u;
+    return urban_editor_bank(&tmp,&count);
+}
+static void urban_port_rec_keys(void) {
+    UrbanHypPort *p=&urban_port;
+    UrbanRecorder *r=&p->recorder;
+    uint32_t keys=p->rec_screen?plat_keys():0u;
+    uint32_t changed=(keys^p->rec_last_keys);
+    int voice=urban_hyp_voice(r->track);
+    for(unsigned k=0u;k<27u;k++)if(changed&(1u<<k)) {
+        unsigned on=(keys>>k)&1u;
+        unsigned note=53u+k;
+        if(voice>=0)en_note(voice,urban_hyp_key((unsigned)voice,(uint8_t)note),on);
+        if(r->state==UR_REC_RECORD)
+            (void)urban_rec_capture(r,on?UR_REC_NOTE_ON:UR_REC_NOTE_OFF,
+                                    note,on?110u:0u,0u,urban_port_rec_stamp());
+    }
+    p->rec_last_keys=keys;
+}
+static void urban_port_rec_input(uint32_t b,uint32_t down) {
+    UrbanHypPort *p=&urban_port;
+    UrbanRecorder *r=&p->recorder;
+    if(down&(1u<<B_REC)) {
+        if(!p->rec_screen) {
+            p->rec_screen=1u;p->editor.view=0u;
+            if(r->state==UR_REC_OFF)urban_rec_arm(r);
+        } else if(r->state==UR_REC_ARM) {
+            urban_rec_start(r);
+            p->rec_clock_started=0u;
+            if(!p->rt.ui.song.playing)urban_port_play();
+        } else if(r->state==UR_REC_RECORD) {
+            urban_rec_stop(r);
+        } else if(r->state==UR_REC_EDIT) {
+            urban_rec_overdub(r); /* keep all earlier passes */
+        }
+        p->ui_drawn=0u;
+    }
+    if(!p->rec_screen)return;
+    if(down&(1u<<B_SEL))r->mod_page=(uint8_t)((r->mod_page+1u)%4u);
+    if(down&(1u<<B_ENV))r->mod_page=1u;
+    if(down&(1u<<B_LFO))r->mod_page=2u;
+    if(down&(1u<<B_EDIT))r->mod_page=3u;
+    int d=plat_enc(EN_SELECT);
+    if(d)r->mod_page=(uint8_t)(((int)r->mod_page+d%4+4)%4);
+    if((down&(1u<<B_SAVE))&&r->state==UR_REC_EDIT)
+        p->rec_screen=0u; /* keep recorded loop playing in RAM */
+    if(r->state==UR_REC_ARM) {
+        d=plat_enc(EN_K1);
+        if(d)r->track=(uint8_t)(2u+((int)r->track-2+d%3+3)%3);
+        d=plat_enc(EN_K2);
+        if(d)urban_rec_set_bars(r,d);
+        d=plat_enc(EN_K3);
+        if(d)r->quant=r->quant?0u:3u;
+        d=plat_enc(EN_K4);
+        if(d) {
+            int q=(int)(r->quant?r->quant:3u)+d;
+            q=(q-1+4*8)%4+1;
+            r->quant=(uint8_t)q;
+        }
+    } else if(r->mod_page==0u && r->state==UR_REC_EDIT) {
+        d=plat_enc(EN_K1);
+        if(d)r->position=(uint16_t)
+          (((int)r->position+2*d+(int)urban_rec_length(r)*32)%
+           (int)urban_rec_length(r));
+        d=plat_enc(EN_K2);
+        if(d) {
+            int v=(int)r->edit_note+d;
+            r->edit_note=(uint8_t)(v<36?36:v>96?96:v);
+        }
+        d=plat_enc(EN_K3);
+        if(d) {
+            int v=(int)r->edit_velocity+d;
+            r->edit_velocity=(uint8_t)(v<1?1:v>127?127:v);
+        }
+        d=plat_enc(EN_K4);
+        if(d)urban_rec_toggle_note(r,r->position,r->edit_note);
+    } else if(r->mod_page!=0u &&
+             (r->state==UR_REC_RECORD||r->state==UR_REC_EDIT)) {
+        const UrbanEditorBank *bank=urban_port_rec_mod_bank();
+        for(unsigned i=0u;i<4u;i++) {
+            d=plat_enc(EN_K1+(int)i);
+            if(!d||!bank||bank->param[i]==URBAN_EDITOR_NO_PARAM)continue;
+            int id=bank->param[i];
+            int before=urban_port_editor_value(id);
+            urban_port_editor_write(id,d);
+            int after=urban_port_editor_value(id);
+            if(after!=before && r->state==UR_REC_RECORD)
+                (void)urban_rec_capture(r,UR_REC_PARAM,0u,
+                        (unsigned)after,(unsigned)id,urban_port_rec_stamp());
+        }
+    } else {
+        for(unsigned i=0u;i<4u;i++)(void)plat_enc(EN_K1+(int)i);
+    }
+    urban_port_rec_keys();
+}
+
 static void urban_port_input(void) {
     UrbanHypPort *p=&urban_port;
     UrbanSong *s=&p->rt.ui.song;
