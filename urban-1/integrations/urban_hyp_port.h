@@ -30,6 +30,9 @@ extern uint8_t urban_jazz_bass_mode;
 extern volatile uint32_t urban_jazz_bass_onsets,urban_jazz_bass_rendered_frames;
 extern uint8_t urban_jazz_chord_mode,urban_jazz_lead_mode;
 extern volatile uint32_t urban_jazz_note_onsets,urban_jazz_rendered_frames;
+extern volatile uint32_t urban_echo_normal_input_frames;
+extern volatile uint32_t urban_echo_normal_tap_frames;
+extern volatile uint32_t urban_echo_throw_input_frames;
 extern volatile uint32_t urban_piano_note_onsets;
 extern volatile uint32_t urban_piano_rolled_chords;
 
