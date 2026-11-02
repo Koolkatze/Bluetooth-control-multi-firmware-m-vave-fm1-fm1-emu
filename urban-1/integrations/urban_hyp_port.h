@@ -812,21 +812,31 @@ static const char *urban_port_instrument_name(const UrbanSong *s,
     if(track==0u||track==1u)return urban_kit_names[ip.patch.drum_kit];
     return urban_noise_names[ip.noise_color];
 }
+/* JieLi's freestanding linker has no libc strcpy. The fixed-size
+ * explicit loop also ensures no text write exceeds its 24-byte buffer. */
+static void urban_port_copy_text(char dst[24],const char *src) {
+    for(unsigned i=0;i<23u;i++) {
+        char ch=src[i];
+        dst[i]=ch;
+        if(!ch)return;
+    }
+    dst[23]=0;
+}
 static void urban_port_editor_value_text(int id,char buf[24]) {
     int v=urban_port_editor_value(id);
     static const char *const scale_name[URBAN_SCALE_COUNT]={
         "MINOR","PHRYG","DORIAN","HARM MIN","MAJOR",
         "MIXOLYD","PHRYG DOM","LYDIAN","MEL MIN","LOCRIAN"
     };
-    if(id==UC_KEY)strcpy(buf,EN_NOTE_NAME[(unsigned)v%12u]);
-    else if(id==UC_SCALE)strcpy(buf,scale_name[(unsigned)v%URBAN_SCALE_COUNT]);
+    if(id==UC_KEY)urban_port_copy_text(buf,EN_NOTE_NAME[(unsigned)v%12u]);
+    else if(id==UC_SCALE)urban_port_copy_text(buf,scale_name[(unsigned)v%URBAN_SCALE_COUNT]);
     else if(id==UC_COMPLEX) {
         buf[0]=(char)('0'+v);buf[1]=0;
     } else if(id>=UC_GATE16 && id<=UC_REPEAT8)
-        strcpy(buf,v?"ON":"OFF");
+        urban_port_copy_text(buf,v?"ON":"OFF");
     else if(id==UC_TEMPO)en_param_text(P_TEMPO,v,buf);
     else if(id>=0 && id<P_NPARAMS)en_param_text(id,v,buf);
-    else strcpy(buf,"--");
+    else urban_port_copy_text(buf,"--");
 }
 static void urban_port_editor_upper(uint16_t orange,uint16_t dim) {
     const UrbanEditor *e=&urban_port.editor;
