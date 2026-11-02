@@ -41,9 +41,14 @@ static void check_musical_lead(void) {
             if(section==URBAN_DROP)drop+=hits;
           }
         assert(silent>=8u);
-        assert(hook>0u && drop>0u);
-        assert(intro<hook);
-        assert(verse<hook);
+        /* Vocal-first / bass-first songs intentionally have no
+         * monophonic synth lead at all. This is valid, not a failed
+         * generator. Lead-forward takes still require strong choruses. */
+        if(urban_lead_presence(&s)) {
+            assert(hook>0u && drop>0u);
+            assert(intro<hook);
+            assert(verse<hook);
+        } else assert(intro==0u && verse==0u && hook==0u && drop==0u);
       }
 }
 static void check_headroom_and_mutes(void) {
@@ -80,6 +85,17 @@ static void check_headroom_and_mutes(void) {
 static void check_runtime_mute(void) {
     UrbanRuntime r;
     urban_runtime_init(&r,713u);
+    /* Use uplifting trance (lead-forward) for the explicit unmute test;
+     * trap/hip-hop/techno can intentionally generate a leadless track. */
+    r.ui.genre=12u;
+    r.ui.song.genre=12u;
+    r.ui.song.subgenre=1u;
+    r.ui.song.tracks[3].genre=12u;
+    r.ui.song.tracks[3].subgenre=1u;
+    for(unsigned attempt=0;attempt<64u &&
+        !urban_lead_presence(&r.ui.song);attempt++)
+        urban_runtime_generate_entropy(&r,attempt+9u);
+    assert(urban_lead_presence(&r.ui.song));
     urban_song_set_mode(&r.ui.song,0);
     r.ui.song.current=URBAN_HOOK;
     r.ui.song.queued=URBAN_HOOK;
