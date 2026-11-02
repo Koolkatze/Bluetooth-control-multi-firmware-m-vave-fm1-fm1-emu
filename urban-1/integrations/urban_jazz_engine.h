@@ -16,7 +16,7 @@ enum {
     URBAN_JAZZ_FLUTE=3,URBAN_JAZZ_VIBES=4,URBAN_JAZZ_BELL=5
 };
 typedef struct {
-    float phase,freq,strength,decay,hammer,lp,lfo;
+    float phase,freq,strength,decay,hammer,lp,lfo,tone_lp;
     uint32_t noise,age,order;
     uint8_t key,held,active,program;
 } UrbanJazzVoice;
@@ -26,7 +26,7 @@ static uint32_t urban_jazz_current,urban_jazz_age;
 enum { URBAN_JAZZ_BASS_OFF=0,URBAN_JAZZ_BASS_UPRIGHT=1,
        URBAN_JAZZ_BASS_FINGER=2 };
 typedef struct {
-    float phase,phase2,freq,env,pluck,brightness,body,body_low,attack;
+    float phase,phase2,freq,env,pluck,brightness,body,body_low,attack,tone_lp;
     uint32_t noise,age;
     uint8_t note,held,active,program;
 } UrbanJazzBass;
@@ -34,6 +34,7 @@ static UrbanJazzBass urban_jazz_bass;
 uint8_t urban_jazz_bass_mode;
 volatile uint32_t urban_jazz_bass_onsets,urban_jazz_bass_rendered_frames;
 volatile uint32_t urban_jazz_note_onsets,urban_jazz_rendered_frames;
+volatile uint32_t urban_jazz_modulated_frames;
 uint8_t urban_jazz_chord_mode,urban_jazz_lead_mode;
 
 /* The device and Android host use one identical audio implementation.
@@ -70,6 +71,7 @@ static void urban_jazz_start(UrbanJazzVoice *v,int midi,unsigned program,
     v->decay=1.0f;
     v->hammer=program==URBAN_JAZZ_PIANO?0.10f:0.028f;
     v->lp=0.0f;
+    v->tone_lp=0.0f;
     v->lfo=0.0f;
     v->age=0u;
     v->noise=0xa511e9b3u^((uint32_t)midi*0x9e3779b9u)^(pan_seed*0x85ebca6bu);
@@ -92,7 +94,7 @@ static void urban_jazz_note_cmd(int voice,int key,int on) {
             b->env=1.0f;b->attack=0.0f;b->age=0u;
             b->pluck=1.0f;b->brightness=1.0f;
             b->phase=0.12f;b->phase2=0.0f;
-            b->body=b->body_low=0.0f;
+            b->body=b->body_low=b->tone_lp=0.0f;
             b->noise=0xa511e9b3u ^ ((uint32_t)midi*0x9e3779b9u) ^
                      ((uint32_t)urban_jazz_bass_onsets*0x85ebca6bu);
             ++urban_jazz_bass_onsets;
@@ -168,12 +170,26 @@ static float urban_jazz_sample(UrbanJazzVoice *v) {
         break;
     default:v->active=0u;return 0.0f;
     }
+    if(v==&urban_jazz_melody) {
+        /* The true melodic engine obeys its lead envelope knobs too. */
+        if(v->program!=URBAN_JAZZ_FLUTE)
+            rate=1.0f-(1.0f-rate)*
+                (1.8f-1.4f*(float)par[P_AC_DEC]*0.01f);
+    } else {
+        /* Native PAD/ENV controls also shape our acoustic keys, not
+         * just the original HYP oscillator that is now bypassed. */
+        attack*=1.0f-0.87f*(float)par[P_PE_ATK]*0.01f;
+    }
     v->strength+=(1.0f-v->strength)*attack;
     v->decay*=rate;
     /* Instrument-specific dampening; resonant mallet tails aren't cut
      * like woodwind, but all voices have a bounded release. */
-    if(!v->held) v->strength*=v->program==URBAN_JAZZ_FLUTE?
-                             0.9993f:0.99988f;
+    if(!v->held) {
+        float release=v==&urban_jazz_melody?
+            (0.9991f+0.00068f*(float)par[P_AC_DEC]*0.01f):
+            (0.99935f+0.00063f*(float)par[P_PE_REL]*0.01f);
+        v->strength*=release;
+    }
     if(v->strength*v->decay<0.00035f && v->age>512u) {
         v->active=0u;return 0.0f;
     }
@@ -183,7 +199,11 @@ static float urban_jazz_sample(UrbanJazzVoice *v) {
         freq*=1.0f+0.0022f*sine(v->lfo);
     v->phase+=freq*(1.0f/EN_SR);
     if(v->phase>=1.0f)v->phase-=1.0f;
-    v->lfo+=(v->program==URBAN_JAZZ_VIBES?5.6f:5.1f)*(1.0f/EN_SR);
+    /* The chord-LFO rate is now the selected HYP rate knob; flute
+     * keeps its natural breath vibrato at roughly 5 Hz. */
+    float hz=v==&urban_jazz_melody?5.1f:
+             (0.25f+0.45f*(float)par[P_PL_RATE]);
+    v->lfo+=hz*(1.0f/EN_SR);
     if(v->lfo>=1.0f)v->lfo-=1.0f;
     v->hammer*=0.990f;
     return x*v->strength*v->decay;
@@ -221,14 +241,26 @@ static void urban_jazz_bass_render(uint32_t n) {
         /* Low wood resonance adds pluck character without another synth
          * oscillator taking over the perceived pitch. */
         float x=(0.79f*raw+0.21f*b->body+scrape);
-        b->attack+=(1.0f-b->attack)*0.015f; /* ~1.5 ms finger onset */
+        /* Real knob-driven filter: native DRONE controls remain
+         * functional when the electronic oscillator is replaced
+         * by this acoustic string. LFO changes timbre, not pitch. */
+        float depth=(float)par[P_DL_DEPTH]*0.01f;
+        float cf=0.045f+0.33f*(float)par[P_DR_CUT]*0.01f+
+                 0.22f*depth*sine(b->phase2);
+        cf=fm_clampf(cf,0.018f,0.86f);
+        b->tone_lp+=cf*(x-b->tone_lp);
+        x=b->tone_lp;
+        b->phase2+=(0.25f+0.45f*(float)par[P_DL_RATE])*(1.0f/EN_SR);
+        if(b->phase2>=1.0f)b->phase2-=1.0f;
+        b->attack+=(1.0f-b->attack)*
+                   (0.029f-0.024f*(float)par[P_DE_ATK]*0.01f);
         float envelope=b->env*b->attack;
         x*=envelope;
         b->brightness*=b->program==URBAN_JAZZ_BASS_FINGER?
                         0.99991f:0.99987f;
         b->pluck*=0.9974f; /* scrape gone in tens of milliseconds */
-        b->env*=b->program==URBAN_JAZZ_BASS_FINGER?
-                 0.999980f:0.999974f;
+        float dec=0.99994f+0.00005f*(float)par[P_DE_DEC]*0.01f;
+        b->env*=b->program==URBAN_JAZZ_BASS_FINGER?dec*0.999997f:dec;
         if(!b->held)b->env*=0.99981f;
         ++b->age;
         if(b->env<0.00038f && b->age>256u) {
@@ -245,6 +277,7 @@ static void urban_jazz_bass_render(uint32_t n) {
         rsend[j]+=(l+r)*0.095f;
         esend[j]+=(l+r)*0.025f;
         ++urban_jazz_bass_rendered_frames;
+        ++urban_jazz_modulated_frames;
     }
 }
 
@@ -257,13 +290,34 @@ static void urban_jazz_render(uint32_t n) {
         float l=0.0f,r=0.0f;
         if(urban_jazz_chord_mode)
             for(unsigned i=0u;i<EN_NPAD;i++) {
-                float x=urban_jazz_sample(&urban_jazz_chords[i])*cg;
+                UrbanJazzVoice *v=&urban_jazz_chords[i];
+                float x=urban_jazz_sample(v);
+                /* Brightness and the actual PAD LFO now filter piano,
+                 * Rhodes and mallet voices directly in this engine. */
+                float cf=0.14f+
+                       0.60f*(float)par[P_BRIGHT]*0.01f+
+                       0.25f*(float)par[P_PL_DEPTH]*0.01f*sine(v->lfo);
+                cf=fm_clampf(cf,0.012f,0.94f);
+                v->tone_lp+=cf*(x-v->tone_lp);
+                x=v->tone_lp*cg;
                 l+=x*(i&1u?0.79f:1.0f);
                 r+=x*(i&1u?1.0f:0.79f);
+                if(v->active)++urban_jazz_modulated_frames;
             }
         if(urban_jazz_lead_mode) {
-            float x=urban_jazz_sample(&urban_jazz_melody)*lg;
+            UrbanJazzVoice *v=&urban_jazz_melody;
+            float x=urban_jazz_sample(v);
+            /* New independent LEAD LFO affects cutoff on flute,
+             * vibraphone and bell too; P_AC_ENV adds pluck brightness. */
+            float cf=0.035f+
+                     0.70f*(float)par[P_AC_CUT]*0.01f+
+                     0.065f*(float)par[P_AC_ENV]*0.01f*v->decay+
+                     0.095f*urban_lead_lfo_oct;
+            cf=fm_clampf(cf,0.009f,0.95f);
+            v->tone_lp+=cf*(x-v->tone_lp);
+            x=v->tone_lp*lg;
             l+=x*0.96f;r+=x*1.04f;
+            if(v->active)++urban_jazz_modulated_frames;
         }
         mixl[j]+=l;mixr[j]+=r;
         rsend[j]+=(l+r)*0.16f;
