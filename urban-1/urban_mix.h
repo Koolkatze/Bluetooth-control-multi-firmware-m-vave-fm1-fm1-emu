@@ -131,7 +131,7 @@ static UrbanMixPlan urban_mix_plan(const UrbanSong *s,
     unsigned ds=s->tracks[0].subgenre%4u;
     if(dg==3u || dg==5u) {
         m.kick=(uint8_t)(dg==3u && ds==3u?74u:70u);
-        m.drive=(uint8_t)(dg==3u && ds==3u?34u:17u);
+        m.drive=(uint8_t)(dg==3u && ds==3u?42u:8u);
         if(dg==3u && ds==0u)
             m.clap=0u; /* Boom Bap: pure snare even in mixed-genre songs. */
     }
