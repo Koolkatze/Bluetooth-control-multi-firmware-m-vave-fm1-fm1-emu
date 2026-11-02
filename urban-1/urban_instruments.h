@@ -104,6 +104,23 @@ static UrbanInstrumentProgram urban_instrument_program(
         /* The bass sound is now chosen from the named SUBGENRE, never
          * from the old genre-global alternative pool. */
         p.patch.bass=urban_subgenre_bass_sounds[genre][t->subgenre%4u][variation];
+    } else if(genre==12u) {
+        /* Progressive, Uplifting, Psytrance and Tech Trance no longer
+         * share the same three stochastic chip/Fifth/Sync timbres.
+         * Give each style a coherent lead AND a separate pad family. */
+        static const uint8_t trance_leads[4][4]={
+            {15u,8u,5u,15u}, /* Progressive: soft analog / warm PWM */
+            {8u,5u,8u,0u},   /* Uplifting: bright sustained analog */
+            {3u,2u,3u,5u},   /* Psy: filtered sync/acid plucks */
+            {5u,3u,5u,0u}    /* Tech: rhythmic short synth stabs */
+        };
+        static const uint8_t trance_pads[4][4]={
+            {5u,9u,5u,1u},{9u,10u,9u,6u},
+            {7u,8u,7u,14u},{6u,9u,5u,6u}
+        };
+        unsigned sub=t->subgenre%4u;
+        if(track==3u)p.patch.lead=trance_leads[sub][variation];
+        if(track==4u)p.patch.pad=trance_pads[sub][variation];
     } else if(genre==3u || genre==5u) {
         /* Never let a generic, RNG-selected Chip/Bell/Pluck overwrite
          * a laid-back hip-hop patch. Map the melodic layer by SUBSTYLE.
