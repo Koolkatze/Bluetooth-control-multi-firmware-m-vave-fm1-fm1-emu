@@ -57,13 +57,16 @@ expect urbanpadattackedit 1
 spin PRESET 1
 expect urbanbank 2
 shot editor-edit-pad-lfo.png
-# Tracks 6/7 have no independent HYP DSP; must not fake controls.
+# Track 7 is a real Sound FX DSP voice, with four active knobs.
 spin ALGO 2
 expect urbantarget 7
 expect urbanbank 0
+expect urbansfxlevel 100
 spin K1 20
+spin K2 -12
+expect urbansfxlevel 88
 expect urbanpadattackedit 1
-shot editor-no-extra-voice.png
+shot editor-sound-fx.png
 # Home and Seq return to music pages; FX and EDIT are always accessible.
 tap HOME
 expect urbanview 0
