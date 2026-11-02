@@ -912,6 +912,18 @@ static void urban_port_editor_value_text(int id,char buf[24]) {
         buf[0]=(char)('0'+v);buf[1]=0;
     } else if(id>=UC_GATE16 && id<=UC_REPEAT8)
         urban_port_copy_text(buf,v?"ON":"OFF");
+    else if(id==UC_SFX_SOUND) {
+        urban_port_copy_text(buf,v<0?"AUTO (STYLE)":
+            urban_sfx_names[(unsigned)v%URBAN_SFX_COUNT]);
+    } else if(id==UC_SFX_LEVEL || id==UC_SFX_LENGTH ||
+              id==UC_SFX_DENSITY) {
+        unsigned n=(unsigned)v;
+        unsigned digits=0u;
+        if(n>=100u)buf[digits++]=(char)('0'+n/100u);
+        if(n>=10u)buf[digits++]=(char)('0'+(n/10u)%10u);
+        buf[digits++]=(char)('0'+n%10u);
+        buf[digits]=0;
+    }
     else if(id==UC_TEMPO)en_param_text(P_TEMPO,v,buf);
     else if(id>=0 && id<P_NPARAMS)en_param_text(id,v,buf);
     else urban_port_copy_text(buf,"--");
