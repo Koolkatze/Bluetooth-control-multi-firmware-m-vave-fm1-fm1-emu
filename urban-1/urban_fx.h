@@ -19,7 +19,7 @@ typedef struct {
 /* 14 distinct genre effect architectures. Substyle offsets are applied
  * below and all required FX remain strictly above zero. Echo-time
  * enums are native HYP 0..5, not milliseconds. */
-static const uint8_t urban_fx_genre[URBAN_GENRES][12]={
+static const uint8_t urban_fx_genre[URBAN_GENRES][11]={
  /* echo rev size drive  PAD rate depth detune BASS rate depth  lead env   echo time */
     {24,36,61,25, 2,15, 8, 2,12,28, 1}, /* trap, pluck and wide tails */
     {42,60,82,28, 1,31,14, 1,25,17, 3}, /* gothic dark distant */
@@ -51,9 +51,9 @@ static UrbanFxPlan urban_fx_plan(const UrbanSong *s) {
      * Every one of the 56 choices differs in envelope/effect parameters. */
     static const int8_t wet[4]={0,6,12,-5};
     static const int8_t drive[4]={0,8,-6,4};
-    f.echo=(uint8_t)urban_fx_clamp((int)v[0]+wet[sub],10,mix.echo);
+    f.echo=(uint8_t)urban_fx_clamp((int)v[0]+wet[sub],8,mix.echo);
     f.echo_time=(uint8_t)((v[10]+(sub==2u?1u:sub==3u?2u:0u))%6u);
-    f.reverb=(uint8_t)urban_fx_clamp((int)v[1]+wet[sub],12,mix.reverb);
+    f.reverb=(uint8_t)urban_fx_clamp((int)v[1]+wet[sub],8,mix.reverb);
     f.reverb_size=(uint8_t)urban_fx_clamp((int)v[2]+wet[sub],35,90);
     f.drive=(uint8_t)urban_fx_clamp((int)v[3]+drive[sub],8,mix.drive);
     f.pad_lfo_rate=(uint8_t)((v[4]+sub)%8u);
