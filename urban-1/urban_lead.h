@@ -211,11 +211,24 @@ static UrbanNote urban_lead_score(const UrbanSong *s,unsigned section,
             ((uint32_t)(step+1u)*0x9e3779b9u));
     /* Strong onsets outline chord functions; weak onsets use a genuine
      * genre contour, whose pitches live within the selected mode. */
-    unsigned contour_pos=(step/2u+(s->melodic_variant%8u))%8u;
+    /* Trance motif always begins on its planned tonic/third.
+     * Rotating the entire ascending figure at random made the melody
+     * lose its melodic question/answer identity each generation. */
+    unsigned contour_pos=g==12u?(step/2u)%8u:
+                   (step/2u+(s->melodic_variant%8u))%8u;
     int relative=g==12u?
            (int)urban_trance_contour[t->subgenre%4u][contour_pos]:
            (int)urban_lead_degrees[g][contour_pos] +
            (int)urban_substyle_lead_steps[t->subgenre%4u][contour_pos];
+    if(g==12u) {
+        /* Four-bar development without wandering off the eighth-note
+         * grid: the melodic_variant changes a stable hook resolution,
+         * not the downbeat or entire tune's starting degree. */
+        if((s->melodic_variant&1u) && bar==2u &&
+           (step==10u || step==12u))relative+=2;
+        if((s->melodic_variant&2u) && bar==3u && step>=12u)
+           relative=0; /* phrase resolves to the chord root */
+    }
     /* Some styles explicitly repeat their tonic to let bass/voice carry
      * the harmony; jazz / trance styles are more chord-tone mobile. */
     if((step%4u)==0u && (g==0u||g==1u||g==2u||g==9u))
