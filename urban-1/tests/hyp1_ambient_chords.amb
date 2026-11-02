@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Ambient pads keep their original unrolled, sustained block chords.
+expect urbanpianorolls 0
+spin K2 13
+spin K3 1
+expect urbansub 1
+tap PLAY
+wait 7600
+expect playing 1
+expect urbanpianorolls 0
+expect urbanpianonotes 0
+shot atmospheric-long-pad-chords.png
+tap PLAY
+expect playing 0
