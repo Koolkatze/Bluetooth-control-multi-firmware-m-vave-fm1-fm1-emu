@@ -60,6 +60,8 @@ def main() -> None:
                     root / "firmware/src/app/urban_jazz_engine.h")
     shutil.copyfile(HERE / "integrations/urban_echo_engine.h",
                     root / "firmware/src/app/urban_echo_engine.h")
+    shutil.copyfile(HERE / "integrations/urban_tape_transport.h",
+                    root / "firmware/src/app/urban_tape_transport.h")
     # HYP-1's Break kit applies random ghost kicks/snares and 32nd-roll
     # retriggers *after* reading the six authored pattern lanes. These
     # unscored hits sound like glitches in URBAN-1, where all fills and
@@ -140,6 +142,15 @@ def main() -> None:
     replace_once(dsp,
         '    duck_env = fm_flush(de);',
         '    urban_sfx_render(n); /* dedicated SFX voice, mixed before master FX */\n    duck_env = fm_flush(de);')
+    # Tape Start uses the SAME existing master tape ring; no new large
+    # allocation. Run after HYP's FX master, before 24-bit PCM conversion.
+    replace_once(dsp,
+        'static void drain(void)',
+        '#include "../app/urban_tape_transport.h"\nstatic void drain(void)')
+    replace_once(dsp,
+        '        fx_master(&l, &r);',
+        '        fx_master(&l, &r);\n'
+        '        urban_tape_start_mix(&l,&r);')
     # HYP's drum tick is sample-aligned, while the previous Acid lead
     # note-on ran after WebView/LCD polling (up to a full UI frame late).
     # Trance now consumes a prebuilt score on the very same DSP tick.
@@ -232,6 +243,8 @@ def main() -> None:
         '    else if (!strcmp(what, "urbanview")) got = urban_port.editor.view;\n'
         '    else if (!strcmp(what, "urbantarget")) got = urban_port.editor.target;\n'
         '    else if (!strcmp(what, "urbanbank")) got = urban_port.editor.bank;\n'
+        '    else if (!strcmp(what, "urbantapestartframes")) got = urban_tape_start_frames;\n'
+        '    else if (!strcmp(what, "urbantapestarts")) got = urban_tape_start_completed;\n'
         '    else if (!strcmp(what, "urbanfxechosend")) got = urban_echo_normal_input_frames;\n'
         '    else if (!strcmp(what, "urbanfxechowet")) got = urban_echo_normal_tap_frames;\n'
         '    else if (!strcmp(what, "urbanfxthrowsend")) got = urban_echo_throw_input_frames;\n'
