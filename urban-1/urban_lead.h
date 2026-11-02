@@ -111,9 +111,9 @@ static const uint8_t urban_lead_chance[URBAN_GENRES][4]={
     {25,45,12,35},   /* Trap: often leaves room for vocals / 808 */
     {20,35,18,12},   /* Goth: sparse dark distant motifs */
     {35,20,12,30},   /* Sad: pluck/piano chord main layer */
-    {8,14,72,6},     /* Hip-hop: space for MC; G-Funk leads */
+    {8,62,72,6},     /* Jazz Rap: flute/mallet call and response */
     {12,15,22,12},   /* Trip-hop: atmosphere and bass dominate */
-    {8,18,12,22},    /* Underground: chord/sample first */
+    {8,58,12,22},    /* Jazz Underground: instrumental replies */
     {25,32,20,25},   /* Horrorcore */
     {45,55,24,42},   /* Reggaeton: hook, not continuous lead */
     {15,35,18,18},   /* DnB: Reese/breaks dominate */
@@ -121,7 +121,7 @@ static const uint8_t urban_lead_chance[URBAN_GENRES][4]={
     { 8,24,12, 3},   /* Techno: hypnotic and minimal may need no solo */
     { 4, 7,30,18},   /* Hardcore: gabber = kick is the lead */
     {72,94,62,70},   /* Trance: one of the few genuinely lead-forward genres */
-    {28,20,45,15}    /* Liquid: soulful pads and chords also foreground */
+    {28,20,68,15}    /* Jazz Liquid: audible flute/vibes phrasing */
 };
 static uint8_t urban_lead_presence(const UrbanSong *s) {
     const UrbanTrack *t=&s->tracks[3];
