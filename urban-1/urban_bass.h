@@ -83,7 +83,8 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
     uint8_t phrase_note[4];
     for(unsigned i=0;i<4u;i++) {
         unsigned degree=(urban_rng(&root)%3u)*2u;
-        phrase_note[i]=urban_scale_intervals[song->scale%URBAN_SCALE_COUNT][degree];
+        phrase_note[i]=(uint8_t)urban_scale_pc(song->scale,
+            urban_scale_root_degree(song->scale,degree));
     }
     for(unsigned sec=0;sec<URBAN_SEQUENCES;sec++) {
         uint32_t r=root ^ ((sec+1u)*0x85ebca6bu) ^
@@ -116,7 +117,7 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
             unsigned root_note=36u+(song->key%12u);
             /* Strong beats take tonic. Offbeats use notes established in the
              * SONG'S modal palette; all tracks share the chord transposition. */
-            const uint8_t *scale=urban_scale_intervals[song->scale%URBAN_SCALE_COUNT];
+            unsigned scale=song->scale;
             unsigned degree=0u;
             switch(style->motion) {
             case 1u: /* Sliding 808: tonic, minor-third, fifth, turnaround */
@@ -155,7 +156,8 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
                 else if(style->motion==0u)
                     degree=step==10u?4u:0u;
             }
-            unsigned interval=scale[degree];
+            unsigned interval=urban_scale_pc(scale,
+                          urban_scale_root_degree(scale,degree));
             if(track->genre!=3u && track->genre!=5u &&
                style->motion==2u && v%5u==0u)
                 interval=phrase_note[(step/4u)%4u];
@@ -171,7 +173,8 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
                               v%100u<(unsigned)style->slide);
             /* Correctly scale-quantized slide target, including Locrian. */
             if(n->glide && interval==0u)
-                n->note=(uint8_t)(root_note+scale[4]);
+                n->note=(uint8_t)(root_note+urban_scale_pc(scale,
+                                     urban_scale_root_degree(scale,4u)));
         }
     }
 }
