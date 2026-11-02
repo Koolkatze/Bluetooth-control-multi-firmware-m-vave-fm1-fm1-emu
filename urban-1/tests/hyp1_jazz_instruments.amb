@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Real HYP DSP rendering: jazz mode must select novel oscillator instruments
+# and produce actual audio frames from the new five-voice engine.
+expect urbanjazzchord 0
+expect urbanjazzlead 0
+expect urbanjazznotes 0
+spin K2 3
+spin K3 1
+expect urbansub 1
+tap PLAY
+wait 7500
+expect playing 1
+expect urbanjazzchord >0
+expect urbanjazzlead >2
+expect urbanjazznotes >3
+expect urbanjazzframes >1000
+expect urbanpianorolls >0
+shot jazz-keys-flute-mallets.png
+tap PLAY
+expect playing 0
