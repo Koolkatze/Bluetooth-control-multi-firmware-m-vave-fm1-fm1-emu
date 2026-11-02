@@ -38,17 +38,27 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
     const UrbanTrack *track=&song->tracks[2];
     const UrbanBassGrammar *style=&urban_bass_grammars[track->genre%URBAN_GENRES];
     uint32_t root=seed ^ 0x5f356495u;
-    uint8_t mode=song->scale%4u;
-    static const uint8_t passing[4][3]={
-        {0,3,7},{0,1,7},{0,3,7},{0,3,7}
-    };
     uint8_t phrase_note[4];
-    for(unsigned i=0;i<4u;i++)
-        phrase_note[i]=passing[mode][urban_rng(&root)%3u];
+    for(unsigned i=0;i<4u;i++) {
+        unsigned degree=(urban_rng(&root)%3u)*2u;
+        phrase_note[i]=urban_scale_intervals[song->scale%URBAN_SCALE_COUNT][degree];
+    }
     for(unsigned sec=0;sec<URBAN_SEQUENCES;sec++) {
         uint32_t r=root ^ ((sec+1u)*0x85ebca6bu) ^
                  ((uint32_t)track->subgenre*0xc2b2ae35u);
         uint16_t mask=urban_bass_section_mask(style->mask,sec);
+        /* Distinct bass motif even at the same genre/subgenre. Keep the
+         * original root downbeat while selecting different syncopations
+         * and turnaround pickups for each newly generated song. */
+        uint32_t riff=urban_mix_seed(seed ^ song->seed ^
+              ((uint32_t)sec*0xa511e9b3u));
+        static const uint8_t pickup[7]={3,5,6,7,9,11,14};
+        for(unsigned n=0;n<1u+(song->complexity>1u);n++) {
+            unsigned st=pickup[urban_rng(&riff)%7u];
+            if(urban_rng(&riff)&1u)mask|=(uint16_t)(1u<<st);
+            else mask&=(uint16_t)~(1u<<st);
+        }
+        mask|=1u;
         /* Subgenre bass arrangement: preserve the parent genre's bass
          * identity, but alter its syncopation and phrasing audibly. */
         switch(track->subgenre%4u) {
@@ -79,6 +89,11 @@ static void urban_generate_bass(const UrbanSong *song,uint32_t seed,UrbanBassSon
              * SONG'S modal palette; all tracks share the chord transposition. */
             unsigned interval=step%4u==0u?0u:phrase_note[(step/4u)%4u];
             if(style->octave && (v%5u==0u))interval+=12u;
+            /* A secondary root/fifth phrase appears in the second half
+             * of hooks; this is still inside the selected mode. */
+            if((sec==URBAN_HOOK || sec==URBAN_DROP) && step>=8u &&
+               (v%5u==0u))
+                interval=urban_scale_intervals[song->scale%URBAN_SCALE_COUNT][4];
             if(song->complexity>=2u && track->subgenre%4u==3u && step==15u &&
                (sec==URBAN_HOOK || sec==URBAN_DROP))hit=1u;
             n->note=(uint8_t)(root_note+interval);
