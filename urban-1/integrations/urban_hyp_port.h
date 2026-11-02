@@ -302,6 +302,35 @@ static void urban_port_init(uint32_t seed) {
     urban_port_stage_pattern();
     p->last_sixteenth=en_bars;
 }
+/* The four right-hand panel knobs must be sufficient on Android:
+ * KNOB3 selects song subgenre (previously used exclusively for key).
+ * The left SELECT encoder changes the tonal key as an optional control.
+ * ALGORITHM is kept as a second substyle encoder for physical FM-1.
+ */
+static void urban_port_song_subgenre(int delta) {
+    UrbanHypPort *p=&urban_port;
+    UrbanSong *s=&p->rt.ui.song;
+    int v=((int)s->subgenre+delta)%4;
+    if(v<0)v+=4;
+    s->subgenre=(uint8_t)v;
+    p->rt.ui.subgenre=(uint8_t)v;
+    for(unsigned i=0;i<URBAN_TRACKS;i++)
+        if(!p->overridden[i] && !s->tracks[i].locked)
+            s->tracks[i].subgenre=(uint8_t)v;
+    urban_port_sound_profile();
+    urban_port_stage_pattern();
+}
+static void urban_port_song_key(int delta) {
+    UrbanHypPort *p=&urban_port;
+    UrbanSong *s=&p->rt.ui.song;
+    int v=((int)s->key+delta)%12;
+    if(v<0)v+=12;
+    s->key=(uint8_t)v;
+    en_set(P_ROOT,v);
+    for(unsigned i=0;i<URBAN_TRACKS;i++)
+        if(!s->tracks[i].locked)
+            urban_runtime_refresh_track(&p->rt,i);
+}
 static void urban_port_input(void) {
     UrbanHypPort *p=&urban_port;
     UrbanSong *s=&p->rt.ui.song;
@@ -349,49 +378,45 @@ static void urban_port_input(void) {
             for(unsigned i=0;i<URBAN_TRACKS;i++)
                 if(!p->overridden[i] && !s->tracks[i].locked)
                     s->tracks[i].genre=(uint8_t)v;
-            /* Press SAVE to recompose the notes in the new style. */
+            /* Patch and drum-kit preview; SAVE regenerates motifs. */
+            urban_port_sound_profile();
+            urban_port_stage_pattern();
         } else {
             urban_ui_set_genre(&p->rt.ui,(uint8_t)v,
                               s->tracks[p->rt.ui.selected_track].subgenre);
             p->overridden[p->rt.ui.selected_track]=1u;
+            urban_port_sound_profile();
+            urban_port_stage_pattern();
         }
     }
-    /* The left ALGORITHM encoder selects the genre's four named
-     * substyles; PRESETS controls ornament/fill complexity (0..3).
-     * KNOB3 remains the musical key in SONG and substyle in TRACKS.
-     */
+    /* Both KNOB3 and ALGORITHM can choose subgenre. The Android
+     * instrument displays KNOB3 prominently, so this path is essential. */
     d=plat_enc(EN_ALGO);
-    if(d && p->rt.ui.page==URBAN_PAGE_SONG) {
-        int v=(int)s->subgenre+(int)d;
-        v=(v%4+4)%4;
-        s->subgenre=(uint8_t)v;
-        p->rt.ui.subgenre=(uint8_t)v;
-        for(unsigned i=0;i<URBAN_TRACKS;i++)
-            if(!p->overridden[i] && !s->tracks[i].locked)
-                s->tracks[i].subgenre=(uint8_t)v;
-    }
+    if(d && p->rt.ui.page==URBAN_PAGE_SONG)
+        urban_port_song_subgenre((int)d);
+    d=plat_enc(EN_SELECT);
+    if(d && p->rt.ui.page==URBAN_PAGE_SONG)
+        urban_port_song_key((int)d);
     d=plat_enc(EN_PRESET);
     if(d && p->rt.ui.page==URBAN_PAGE_SONG) {
         int v=(int)s->complexity+(int)d;
         if(v<0)v=0;
         if(v>3)v=3;
         s->complexity=(uint8_t)v;
+        urban_port_stage_pattern();
     }
     d=plat_enc(EN_K3);
     if(d) {
-        if(p->rt.ui.page==URBAN_PAGE_SONG) {
-            int v=(int)s->key+(int)d;
-            v=(v%12+12)%12;
-            s->key=(uint8_t)v;
-            en_set(P_ROOT,v);
-            /* Key modulation revoices the existing rhythms, not the song. */
-            for(unsigned i=0;i<URBAN_TRACKS;i++)
-                if(!s->tracks[i].locked)urban_runtime_refresh_track(&p->rt,i);
-        } else {
+        if(p->rt.ui.page==URBAN_PAGE_SONG)
+            urban_port_song_subgenre((int)d);
+        else {
             UrbanTrack *t=&s->tracks[p->rt.ui.selected_track];
-            int v=(int)t->subgenre+(int)d;
-            t->subgenre=(uint8_t)((v%4+4)%4);
+            int v=((int)t->subgenre+(int)d)%4;
+            if(v<0)v+=4;
+            t->subgenre=(uint8_t)v;
             p->overridden[p->rt.ui.selected_track]=1u;
+            urban_port_sound_profile();
+            urban_port_stage_pattern();
         }
     }
     d=plat_enc(EN_K4);
@@ -420,7 +445,7 @@ static void urban_port_frame(void) {
     draw_text_box(0,9,240,&FONT_B,"URBAN-1",RGB(255,165,110),1);
     if(p->rt.ui.page==URBAN_PAGE_SONG) {
         draw_text_box(0,42,240,&FONT_S,
-              s->song_mode?"SONG MODE / AUTO":"SEQUENCE MODE / MANUAL",C_WHITE,1);
+              s->song_mode?"SONG MODE: 4-BAR PHRASES":"LOOP MODE: REPEAT A-H",C_WHITE,1);
         draw_text_box(0,66,240,&FONT_S,
               s->song_mode?bar:seq,RGB(255,165,110),1);
         draw_text_box(0,89,240,&FONT_S,urban_section_name[s->current],C_WHITE,1);
@@ -433,9 +458,9 @@ static void urban_port_frame(void) {
         lcd_fill(15,168,210,5,RGB(49,55,70));
         if(s->song_mode)
             lcd_fill(15,168,(int)(210u*n/s->arrangement_len),5,RGB(255,165,110));
-        draw_text_box(0,182,240,&FONT_S,"SAVE: GENERATE SONG",C_WHITE,1);
-        draw_text_box(0,202,240,&FONT_S,"ARP: SONG / SEQUENCE",C_WHITE,1);
-        draw_text_box(0,221,240,&FONT_S,"SEQ: TRACKS",C_WHITE,1);
+        draw_text_box(0,182,240,&FONT_S,"K2 GENRE  K3 SUBGENRE",C_WHITE,1);
+        draw_text_box(0,202,240,&FONT_S,"SAVE: GENERATE  ARP: LOOP",C_WHITE,1);
+        draw_text_box(0,221,240,&FONT_S,"SEQ: TRACKS  SEL: KEY",C_WHITE,1);
     } else {
         draw_text_box(0,41,240,&FONT_S,trnum,RGB(255,165,110),1);
         draw_text_box(0,65,240,&FONT_S,urban_track_name[tr],C_WHITE,1);
