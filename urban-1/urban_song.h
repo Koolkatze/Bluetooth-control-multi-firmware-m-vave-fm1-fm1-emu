@@ -12,6 +12,7 @@
 #define URBAN_TRACKS 8
 #define URBAN_SEQUENCES 8
 #define URBAN_STEPS 16
+#define URBAN_BARS_PER_PHRASE 4u
 #define URBAN_ARRANGEMENT 64
 #define URBAN_GENRES 14u
 
@@ -33,7 +34,7 @@ typedef struct {
     uint8_t arrangement_len, key, tempo, current, queued, playing;
     uint32_t seed;
     uint8_t genre, subgenre, scale, complexity, progression[4];
-    uint8_t song_mode, arrangement_pos, section_bar;
+    uint8_t song_mode, arrangement_pos, section_bar; /* song_mode=1 AUTO, 0 LOOP */
 } UrbanSong;
 
 static const uint8_t urban_genre_bpm[URBAN_GENRES] = {
@@ -71,7 +72,7 @@ static void urban_song_harmony(UrbanSong *s) {
     s->scale=urban_genre_scale[g];
     for(unsigned i=0;i<4u;i++) s->progression[i]=urban_progressions[g][i];
 }
-/* 56 bars: intro, verse, hook, second verse, hook reprise,
+/* 56 bars, 14 complete 4-bar phrases: intro, verse, hook, second verse, hook reprise,
  * bridge, drop, breakdown, outro. All 8 A-H sections appear.
  * Repeated C is the SAME hook motif by design, not another random song.
  */
@@ -145,6 +146,12 @@ static void urban_queue_next(UrbanSong *s,int delta) {
 /* Exactly once after 16 steps (one bar); the genre/song arrangement
  * clock advances without altering a track's locked patterns.
  */
+/* Each A-H phrase has four real bars with four harmonic steps.
+ * Manual LOOP repeats that phrase forever, and the knob queues a change
+ * at the next *bar*, never mid-bar or after a forced four-bar wait. */
+static unsigned urban_phrase_bar(const UrbanSong *s) {
+    return (unsigned)s->section_bar % URBAN_BARS_PER_PHRASE;
+}
 static void urban_sequence_boundary(UrbanSong *s) {
     if(!s->playing)return;
     if(s->song_mode) {
