@@ -474,12 +474,13 @@ static void urban_port_rec_timeline(void) {
             if(e->parameter<P_NPARAMS) {
                 UrbanEditor *ed=&p->editor;
                 ed->changed[e->parameter]=1u;
-                ed->override[e->parameter]=e->value;
-                urban_port_set(e->parameter,e->value);
+                int v=(int)(int8_t)e->value;
+                ed->override[e->parameter]=(int16_t)v;
+                urban_port_set(e->parameter,v);
             } else if(e->parameter==UC_LEAD_LFO_RATE||
                       e->parameter==UC_LEAD_LFO_DEPTH) {
                 urban_port_editor_write(e->parameter,
-                    (int)e->value-urban_port_editor_value(e->parameter));
+                    (int)(int8_t)e->value-urban_port_editor_value(e->parameter));
             }
         } else if(e->kind==UR_REC_NOTE_ON||e->kind==UR_REC_NOTE_OFF) {
             int voice=urban_hyp_voice(r->track);
@@ -1388,7 +1389,10 @@ static void urban_port_rec_lower(uint16_t orange,uint16_t dim) {
         /* Print value separately, no dynamic text allocation. */
         urban_port_screen_text(17,&FONT_S,info,orange);
         urban_port_screen_text(35,&FONT_S,"K1 INST   K2 BARS",C_WHITE);
-        urban_port_screen_text(53,&FONT_S,"K3 QUANT ON/OFF",C_WHITE);
+        const char *qname=r->quant==0u?"Q:OFF":
+             r->quant==1u?"Q:1/4":r->quant==2u?"Q:1/8":
+             r->quant==3u?"Q:1/16":"Q:1/32";
+        urban_port_screen_text(53,&FONT_S,qname,C_WHITE);
         urban_port_screen_text(71,&FONT_S,"K4 GRID  REC START",dim);
     } else if(r->state==UR_REC_RECORD) {
         urban_port_screen_text(18,&FONT_S,"PLAY THE 27 KEYS",C_WHITE);
