@@ -13,6 +13,7 @@
 #include "urban/urban_instruments.h"
 #include "urban/urban_chord_score.h"
 #include "urban/urban_mix.h"
+#include "urban/urban_fx.h"
 
 typedef struct {
     UrbanRuntime rt;
@@ -22,6 +23,7 @@ typedef struct {
     uint8_t previous_chord[4], previous_chord_count;
     uint8_t overridden[URBAN_TRACKS];
     uint8_t bank;
+    uint8_t active_mix_section;
     uint8_t ui_drawn;
     uint32_t ui_signature;
 } UrbanHypPort;
@@ -138,45 +140,54 @@ static void urban_port_sound_profile(void) {
     en_set(P_KIT_SNARE,d.drum_kit);
     en_set(P_KIT_HAT,h.hat_kit);
     en_set(P_KIT_PERC,h.drum_kit);
-    en_set(P_SWING,urban_groove(s->genre,s->subgenre).swing);
-    /* Stable seed-dependent variations: every SAVE produces new sonic
-     * colour inside the same genre; no random kit switches per 16th. */
-    uint32_t color_rng=urban_mix_seed(s->seed ^ 0xaf2b4e13u);
-    int drv=(int)overall.drive+(int)(color_rng%13u)-6;
-    int rvb=(int)overall.reverb+(int)((color_rng>>8)%13u)-6;
-    if(drv<0)drv=0;if(drv>100)drv=100;
-    if(rvb<0)rvb=0;if(rvb>100)rvb=100;
+    /* HYP SWING delays percussion but not our lead MIDI notes.
+     * Straight 16ths keep ALL parts on one shared timing grid;
+     * genre syncopation is already encoded in groove masks. */
+    en_set(P_SWING,0);
+    /* 56 named FX palettes: HYP has SHARED wet echo/reverb but
+     * independent lead/filter envelopes, bass/pad LFO and 6 drum decays. */
+    UrbanFxPlan fx=urban_fx_plan(s);
+    en_set(P_DRIVE,fx.drive);
+    en_set(P_REVERB,fx.reverb);
+    en_set(P_ECHO,fx.echo);
+    en_set(P_ETIME,fx.echo_time);
+    en_set(P_SIZE,fx.reverb_size);
+    en_set(P_PL_RATE,fx.pad_lfo_rate);
+    en_set(P_PL_DEPTH,fx.pad_lfo_depth);
+    en_set(P_DETUNE,fx.pad_detune);
+    en_set(P_DL_RATE,fx.bass_lfo_rate);
+    en_set(P_DL_DEPTH,fx.bass_lfo_depth);
+    en_set(P_LANE_DEC(0),fx.kick_decay);
+    en_set(P_LANE_DEC(1),fx.snare_decay);
+    en_set(P_LANE_DEC(2),fx.snare_decay);
+    en_set(P_LANE_DEC(3),fx.hat_decay);
+    en_set(P_LANE_DEC(4),fx.hat_decay);
+    en_set(P_LANE_DEC(5),fx.perc_decay);
+    en_set(P_NZ_COLOR,atmosphere.noise_color);
+    en_set(P_NZ_TONE,fx.noise_tone);
+    en_set(P_NZ_PUMP,fx.noise_pump);
     UrbanMixPlan initial=urban_mix_plan(s,s->current,urban_phrase_bar(s));
-    en_set(P_DRIVE,drv<=(int)initial.drive?drv:initial.drive);
-    en_set(P_REVERB,rvb<=(int)initial.reverb?rvb:initial.reverb);
-    en_set(P_ECHO,initial.echo);
-    /* Per-lane trims: snare/clap/hats must not all be mixed at kit 100.
-     * In HYP-1 these trims are distinct from global P_PULSE. */
     en_set(P_LANE_LVL(0),initial.kick);
     en_set(P_LANE_LVL(1),initial.snare);
     en_set(P_LANE_LVL(2),initial.clap);
     en_set(P_LANE_LVL(3),initial.hat);
     en_set(P_LANE_LVL(4),initial.open);
     en_set(P_LANE_LVL(5),initial.perc);
-    en_set(P_NZ_COLOR,atmosphere.noise_color);
-    en_set(P_NZ_TONE,s->genre<=2u?25:52);
-    en_set(P_NZ_PUMP,s->genre==8u||s->genre==10u?55:24);
     en_set(P_DR_INST,bass.bass);
     en_set(P_DR_CUT,bass.bass_cut);
-    en_set(P_DR_RES,bass.bass==9u?20:51);
+    en_set(P_DR_RES,fx.bass_resonance);
     en_set(P_BASSOCT,bass.bass==9u||bass.bass==8u?-1:0);
-    const UrbanLeadTone *tone=&urban_lead_tones[s->tracks[3].genre%URBAN_GENRES];
     en_set(P_AC_WAVE,lead.lead);
     en_set(P_AC_CUT,lead.lead_cut);
-    en_set(P_AC_RES,tone->resonance);
-    en_set(P_AC_ENV,tone->filter_env);
-    en_set(P_AC_DEC,tone->decay);
-    en_set(P_AC_ACC,tone->accent);
-    en_set(P_AC_SLIDE,tone->slide);
+    en_set(P_AC_RES,fx.lead_resonance);
+    en_set(P_AC_ENV,fx.lead_env);
+    en_set(P_AC_DEC,fx.lead_decay);
+    en_set(P_AC_ACC,fx.lead_accent);
+    en_set(P_AC_SLIDE,fx.lead_slide);
     en_set(P_PADTONE,pad.pad);
     en_set(P_BRIGHT,brightness);
-    en_set(P_PE_ATK,pad.pad==7u||pad.pad==3u?36:12);
-    en_set(P_PE_REL,pad.pad==7u||pad.pad==3u?72:40);
+    en_set(P_PE_ATK,fx.pad_attack);
+    en_set(P_PE_REL,fx.pad_release);
     /* Noise fader belongs to the same headroom-controlled mix as the
      * other layers, not a separately unbounded atmospheric constant. */
 }
