@@ -1,0 +1,64 @@
+name: Publish URBAN-1 updates to installed Android firmware catalog
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: URBAN-1 firmware release tag (e.g. urban1-firmware-v0.2.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: urban1-firmware-catalog-master
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: >-
+      (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'urban1-firmware-v'))
+      || (github.event_name == 'workflow_dispatch' && startsWith(inputs.tag, 'urban1-firmware-v'))
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          persist-credentials: true
+
+      - name: Resolve and validate published firmware
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > /tmp/urban1-release.json
+          python3 tools/sync_urban1_catalog.py /tmp/urban1-release.json
+          URL=$(python3 -c 'import json; p=json.load(open("/tmp/urban1-release.json")); print(next(a["browser_download_url"] for a in p["assets"] if a["name"].endswith(".fwsc")))')
+          curl --fail --location --retry 3 --max-time 60 "$URL" --output /tmp/urban1-latest.fwsc
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { appFromPackage } from "./web/fwsc.js";
+            const data = new Uint8Array(readFileSync("/tmp/urban1-latest.fwsc"));
+            const app = appFromPackage(data);
+            if (data.length < 1024 || app.length < 512) process.exit(1);
+            console.log("URBAN-1 update verified:", data.length, "bytes");
+          '
+
+      - name: Commit updater feed only, never Android app
+        run: |
+          set -euo pipefail
+          git diff --check
+          if git diff --quiet -- web/firmwares-own.json web/firmwares.json; then
+            echo "URBAN-1 catalog already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/firmwares-own.json web/firmwares.json
+          git commit -m "Catalog: publish latest URBAN-1 firmware for Update All"
+          git push origin HEAD:master
