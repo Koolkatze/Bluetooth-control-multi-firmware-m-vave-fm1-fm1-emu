@@ -123,6 +123,26 @@ static void urban_drum_lanes(const UrbanSong *s,unsigned section,unsigned sectio
                ((section_bar/4u)*0x7f4a7c15u);
     out[0]=g.kick; out[1]=g.snare; out[2]=g.clap;
     out[3]=hg.hat; out[4]=hg.open; out[5]=hg.perc;
+    /* Two recordings in the same genre should NOT share the same drum
+     * partitura: derive a 4-bar riff and extra accents from the song seed.
+     * Keep canonical downbeats, dembow/snare backbeats and 4-to-floor
+     * anchors; genre identity survives every generation. */
+    uint32_t figure=urban_mix_seed(s->seed ^
+         (d->seq[section%URBAN_SEQUENCES].seed*0x7f4a7c15u) ^
+         ((uint32_t)s->drum_variant*0x85ebca6bu) ^
+         ((section_bar/4u)*0x9e3779b9u));
+    static const uint8_t accents[8]={2,3,5,6,7,9,11,14};
+    unsigned edits=1u+(s->complexity>=2u);
+    for(unsigned n=0;n<edits;n++) {
+        unsigned step=accents[urban_rng(&figure)%8u];
+        uint16_t bit=(uint16_t)(1u<<step);
+        if((urban_rng(&figure)&1u)!=0u) out[0]|=bit;
+        else out[0]&=(uint16_t)~bit;
+        if((urban_rng(&figure)%4u)==0u)out[5]^=bit;
+    }
+    /* Signature kick beats must be present, avoiding a new song that
+     * accidentally loses the reggaeton, techno or DnB foundation. */
+    out[0]|=(uint16_t)(g.kick&0x1111u);
     if(section==URBAN_INTRO) {
         out[0]&=0x0101u;
         out[1]=0; out[2]=0; out[3]&=0x1111u; out[4]=0; out[5]=0;
