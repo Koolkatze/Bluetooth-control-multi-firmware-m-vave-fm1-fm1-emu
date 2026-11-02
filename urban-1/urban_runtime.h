@@ -72,17 +72,13 @@ static void urban_runtime_modal_step(const UrbanSong *s,UrbanNote *n,int offset)
     if(!n->velocity || offset==0)return;
     unsigned tonic=s->key%12u;
     unsigned pc=(n->note+120u-tonic)%12u;
-    unsigned degree=7u;
-    for(unsigned d=0;d<7u;d++)
-        if(urban_scale_intervals[s->scale%URBAN_SCALE_COUNT][d]==pc){degree=d;break;}
-    if(degree>=7u)return;
-    int next=(int)degree+offset;
-    int oct=0;
-    while(next<0){next+=7;oct--;}
-    while(next>=7){next-=7;oct++;}
+    unsigned size=urban_scale_size(s->scale),degree=size;
+    for(unsigned d=0;d<size;d++)
+        if(urban_scale_pc(s->scale,d)==pc){degree=d;break;}
+    if(degree>=size)return;
     int note=(int)n->note+
-      (int)urban_scale_intervals[s->scale%URBAN_SCALE_COUNT][next]-
-      (int)urban_scale_intervals[s->scale%URBAN_SCALE_COUNT][degree]+12*oct;
+        urban_scale_offset(s->scale,(int)degree+offset)-
+        urban_scale_offset(s->scale,(int)degree);
     if(note>=30&&note<=110)n->note=(uint8_t)note;
 }
 static void urban_runtime_bar_variation(const UrbanSong *s,
