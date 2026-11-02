@@ -108,6 +108,15 @@ def main() -> None:
     replace_once(root / "host/amb_host.c",
         '            ui_input_only();',
         '            urban_port_input();')
+    # Real SFX diagnostics: distinguish an authored cue from a voice
+    # actually consumed by HYP's audio interrupt.
+    replace_once(root / "host/amb_host.c",
+        '    else if (!strcmp(what, "sixteenths"))',
+        '    else if (!strcmp(what, "urbansfxrendered")) got = urban_sfx_rendered_events;\n'
+        '    else if (!strcmp(what, "urbansfxlevel")) got = urban_port.sfx_level;\n'
+        '    else if (!strcmp(what, "urbansfxlength")) got = urban_port.sfx_length;\n'
+        '    else if (!strcmp(what, "urbansfxdensity")) got = urban_port.sfx_density;\n'
+        '    else if (!strcmp(what, "sixteenths"))')
     # Expose the actual URBAN-1 song transport to host regression scripts.
     replace_once(root / "host/amb_host.c",
         '    else if (!strcmp(what, "sixteenths"))',
