@@ -10,12 +10,13 @@
 #define URBAN_EMBEDDED 1
 #include "urban/urban_runtime.h"
 #include "urban/urban_style.h"
+#include "urban/urban_chord_score.h"
 
 typedef struct {
     UrbanRuntime rt;
     uint32_t last_sixteenth, held_buttons;
     uint8_t held[3], note[3], left[3];
-    uint8_t chord_notes[4], chord_count;
+    uint8_t chord_notes[4], chord_count, chord_left;
     uint8_t overridden[URBAN_TRACKS];
     uint8_t bank;
 } UrbanHypPort;
@@ -52,6 +53,7 @@ static void urban_port_release(void) {
     for(i=0;i<urban_port.chord_count;i++)
         en_note(EN_V_PAD,urban_port.chord_notes[i],0);
     urban_port.chord_count=0u;
+    urban_port.chord_left=0u;
 }
 /* Never edit the pattern currently read by the audio ISR. The inactive
  * HYP drum slot acts as the next-bar buffer. The two URBAN drum tracks
@@ -214,37 +216,51 @@ static void urban_port_note(unsigned track,UrbanNote n,uint8_t glide) {
  * voicings on each harmony change. Inversions choose the nearest register
  * to the last chord; the Acid melody remains available independently.
  */
-static void urban_port_chord(void) {
+static void urban_port_chord_off(void) {
+    UrbanHypPort *p=&urban_port;
+    for(unsigned i=0;i<p->chord_count;i++)
+        en_note(EN_V_PAD,p->chord_notes[i],0);
+    p->chord_count=0u;
+    p->chord_left=0u;
+}
+static void urban_port_chord(unsigned color,unsigned gate) {
     UrbanHypPort *p=&urban_port;
     const UrbanSong *s=&p->rt.ui.song;
-    unsigned i;
-    uint8_t next[4]={0};
-    uint8_t prev[4]={0};
+    uint8_t next[4]={0},prev[4]={0};
     unsigned old=p->chord_count;
-    for(i=0;i<old;i++)prev[i]=p->chord_notes[i];
-    for(i=0;i<old;i++)en_note(EN_V_PAD,p->chord_notes[i],0);
-    p->chord_count=0;
+    for(unsigned i=0;i<old;i++)prev[i]=p->chord_notes[i];
+    urban_port_chord_off();
     uint8_t solo=0u;
-    for(i=0;i<URBAN_TRACKS;i++)solo|=s->tracks[i].solo;
+    for(unsigned i=0;i<URBAN_TRACKS;i++)solo|=s->tracks[i].solo;
     if(s->tracks[4].muted || (solo && !s->tracks[4].solo))
         return;
-    unsigned count=urban_build_chord(s,urban_phrase_bar(s),
-                            old?prev:0,next);
+    unsigned count=urban_build_chord_colored(s,urban_phrase_bar(s),
+                            color,old?prev:0,next);
     if(count>EN_NPAD)count=EN_NPAD;
-    for(i=0;i<count;i++) {
+    for(unsigned i=0;i<count;i++) {
         if(!next[i])continue;
         en_note(EN_V_PAD,next[i],1);
         p->chord_notes[p->chord_count++]=next[i];
     }
+    p->chord_left=(uint8_t)(gate?gate:1u);
 }
-
 static void urban_port_step(void) {
     UrbanHypPort *p=&urban_port;
     UrbanMidiFrame frame;
     unsigned i,t;
-    /* A complete chord score is rendered on the first step of every
-     * bar, with coordinated polyphonic voice-leading and note-offs. */
-    if(p->rt.transport.step==0u)urban_port_chord();
+    /* Chord partitura: each genre has an actual rhythmic score, with
+     * voiced triads/7ths/9ths/sus/power chords, not one eternal pad chord
+     * triggered only at bar 1. Chord changes still follow the song's
+     * four-bar harmonic plan. */
+    unsigned cstep=p->rt.transport.step;
+    if(cstep==0u)urban_port_chord_off();
+    if(p->chord_left && --p->chord_left==0u)
+        urban_port_chord_off();
+    UrbanChordScore cs=urban_chord_score(&p->rt.ui.song,
+                          p->rt.ui.song.current,
+                          urban_phrase_bar(&p->rt.ui.song));
+    if((cs.onsets>>cstep)&1u)
+        urban_port_chord(cs.color,cs.gate);
     /* A gate lasts N sixteenth notes. */
     for(i=0;i<3;i++) if(p->held[i] && p->left[i]) {
         if(--p->left[i]==0u) {
