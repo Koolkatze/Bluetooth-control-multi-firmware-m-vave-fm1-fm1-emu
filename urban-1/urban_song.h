@@ -217,7 +217,13 @@ static void urban_generate_song(UrbanSong *s,uint32_t seed) {
                               ((uint32_t)s->subgenre*0x85ebca6bu));
     s->seed=seed;
     s->harmony_variant=(uint8_t)(urban_rng(&r)%4u);
-    s->scale=urban_genre_mode_options[g][urban_rng(&r)%4u];
+    /* The selected SUBGENRE now has its own preferred mode.
+     * Three out of four takes retain the chosen modal colour; other
+     * takes may borrow one of the genre's related scales. */
+    uint32_t mode_roll=urban_rng(&r);
+    unsigned mode_choice=(mode_roll%4u<3u)?
+              (unsigned)(s->subgenre%4u):(unsigned)(urban_rng(&r)%4u);
+    s->scale=urban_genre_mode_options[g][mode_choice];
     s->melodic_variant=(uint8_t)(urban_rng(&r)%8u);
     s->drum_variant=(uint8_t)(urban_rng(&r)%4u);
     for(unsigned bar=0;bar<4u;bar++) {
