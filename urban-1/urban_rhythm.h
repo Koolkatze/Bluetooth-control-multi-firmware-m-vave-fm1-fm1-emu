@@ -94,6 +94,30 @@ static UrbanGroove urban_groove(uint8_t genre,uint8_t subgenre) {
     UrbanGroove g=sub?variants[gidx][sub-1u]:grooves[gidx];
     return g;
 }
+/* Authentic, individually arranged drum phrase responses per subgenre.
+ * Lane ownership stays separate: kick/snare = drum track, hats/perc =
+ * hats track, so a mixed-genre arrangement does not overwrite either.
+ * 0 means a consciously sparse style, not a missing sample or fallback.
+ * bar2 kick | bar3 snare ghost | bar2 hat | bar3 perc | bar4 snare fill */
+typedef struct {
+    uint16_t kick_response,snare_ghost,hat_response,perc_response,turnaround;
+} UrbanDrumPocket;
+static const UrbanDrumPocket urban_drum_pockets[URBAN_GENRES][4]={
+  /* 0 */ {{0x0800u,0x0000u,0x0880u,0x0000u,0x8000u},{0x0200u,0x0000u,0x8080u,0x0040u,0x2000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x1000u,0x0000u,0xaaaau,0x0080u,0x4000u}},
+  /* 1 */ {{0x0800u,0x0000u,0x8080u,0x0020u,0x4000u},{0x0200u,0x0020u,0xaaaau,0x2222u,0x8000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u}},
+  /* 2 */ {{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0800u,0x0000u,0x0000u,0x0000u,0x0000u}},
+  /* 3 */ {{0x0008u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0040u,0x0020u,0x0000u,0x0040u,0x0000u},{0x0200u,0x0000u,0x8000u,0x0000u,0x0000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u}},
+  /* 4 */ {{0x0020u,0x0000u,0x0000u,0x0008u,0x0000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0800u,0x0020u,0x8888u,0x0200u,0x0000u},{0x0020u,0x0000u,0x0000u,0x0800u,0x0000u}},
+  /* 5 */ {{0x0008u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0000u,0x0020u,0x0000u,0x0020u,0x0000u},{0x0200u,0x0000u,0x0000u,0x0800u,0x0000u},{0x0020u,0x0040u,0x0000u,0x0080u,0x0000u}},
+  /* 6 */ {{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0200u,0x0000u,0xaaaau,0x2222u,0x4000u},{0x0800u,0x0000u,0x0000u,0x0800u,0x0000u}},
+  /* 7 */ {{0x0800u,0x0000u,0x0000u,0x0080u,0x0000u},{0x0200u,0x0000u,0xaaaau,0x2222u,0x0000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0200u,0x0000u,0xaaaau,0x0040u,0x0000u}},
+  /* 8 */ {{0x0200u,0x0020u,0x8888u,0x0080u,0x8000u},{0x0800u,0x0000u,0x0000u,0x0040u,0x4000u},{0x0200u,0x0040u,0xffffu,0x4444u,0x2000u},{0x0800u,0x0020u,0xaaaau,0x0080u,0x2000u}},
+  /* 9 */ {{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x2000u,0x0000u,0x0000u,0x0000u,0x8000u},{0x0800u,0x0000u,0xaaaau,0x8888u,0x4000u}},
+  /* 10 */ {{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u}},
+  /* 11 */ {{0x0000u,0x0000u,0xaaaau,0x0000u,0x0000u},{0x0000u,0x0000u,0xaaaau,0x4444u,0x0000u},{0x0000u,0x0000u,0xaaaau,0x0000u,0x0000u},{0x0000u,0x0000u,0xffffu,0x8888u,0x0000u}},
+  /* 12 */ {{0x0000u,0x0000u,0xaaaau,0x0000u,0x0000u},{0x0000u,0x0000u,0xeeeeu,0x0000u,0x0000u},{0x0000u,0x0000u,0xffffu,0x8888u,0x0000u},{0x0000u,0x0000u,0xaaaau,0x2222u,0x0000u}},
+  /* 13 */ {{0x0200u,0x0020u,0xaaaau,0x0040u,0x8000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u},{0x0800u,0x0020u,0xaaaau,0x4444u,0x4000u},{0x0000u,0x0000u,0x0000u,0x0000u,0x0000u}}
+};
 static uint8_t urban_drum_hit(uint8_t genre,uint8_t subgenre,
     unsigned track,unsigned step,unsigned section,uint32_t *rng) {
     UrbanGroove g=urban_groove(genre,subgenre);
@@ -124,29 +148,17 @@ static void urban_drum_lanes(const UrbanSong *s,unsigned section,unsigned sectio
                ((section_bar/4u)*0x7f4a7c15u);
     out[0]=g.kick; out[1]=g.snare; out[2]=g.clap;
     out[3]=hg.hat; out[4]=hg.open; out[5]=hg.perc;
-    /* Two recordings in the same genre should NOT share the same drum
-     * partitura: derive a 4-bar riff and extra accents from the song seed.
-     * Keep canonical downbeats, dembow/snare backbeats and 4-to-floor
-     * anchors; genre identity survives every generation. */
+    /* NO universal random kick/snare mutation: that previously made
+     * all drum subgenres converge on one generic syncopated rhythm. Only
+     * explicitly authored bar-by-bar ghost notes and fill candidates
+     * may be added. Preserve the baseline kick/snare/hat signature. */
+    const UrbanDrumPocket dp=urban_drum_pockets[d->genre%URBAN_GENRES]
+                                                  [d->subgenre%4u];
+    const UrbanDrumPocket hp=urban_drum_pockets[h->genre%URBAN_GENRES]
+                                                  [h->subgenre%4u];
     uint32_t figure=urban_mix_seed(s->seed ^
-         (d->seq[section%URBAN_SEQUENCES].seed*0x7f4a7c15u) ^
-         ((uint32_t)s->drum_variant*0x85ebca6bu) ^
-         ((section_bar/4u)*0x9e3779b9u));
-    static const uint8_t accents[8]={2,3,5,6,7,9,11,14};
-    unsigned edits=1u+(s->complexity>=2u);
-    for(unsigned n=0;n<edits;n++) {
-        unsigned step=accents[urban_rng(&figure)%8u];
-        uint16_t bit=(uint16_t)(1u<<step);
-        if(d->genre!=3u && d->genre!=5u) {
-            /* Never randomly move the backbone of a sampled-style beat. */
-            if((urban_rng(&figure)&1u)!=0u) out[0]|=bit;
-            else out[0]&=(uint16_t)~bit;
-        }
-        if((urban_rng(&figure)%4u)==0u)out[5]^=bit;
-    }
-    /* Signature kick beats must be present, avoiding a new song that
-     * accidentally loses the reggaeton, techno or DnB foundation. */
-    out[0]|=(uint16_t)(g.kick&0x1111u);
+         d->seq[section%URBAN_SEQUENCES].seed ^
+         ((uint32_t)s->drum_variant*0x85ebca6bu));
     if(section==URBAN_INTRO) {
         out[0]&=0x0101u;
         out[1]=0; out[2]=0; out[3]&=0x1111u; out[4]=0; out[5]=0;
@@ -158,54 +170,31 @@ static void urban_drum_lanes(const UrbanSong *s,unsigned section,unsigned sectio
         out[0]&=0x1111u; out[1]&=0x1010u;
         out[3]&=0x5555u; out[4]=0; out[5]=0;
     } else if(section==URBAN_HOOK || section==URBAN_DROP) {
-        /* stronger hats and claps on hooks, 4-bar buildup into drops */
-        out[3]|=hg.hat&0xaaaa;
-        /* Tripled claps on top of both snare backbeats make hip-hop
-         * sound plastic; retain only authored claps for these styles. */
-        if(d->genre!=3u && d->genre!=5u)out[2]|=g.snare;
-        if(section==URBAN_DROP && d->genre!=3u && d->genre!=5u)
-            out[0]|=0x0101u;
+        /* The hook uses this SUBSTYLE's authored lanes. Never force
+         * 0xaaaa hats, doubled claps or 0x0101 kicks into unrelated
+         * styles such as jazz breaks, drill or half-time dubstep. */
+        if(section==URBAN_DROP && s->complexity>=2u)
+            out[5]|=(uint16_t)(hp.perc_response&0x8888u);
     }
-    /* Four-bar phrase development: bar 1 establishes the riff, bar 2
-     * answers the beat, bar 3 varies percussion/hat placement, bar 4
-     * performs a controlled turnaround or fill. All 6 lanes participate.
-     * Important: no random rearrangement of kick/snare backbeat anchors.
-     */
-    unsigned phrase_bar=section_bar%URBAN_BARS_PER_PHRASE;
+    /* Independently authored four-bar pocket, with intentional
+     * response/ghost/turnaround rather than identical universal fills.
+     * Keep Intro/Break/Outro dynamics and any bass pocket separate. */
+    const unsigned phrase_bar=section_bar%URBAN_BARS_PER_PHRASE;
     if(s->complexity && section!=URBAN_INTRO &&
        section!=URBAN_BREAK && section!=URBAN_OUTRO) {
         if(phrase_bar==1u) {
-            switch(d->genre%URBAN_GENRES) {
-            case 0: case 1: case 2: case 6: /* trap / horror */
-                out[3]|=0x0808u; break;
-            case 3: case 4: case 5: /* boom bap / trip hop */
-                out[5]|=0x0080u; break;
-            case 7: /* dembow response */
-                out[2]|=0x0080u; break;
-            case 8: case 13: /* breaks */
-                out[0]|=0x0200u; break;
-            case 9: /* dubstep: half-time space */
-                out[4]|=0x0400u; break;
-            default: /* four on the floor */
-                out[4]|=0x4444u; break;
-            }
+            out[0]|=dp.kick_response;
+            out[3]|=hp.hat_response;
         } else if(phrase_bar==2u && s->complexity>=2u) {
-            if(d->genre<=2u || d->genre==9u)out[3]|=0x8080u;
-            else if(d->genre==7u)out[5]|=0x0404u;
-            else if(d->genre==8u || d->genre==13u)out[1]|=0x0020u;
-            else out[5]|=0x2020u;
-        }
-    }
-    if(s->complexity>0u && section_bar%4u==3u &&
-       section!=URBAN_INTRO && section!=URBAN_OUTRO) {
-        /* Sample-based hip-hop: one optional intentional late ghost,
-         * not four independent random snare and hat retriggers. */
-        if(d->genre==3u || d->genre==5u) {
-            if(s->complexity>=2u)out[0]|=0x2000u;
-            if(s->complexity>=3u)out[1]|=0x4000u;
-        } else for(unsigned step=12u;step<16u;step++) {
-            if((urban_rng(&r)%100u)<g.extras*s->complexity/2u) out[1]|=(uint16_t)(1u<<step);
-            if((urban_rng(&r)%100u)<hg.extras*s->complexity)out[3]|=(uint16_t)(1u<<step);
+            out[1]|=dp.snare_ghost;
+            out[5]|=hp.perc_response;
+        } else if(phrase_bar==3u && s->complexity>=1u) {
+            /* Same named fill identity on every take; seeded probability
+             * changes whether a sparse extra is voiced, never its lane. */
+            if((urban_rng(&figure)&3u)!=0u)
+                out[1]|=dp.turnaround;
+            if(s->complexity>=3u && (urban_rng(&figure)&1u))
+                out[3]|=(uint16_t)(hp.hat_response&0xc000u);
         }
     }
     /* Boom Bap is SNARE ONLY on the backbeat, never the synthetic
