@@ -17,6 +17,10 @@
 #include "urban_editor.h"
 #include "urban/urban_drum_sync.h"
 #include "urban/urban_sfx.h"
+/* The MCU builds HYP as a unity compilation; host builds amb.c as a
+ * separate object. Both need the same exported DSP entry points. */
+void urban_sfx_trigger(unsigned type,unsigned level,unsigned length);
+void urban_sfx_silence(void);
 
 typedef struct {
     UrbanRuntime rt;
