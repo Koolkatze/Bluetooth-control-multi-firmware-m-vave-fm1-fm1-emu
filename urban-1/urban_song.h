@@ -104,35 +104,68 @@ static const uint8_t urban_genre_mode_options[URBAN_GENRES][4]={
  /* Trance: progressive, uplifting, psy, tech */         {0,4,6,2},
  /* Liquid: soulful, atmospheric, jazz, deep */          {2,0,2,0}
 };
-/* Scale-DEGREE (not arbitrary chromatic) chord root movements.
- * 14 genres * 4 alternative 4-chord progressions. Every root belongs
- * to the selected mode, even on subgenre / tonal shifts.
- */
+/* 56 substyle-specific four-bar chord progressions as modal DEGREES.
+ * Each subgenre gets its own functional harmony. This is not a table of
+ * alternative genres selected randomly on SAVE; the user chooses the
+ * substyle and SAVE varies the cadence/voicings within that style.
+ * Chord roots never leave the selected modal scale. */
 static const uint8_t urban_chord_degrees[URBAN_GENRES][4][4]={
-  {{0,5,6,3},{0,5,2,6},{0,3,5,6},{0,6,5,3}}, /* trap */
-  {{0,1,5,6},{0,1,0,6},{0,4,1,5},{0,5,1,6}}, /* goth */
-  {{0,5,2,6},{0,3,5,2},{0,5,3,4},{0,2,6,5}}, /* sad */
-  {{0,3,2,6},{0,4,3,0},{0,5,3,4},{0,2,3,6}}, /* hiphop */
-  {{0,6,3,5},{0,4,3,6},{0,5,1,6},{0,3,2,4}}, /* triphop */
-  {{0,2,3,6},{0,3,5,2},{0,4,2,3},{0,5,6,2}}, /* underground */
-  {{0,1,3,6},{0,6,1,0},{0,4,1,3},{0,5,1,6}}, /* horror */
-  {{0,6,5,6},{0,3,6,5},{0,5,3,6},{0,4,3,6}}, /* reggaeton */
-  {{0,5,2,6},{0,3,6,4},{0,4,5,6},{0,6,3,5}}, /* dnb */
-  {{0,1,6,5},{0,4,1,6},{0,5,1,3},{0,6,1,4}}, /* dubstep */
-  {{0,0,6,5},{0,4,0,6},{0,1,0,4},{0,6,3,0}}, /* techno */
-  {{0,1,0,6},{0,4,1,0},{0,6,1,4},{0,1,5,6}}, /* hardcore */
-  {{0,5,2,6},{0,3,5,2},{0,4,3,6},{0,6,5,2}}, /* trance */
-  {{0,3,2,6},{0,5,2,3},{0,4,3,6},{0,6,3,2}}  /* liquid */
+ /* Classic trap / drill / cloud / rolling hats */
+ {{0,5,6,3},{0,1,5,0},{0,3,5,6},{0,6,5,3}},
+ /* Witch house / industrial / darkwave / cloud */
+ {{0,1,5,6},{0,1,0,6},{0,5,3,6},{0,3,1,5}},
+ /* Emo / piano / lo-fi / guitar */
+ {{0,5,2,6},{0,3,5,2},{0,3,5,6},{0,5,3,6}},
+ /* Boom-bap / jazz / G-funk / lo-fi */
+ {{0,3,6,0},{0,3,2,4},{0,4,3,0},{0,5,3,6}},
+ /* Bristol / downtempo / abstract / dub */
+ {{0,6,3,5},{0,3,5,2},{0,1,6,5},{0,3,6,0}},
+ /* Dusty / jazz underground / experimental / break */
+ {{0,3,6,0},{0,2,3,5},{0,4,2,3},{0,6,3,2}},
+ /* Memphis / cinematic / industrial / horror */
+ {{0,1,6,0},{0,5,1,3},{0,1,0,6},{0,4,1,6}},
+ /* Dembow / perreo / romantic major / futuristic Dorian */
+ {{0,6,5,6},{0,3,6,5},{0,4,5,3},{0,3,4,6}},
+ /* Neuro / jump-up pedal / darkstep / techstep */
+ {{0,5,1,6},{0,0,6,0},{0,1,5,0},{0,4,1,6}},
+ /* UK 140 / deep / riddim / brostep */
+ {{0,5,6,0},{0,3,0,6},{0,1,0,1},{0,6,5,0}},
+ /* Detroit / hypnotic / dub / minimal */
+ {{0,3,4,0},{0,0,6,0},{0,3,0,6},{0,0,0,0}},
+ /* Gabber / industrial / frenchcore / uptempo */
+ {{0,0,6,0},{0,1,0,6},{0,4,0,5},{0,0,1,0}},
+ /* Progressive / uplifting major / psy Phrygian dom / tech Dorian */
+ {{0,5,2,6},{0,4,5,3},{0,1,4,0},{0,3,4,6}},
+ /* Soulful / atmospheric / jazzy / deep liquid */
+ {{0,3,5,6},{0,5,3,0},{0,2,3,6},{0,6,3,0}}
 };
-/* Companion chord colours: triad, seventh, ninth shell, suspension,
- * fifth-only power, stacked fourths. Transposition remains diatonic.
- */
 enum { URBAN_CH_TRIAD, URBAN_CH_SEVENTH, URBAN_CH_NINTH,
        URBAN_CH_SUS, URBAN_CH_POWER, URBAN_CH_QUARTAL };
+/* Distinct chord voicings, not just shifted roots. 4 bars per substyle.
+ * E.g. Jazz rap uses 7th/9th shells, deep dubstep uses suspended pads,
+ * gabber uses power chords and romantic reggaeton uses pop triads. */
+static const uint8_t urban_substyle_chord_colors[URBAN_GENRES][4][4]={
+ {{4,0,4,0},{4,3,4,3},{2,1,2,1},{4,0,3,4}},
+ {{1,3,1,3},{4,3,4,0},{1,2,1,2},{2,1,3,2}},
+ {{1,2,1,1},{0,1,2,0},{2,1,2,1},{0,3,1,0}},
+ {{0,1,0,1},{1,2,1,2},{0,3,1,0},{2,1,2,1}},
+ {{1,2,1,2},{1,3,1,0},{5,3,2,5},{1,3,1,3}},
+ {{1,0,1,0},{2,1,2,1},{5,2,3,5},{1,0,3,0}},
+ {{4,3,4,0},{1,2,3,1},{4,4,3,4},{3,4,1,3}},
+ {{0,1,0,1},{0,3,0,3},{0,0,1,0},{1,2,1,0}},
+ {{4,3,4,3},{4,4,0,4},{3,4,3,4},{4,3,5,3}},
+ {{4,3,4,3},{3,1,3,1},{4,4,3,4},{4,0,4,0}},
+ {{3,4,0,3},{3,4,3,4},{3,1,3,1},{4,4,4,4}},
+ {{4,4,3,4},{4,3,4,4},{4,4,4,0},{4,4,4,4}},
+ {{1,2,1,2},{0,1,0,1},{3,4,3,4},{4,3,1,4}},
+ {{1,2,1,2},{2,1,2,1},{2,1,5,2},{1,3,1,0}}
+};
+/* Legacy family palette stays available for genre-level lookups and
+ * diagnostic compatibility; the real score uses the 56-style table. */
 static const uint8_t urban_chord_palettes[URBAN_GENRES][4]={
   {0,4,1,0},{0,1,4,3},{1,2,0,1},{1,2,0,3},
   {2,1,3,5},{2,1,5,0},{4,0,3,1},{0,1,3,0},
-  {1,3,4,2},{4,3,1,0},{4,3,5,0},{4,4,3,0},
+  {1,3,4,2},{4,3,5,0},{4,3,5,0},{4,4,3,0},
   {1,3,2,0},{2,1,3,5}
 };
 /* A tiny fixed-state mixer, not a platform RNG dependency. */
@@ -149,19 +182,32 @@ static uint32_t urban_rng(uint32_t *x) {
     a ^= a << 13; a ^= a >> 17; a ^= a << 5;
     return *x = a;
 }
+/* Applying a new subgenre must update the actual score WITHOUT
+ * resetting playback. The global song still owns one harmonic timeline;
+ * independently overridden tracks get their own comping/groove, not an
+ * incompatible second key. */
 static void urban_song_harmony(UrbanSong *s) {
     unsigned g=s->genre%URBAN_GENRES;
-    s->scale=urban_genre_scale[g];
-    for(unsigned i=0;i<4u;i++) {
-        s->progression[i]=urban_progressions[g][i];
-        s->chord_degrees[i]=0;
-        for(unsigned d=0;d<7u;d++) {
-            if(urban_scale_intervals[s->scale][d]==s->progression[i]) {
-                s->chord_degrees[i]=(uint8_t)d;
-                break;
-            }
+    unsigned sub=s->subgenre%4u;
+    s->scale=urban_genre_mode_options[g][sub];
+    for(unsigned bar=0;bar<4u;bar++) {
+        unsigned deg=urban_chord_degrees[g][sub][bar];
+        /* Four coherent cadence variants within this same subgenre:
+         * optionally resolve the phrase, or hold the tonic for tension. */
+        if((s->harmony_variant&1u) && bar==3u)
+            deg=urban_chord_degrees[g][sub][1u];
+        if((s->harmony_variant&2u) && bar==2u)
+            deg=urban_chord_degrees[g][sub][0u];
+        s->chord_degrees[bar]=(uint8_t)deg;
+        s->progression[bar]=urban_scale_intervals[s->scale][deg];
+        unsigned color=urban_substyle_chord_colors[g][sub][bar];
+        /* Revoicing one phrase-end chord varies new songs without
+         * destroying the selected style's harmonic identity. */
+        if(bar==3u && s->melodic_variant%3u==2u) {
+            if(color==URBAN_CH_TRIAD)color=URBAN_CH_SEVENTH;
+            else if(color==URBAN_CH_SEVENTH)color=URBAN_CH_NINTH;
         }
-        s->chord_colors[i]=urban_chord_palettes[g][i];
+        s->chord_colors[bar]=(uint8_t)color;
     }
 }
 /* 56 bars, 14 complete 4-bar phrases: intro, verse, hook, second verse, hook reprise,
@@ -244,18 +290,12 @@ static void urban_generate_song(UrbanSong *s,uint32_t seed) {
     /* The chosen subgenre defines its tonal identity. Generating a
      * NEW song varies harmony, voicings and contour without randomly
      * turning a romantic major Reggaeton tune into a Phrygian one. */
-    s->scale=urban_genre_mode_options[g][s->subgenre%4u];
     s->melodic_variant=(uint8_t)(urban_rng(&r)%8u);
     if(seed!=former_seed && s->melodic_variant==former_melody)
         s->melodic_variant=(uint8_t)((former_melody+1u+
                                    (urban_rng(&r)%3u))%8u);
     s->drum_variant=(uint8_t)(urban_rng(&r)%4u);
-    for(unsigned bar=0;bar<4u;bar++) {
-        unsigned deg=urban_chord_degrees[g][s->harmony_variant][bar];
-        s->chord_degrees[bar]=(uint8_t)deg;
-        s->progression[bar]=urban_scale_intervals[s->scale][deg];
-        s->chord_colors[bar]=urban_chord_palettes[g][(bar+s->melodic_variant)%4u];
-    }
+    urban_song_harmony(s);
     urban_song_arrange(s);
     for(unsigned t=0;t<URBAN_TRACKS;t++)
         urban_generate_track(s,t,seed ^ ((uint32_t)t*0x85ebca6bu));
