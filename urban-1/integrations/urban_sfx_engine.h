@@ -13,6 +13,8 @@ typedef struct {
 } UrbanSfxVoice;
 static UrbanSfxVoice urban_sfx_voice;
 static volatile uint32_t urban_sfx_command;
+/* Diagnostics count real DSP render-start events, not just score notes. */
+volatile uint32_t urban_sfx_rendered_events;
 /* Called from UI/transport thread. New transient replaces older transient
  * rather than queuing events and potentially blocking the audio interrupt.
  * Clearing the command on STOP prevents stray sounds on the next song. */
@@ -38,6 +40,7 @@ static void urban_sfx_render(uint32_t n) {
     uint32_t cmd=urban_sfx_command;
     if(cmd!=0u) {
         urban_sfx_command=0u;
+        urban_sfx_rendered_events++;
         v->type=(uint8_t)((cmd&0xffu)-1u);
         v->amp=(float)((cmd>>8)&0xffu)*0.01f;
         float len=(float)((cmd>>16)&0xffu)*step_len;
