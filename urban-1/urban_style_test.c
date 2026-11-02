@@ -24,6 +24,23 @@ int main(void) {
    }
   }
  }
+ /* Exhaust the existing HYP-1 instrument bank in playable
+  * genre/subgenre assignments: all 16 DRONE, 16 ACID, 16 PAD sounds,
+  * and all 8 drum kits. These are genuine HYP sounds, not false names. */
+ unsigned heard[5][16]={{0}};
+ for(unsigned g=0;g<URBAN_GENRES;g++)
+  for(unsigned st=0;st<4u;st++) {
+   UrbanStylePatch p=urban_style_patch(g,st);
+   heard[0][p.bass]=1;
+   heard[1][p.lead]=1;
+   heard[2][p.pad]=1;
+   heard[3][p.drum_kit]=1;
+   heard[4][p.hat_kit]=1;
+  }
+ for(unsigned i=0;i<16u;i++)
+  assert(heard[0][i] && heard[1][i] && heard[2][i]);
+ for(unsigned i=0;i<8u;i++)
+  assert(heard[3][i] || heard[4][i]);
  assert(urban_groove(0,1).hat!=urban_groove(0,0).hat);
  assert(urban_groove(0,2).hat!=urban_groove(0,0).hat);
  assert(urban_groove(7,1).kick!=urban_groove(7,0).kick);
