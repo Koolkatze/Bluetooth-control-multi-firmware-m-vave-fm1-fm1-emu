@@ -23,7 +23,8 @@ int main(void){
  urban_audio_tick(&audio);
  assert(p.on==1u && p.last_track==2u &&
         p.last_note==sounding && p.last_glide==expected.glide);
- for(unsigned i=0;i<URBAN_TICKS_PER_STEP;i++)urban_audio_tick(&audio);
+ /* Sustained 808/drone bass may last up to 16 sixteenth steps. */
+ for(unsigned i=0;i<URBAN_TICKS_PER_STEP*17u;i++)urban_audio_tick(&audio);
  assert(p.off>=1u);
  rt.ui.song.playing=0;
  urban_audio_tick(&audio);
