@@ -23,7 +23,8 @@ test: urban_test urban_ui_test urban_panel_test urban_transport_test urban_music
 	./urban_sfx_test
 	./urban_trance_test
 	./urban_scales_test
-	./urban_groove_v2_test urban_jazz_test
+	./urban_groove_v2_test
+	./urban_jazz_test
 urban_test: urban_test.c urban_song.h
 	$(CC) $(CFLAGS) -o $@ urban_test.c
 urban_ui_test: urban_ui_test.c urban_ui.h urban_song.h
