@@ -21,9 +21,9 @@ static const UrbanBassGrammar urban_bass_grammars[URBAN_GENRES]={
     {0x1119,3,1, 93, 0}, /* Reggaeton: kick/dembow sync */
     {0x4a41,2,1, 95, 0}, /* DnB: syncopated sub/reese accents */
     {0x0401,11,0,104,36},/* Dubstep: long sub, drop movement */
-    {0x2222,3,1, 85, 0}, /* Techno: offbeat bass after kick */
+    {0x4444,3,1, 85, 0}, /* Techno: true offbeat eighths (steps 2,6,10,14) */
     {0x5555,2,1,104, 0}, /* Hardcore techno: driving eighths */
-    {0x2222,4,1, 92, 0}, /* Trance: rolling offbeats */
+    {0x4444,4,1, 92, 0}, /* Trance: true offbeat eighths */
     {0x2a49,5,1, 81, 0}  /* Liquid jungle: smooth syncopation */
 };
 static uint16_t urban_bass_section_mask(uint16_t mask,unsigned sec) {
