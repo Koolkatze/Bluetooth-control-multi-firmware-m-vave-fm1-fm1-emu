@@ -64,6 +64,7 @@ jobs:
           hyp1/build/host/amb_host urban-1/tests/hyp1_song_mode.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_firmware_only.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_subgenre_live.amb hyp1/build/urban
+          hyp1/build/host/amb_host urban-1/tests/hyp1_scales.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_sfx.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_trance_clock.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_fx_edit.amb hyp1/build/urban
