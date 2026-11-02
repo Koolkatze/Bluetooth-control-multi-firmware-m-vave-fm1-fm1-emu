@@ -87,6 +87,8 @@ static void urban_port_style_reset(void) {
     UrbanEditor *e=&urban_port.editor;
     memset(e->changed,0,sizeof(e->changed));
     memset(e->valid,0,sizeof(e->valid));
+    e->performance_mask=0u; /* no old genre's held repeat/crush/gate */
+    if(!urban_port.tape_stop_pending)en_fx(0u);
     urban_port.lead_lfo_rate=0u;
     urban_port.lead_lfo_depth=0u;
     urban_lead_lfo_config(0u,0u);
@@ -812,7 +814,12 @@ static void urban_port_editor_open(unsigned view) {
     if(e->view==view)e->view=0u;
     else {
         e->view=(uint8_t)view;
-        e->target=0u;
+        /* ENV/LFO open on the selected instrument from Tracks;
+         * FX/EDIT still start at MASTER for song-wide control. */
+        e->target=(uint8_t)((view==URBAN_EDITOR_ENV||
+                              view==URBAN_EDITOR_LFO)&&
+                             urban_port.rt.ui.page==URBAN_PAGE_TRACKS?
+                             urban_port.rt.ui.selected_track+1u:0u);
         e->bank=0u;
     }
     urban_port.ui_drawn=0u;
