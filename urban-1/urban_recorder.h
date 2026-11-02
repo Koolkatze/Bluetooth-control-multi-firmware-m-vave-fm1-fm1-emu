@@ -19,7 +19,7 @@ typedef struct {
 } UrbanRecEvent;
 typedef struct {
     UrbanRecEvent event[UR_REC_MAX_EVENTS];
-    uint16_t count,position,pass,play_cursor;
+    uint16_t count,position,pass,play_cursor,edit_cursor;
     uint8_t state,track,bars,quant,overdub,mod_page;
     uint8_t held[27];
     uint8_t edit_note,edit_velocity;
