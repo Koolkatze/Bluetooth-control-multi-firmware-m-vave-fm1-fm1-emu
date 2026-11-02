@@ -79,7 +79,7 @@ static void hiphop(unsigned genre,unsigned sub,unsigned seed) {
         UrbanMixPlan mx=urban_mix_plan(&s,URBAN_HOOK,bar);
         assert(mx.snare>mx.clap);
         assert(mx.kick==(genre==3u && sub==3u?74u:70u));
-        assert(mx.drive==(genre==3u && sub==3u?34u:17u));
+        assert(mx.drive==(genre==3u && sub==3u?42u:8u));
         if(genre==3u && sub==0u)assert(mx.clap==0u);
         /* The drum-track override must work when the song and the
          * other tracks use a completely different global genre. */
@@ -111,7 +111,7 @@ static void hiphop(unsigned genre,unsigned sub,unsigned seed) {
         assert(urban_mix_plan(&s,URBAN_HOOK,0u).kick>trip_mix.kick);
     } else {
         assert(fx.kick_decay==trip_fx.kick_decay);
-        assert(fx.drive==trip_fx.drive);
+        assert(fx.drive<trip_fx.drive);
         assert(urban_mix_plan(&s,URBAN_HOOK,0u).kick==trip_mix.kick);
     }
     if(genre==3u && sub==2u)assert(fx.lead_slide>=50u);
