@@ -63,10 +63,9 @@ static void check_new_song_every_time(void) {
             seen[take]=score;
             assert(r.ui.song.scale<URBAN_SCALE_COUNT);
             for(unsigned bar=0;bar<4;bar++) {
-                assert(r.ui.song.chord_degrees[bar]<7u);
+                assert(r.ui.song.chord_degrees[bar]<urban_scale_size(r.ui.song.scale));
                 assert(r.ui.song.progression[bar]==
-                  urban_scale_intervals[r.ui.song.scale]
-                                       [r.ui.song.chord_degrees[bar]]);
+                  urban_scale_pc(r.ui.song.scale,r.ui.song.chord_degrees[bar]));
                 uint8_t voices[4];
                 unsigned count=urban_build_chord(&r.ui.song,bar,0,voices);
                 assert(count>=2u && count<=4u);
@@ -74,8 +73,8 @@ static void check_new_song_every_time(void) {
                     assert(voices[k]>=46u && voices[k]<=85u);
                     unsigned pc=(voices[k]+120u-r.ui.song.key)%12u;
                     unsigned diatonic=0;
-                    for(unsigned d=0;d<7;d++)
-                        diatonic|=(pc==urban_scale_intervals[r.ui.song.scale][d]);
+                    for(unsigned d=0;d<urban_scale_size(r.ui.song.scale);d++)
+                        diatonic|=(pc==urban_scale_pc(r.ui.song.scale,d));
                     assert(diatonic); /* every chord tone is in mode */
                 }
             }
