@@ -76,6 +76,19 @@ def main() -> None:
     # Expose the actual URBAN-1 song transport to host regression scripts.
     replace_once(root / "host/amb_host.c",
         '    else if (!strcmp(what, "sixteenths"))',
+        '    else if (!strcmp(what, "urbanview")) got = urban_port.editor.view;\n'
+        '    else if (!strcmp(what, "urbantarget")) got = urban_port.editor.target;\n'
+        '    else if (!strcmp(what, "urbanbank")) got = urban_port.editor.bank;\n'
+        '    else if (!strcmp(what, "urbanfxecho")) got = urban_port_editor_value(P_ECHO);\n'
+        '    else if (!strcmp(what, "urbanfxreverb")) got = urban_port_editor_value(P_REVERB);\n'
+        '    else if (!strcmp(what, "urbanfxoverride")) got = urban_port.editor.changed[P_ECHO];\n'
+        '    else if (!strcmp(what, "urbanbassoverride")) got = urban_port.editor.changed[P_DR_CUT];\n'
+        '    else if (!strcmp(what, "urbanleaddecayedit")) got = urban_port.editor.changed[P_AC_DEC];\n'
+        '    else if (!strcmp(what, "urbanpadattackedit")) got = urban_port.editor.changed[P_PE_ATK];\n'
+        '    else if (!strcmp(what, "urbanfxmask")) got = urban_port.editor.performance_mask;\n'
+        '    else if (!strcmp(what, "urbaneditkey")) got = urban_port.rt.ui.song.key;\n'
+        '    else if (!strcmp(what, "urbanedittempo")) got = urban_port.rt.ui.song.tempo;\n'
+        '    else if (!strcmp(what, "urbaneditmode")) got = urban_port.rt.ui.song.scale;\n'
         '    else if (!strcmp(what, "urbanmode")) got = urban_port.rt.ui.song.song_mode;\n'
         '    else if (!strcmp(what, "urbansub")) got = urban_port.rt.ui.song.subgenre;\n'
         '    else if (!strcmp(what, "urbanroot1")) got = urban_port.rt.ui.song.chord_degrees[1];\n'
