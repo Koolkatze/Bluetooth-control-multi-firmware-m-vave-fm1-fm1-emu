@@ -25,6 +25,13 @@ static void hiphop(unsigned genre,unsigned sub,unsigned seed) {
     assert(g.snare==0x1010u);
     assert(!(g.clap&0x0010u));
     assert(g.kit==4u || (genre==3u && sub==2u && g.kit==7u));
+    /* Kit 4 is not merely similar: it is the same Bristol Trip-hop kick.
+     * G-Funk keeps the 808 *snare*, not the harsh 808 kick. */
+    assert(urban_kick_kit(genre,sub)==urban_style_patch(4u,0u).drum_kit);
+    if(genre==3u && sub==0u) {
+        assert(g.clap==0u);
+        assert(urban_style_patch(genre,sub).drum_kit==4u);
+    }
     UrbanInstrumentProgram ins=urban_instrument_program(&s,2u,URBAN_HOOK);
     UrbanInstrumentProgram leads=urban_instrument_program(&s,3u,URBAN_HOOK);
     UrbanInstrumentProgram pad=urban_instrument_program(&s,4u,URBAN_HOOK);
@@ -51,12 +58,38 @@ static void hiphop(unsigned genre,unsigned sub,unsigned seed) {
         for(unsigned lane=0;lane<6u;lane++)assert(mask[lane]==again[lane]);
         assert((mask[1]&0x1010u)==0x1010u);
         assert((mask[2]&0x0010u)==0u);
+        if(genre==3u && sub==0u) {
+            for(unsigned section=0u;section<URBAN_SEQUENCES;section++)
+              for(unsigned complexity=0u;complexity<=3u;complexity++) {
+                s.complexity=(uint8_t)complexity;
+                urban_drum_lanes(&s,section,bar,mask);
+                assert(mask[2]==0u); /* no clap on any section/fill */
+                assert((mask[1]&0x1010u)==0x1010u ||
+                       section==URBAN_INTRO ||
+                       section==URBAN_BRIDGE ||
+                       section==URBAN_BREAK ||
+                       section==URBAN_OUTRO);
+              }
+            s.complexity=3u;
+        }
         /* HYP's random break-kit chop has been disabled in the port. */
         UrbanChordScore cs=urban_chord_score(&s,URBAN_HOOK,bar);
         assert(cs.gate>=6u && cs.onsets);
         assert((cs.onsets&0x0001u)!=0u);
         UrbanMixPlan mx=urban_mix_plan(&s,URBAN_HOOK,bar);
         assert(mx.snare>mx.clap);
+        assert(mx.kick==(genre==3u && sub==3u?74u:70u));
+        assert(mx.drive==(genre==3u && sub==3u?34u:17u));
+        if(genre==3u && sub==0u)assert(mx.clap==0u);
+        /* The drum-track override must work when the song and the
+         * other tracks use a completely different global genre. */
+        UrbanSong mixed=s;
+        mixed.genre=10u;
+        mixed.subgenre=1u;
+        UrbanMixPlan override=urban_mix_plan(&mixed,URBAN_HOOK,bar);
+        assert(override.kick==mx.kick);
+        assert(override.drive==mx.drive);
+        if(genre==3u && sub==0u)assert(override.clap==0u);
         assert(mx.hat<=35u);
         assert(mx.lead<=53u);
         assert(urban_mix_energy(&mx)<=15500u);
@@ -65,6 +98,22 @@ static void hiphop(unsigned genre,unsigned sub,unsigned seed) {
     assert(fx.pad_lfo_depth<=17u);
     assert(fx.bass_lfo_depth<=12u);
     assert(fx.lead_resonance<=20u);
+    UrbanSong reference=s;
+    reference.genre=4u; /* Bristol Trip-hop */
+    reference.subgenre=0u;
+    reference.tracks[0].genre=4u;
+    reference.tracks[0].subgenre=0u;
+    UrbanFxPlan trip_fx=urban_fx_plan(&reference);
+    UrbanMixPlan trip_mix=urban_mix_plan(&reference,URBAN_HOOK,0u);
+    if(genre==3u && sub==3u) {
+        assert(fx.kick_decay>trip_fx.kick_decay);
+        assert(fx.drive>trip_fx.drive);
+        assert(urban_mix_plan(&s,URBAN_HOOK,0u).kick>trip_mix.kick);
+    } else {
+        assert(fx.kick_decay==trip_fx.kick_decay);
+        assert(fx.drive==trip_fx.drive);
+        assert(urban_mix_plan(&s,URBAN_HOOK,0u).kick==trip_mix.kick);
+    }
     if(genre==3u && sub==2u)assert(fx.lead_slide>=50u);
     for(unsigned sec=0;sec<URBAN_SEQUENCES;sec++)
       for(unsigned bar=0;bar<4u;bar++)
@@ -79,6 +128,6 @@ int main(void) {
       for(unsigned sub=0u;sub<4u;sub++)
         for(unsigned take=0u;take<16u;take++)
             hiphop(g,sub,0x1001u+g*1000u+sub*71u+take*31u);
-    puts("URBAN-1 hip-hop: warm patches, grounded bass, sparse break drums, harmonic register and mix PASS");
+    puts("URBAN-1: 128 takes, genuine Trip-hop kicks, isolated lo-fi drive and Boom Bap zero-clap in 8 sections PASS");
     return 0;
 }
