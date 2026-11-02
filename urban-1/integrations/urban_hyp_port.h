@@ -104,6 +104,29 @@ static void urban_port_sound_profile(void) {
                                            s->tracks[3].subgenre);
     UrbanStylePatch pad=urban_style_patch(s->tracks[4].genre,
                                           s->tracks[4].subgenre);
+    /* Match HYP's mode controls where an equivalent exists. HYP does
+     * not expose harmonic/melodic minor, Phrygian dominant or Locrian:
+     * those are played correctly by our explicit MIDI chord/note score. */
+    static const uint8_t hyp_modes[URBAN_SCALE_COUNT]={
+        MODE_AEOLIAN,MODE_PHRYGIAN,MODE_DORIAN,MODE_AEOLIAN,
+        MODE_IONIAN,MODE_MIXOLYDIAN,MODE_PHRYGIAN,
+        MODE_LYDIAN,MODE_AEOLIAN,MODE_PHRYGIAN
+    };
+    static const uint8_t hyp_chords[6]={
+        EN_CH_TRIAD,EN_CH_7TH,EN_CH_9TH,
+        EN_CH_SUS,EN_CH_TRIAD,EN_CH_4THS
+    };
+    en_set(P_ROOT,s->key%12u);
+    en_set(P_MODE,hyp_modes[s->scale%URBAN_SCALE_COUNT]);
+    en_set(P_CHORD,hyp_chords[s->chord_colors[0]%6u]);
+    en_set(P_VOICING,s->chord_colors[0]==URBAN_CH_QUARTAL?1:0);
+    /* A subtle seeded variation of synthesis envelopes distinguishes
+     * successive takes without changing the selected subgenre patch. */
+    uint32_t human=urban_mix_seed(s->seed ^ 0x592fd9e1u);
+    int brightness=urban_timbre[s->tracks[4].genre%URBAN_GENRES].pad_bright;
+    brightness+=(int)(human%11u)-5;
+    if(brightness<0)brightness=0;
+    if(brightness>100)brightness=100;
     en_set(P_KIT_KICK,d.drum_kit);
     en_set(P_KIT_SNARE,d.drum_kit);
     en_set(P_KIT_HAT,h.hat_kit);
@@ -121,7 +144,7 @@ static void urban_port_sound_profile(void) {
     en_set(P_AC_RES,lead.lead==2u?68:43);
     en_set(P_AC_ENV,lead.lead==4u||lead.lead==15u?32:59);
     en_set(P_PADTONE,pad.pad);
-    en_set(P_BRIGHT,urban_timbre[s->tracks[4].genre%URBAN_GENRES].pad_bright);
+    en_set(P_BRIGHT,brightness);
     en_set(P_PE_ATK,pad.pad==7u||pad.pad==3u?36:12);
     en_set(P_PE_REL,pad.pad==7u||pad.pad==3u?72:40);
     en_set(P_NOISE,s->genre==1u||s->genre==4u||s->genre==6u?14:0);
