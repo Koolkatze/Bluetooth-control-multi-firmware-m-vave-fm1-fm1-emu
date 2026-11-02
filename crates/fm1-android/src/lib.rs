@@ -66,6 +66,7 @@ mod android {
             return CALLBACK_CONTINUE;
         }
         let shared = &*(user as *const Shared);
+        shared.audio_callbacks.fetch_add(1, Ordering::Relaxed);
         let pcm = std::slice::from_raw_parts_mut(audio_data as *mut f32, frames as usize * 2);
         // AUDIO THREAD: no allocations, mutexes, logging, or JNI calls.
         // Accumulate starvation and publish ONE atomic update per callback.
@@ -374,6 +375,26 @@ mod android {
         respond(&mut env, &message)
     }
 
+    /// Bit 0: AAudio reported a disconnected stream. Bit 1: stream absent
+    /// after a failed reopen. Bits 2+: number of AAudio callback invocations.
+    /// Kept separate from nativeStats() because its upper bits already
+    /// encode missing PCM frames (any new flag there would corrupt stats).
+    #[no_mangle]
+    pub extern "system" fn Java_com_koolkatze_fm1offline_NativeSynth_audioHealth(
+        _env: JNIEnv, _: JClass,
+    ) -> jlong {
+        if let Ok(guard) = state().try_lock() {
+            if let Some(engine) = guard.as_ref() {
+                let s = &engine.shared;
+                let disconnected = u64::from(s.audio_disconnected.load(Ordering::Acquire));
+                let absent = u64::from(engine.stream == 0);
+                let callbacks = s.audio_callbacks.load(Ordering::Relaxed);
+                return ((callbacks << 2) | disconnected | (absent << 1)) as jlong;
+            }
+        }
+        0
+    }
+
     #[no_mangle]
     pub extern "system" fn Java_com_koolkatze_fm1offline_NativeSynth_stats(
         _env: JNIEnv, _: JClass,
@@ -384,8 +405,7 @@ mod android {
                 let underruns = s.ring.underruns.load(Ordering::Relaxed).min(u32::MAX as u64);
                 let bits = if s.ready.load(Ordering::Acquire) { 1u64 } else { 0 }
                     | if s.playing.load(Ordering::Acquire) { 2 } else { 0 }
-                    | if s.halted.load(Ordering::Acquire) { 4 } else { 0 }
-                    | if s.audio_disconnected.load(Ordering::Acquire) { 8 } else { 0 };
+                    | if s.halted.load(Ordering::Acquire) { 4 } else { 0 };
                 return ((underruns << 3) | bits) as jlong;
             }
         }
