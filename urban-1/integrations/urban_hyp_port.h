@@ -80,38 +80,67 @@ static void urban_port_stage_pattern(void) {
  * The shared song genre selects groove/effects, but each track's genre
  * selects its *own* bass/lead/chord engine timbre.
  */
+/* Full per-genre and per-subgenre instrumentation uses real HYP-1
+ * sound indexes. Global style owns the FX bus; individual track style
+ * owns its synth/kit timbre. These patches are not audio samples.
+ */
 static void urban_port_sound_profile(void) {
-    UrbanHypPort *p=&urban_port;
-    UrbanSong *s=&p->rt.ui.song;
-    unsigned g=s->genre%URBAN_GENRES, bass=s->tracks[2].genre%URBAN_GENRES;
-    unsigned lead=s->tracks[3].genre%URBAN_GENRES, pad=s->tracks[4].genre%URBAN_GENRES;
-    const UrbanGenreTimbre *overall=&urban_timbre[g];
-    const UrbanGenreTimbre *b=&urban_timbre[bass];
-    const UrbanGenreTimbre *l=&urban_timbre[lead];
-    const UrbanGenreTimbre *v=&urban_timbre[pad];
-    UrbanGroove drums=urban_groove(s->tracks[0].genre,s->tracks[0].subgenre);
-    en_set(P_KIT_KICK,drums.kit);
-    en_set(P_KIT_SNARE,drums.kit);
-    en_set(P_KIT_HAT,urban_groove(s->tracks[1].genre,
-                                 s->tracks[1].subgenre).kit);
-    en_set(P_KIT_PERC,drums.kit);
-    en_set(P_SWING,urban_groove(g,s->subgenre).swing);
-    en_set(P_DRIVE,overall->drive);
-    en_set(P_REVERB,overall->reverb);
-    en_set(P_ECHO,overall->echo);
-    en_set(P_PULSE,80);
-    en_set(P_BASS,b->sub_octave?90:75);
-    en_set(P_DR_CUT,b->bass_cut);
-    en_set(P_DR_RES,b->sub_octave?22:55);
-    en_set(P_BASSOCT,b->sub_octave?-1:0);
-    en_set(P_DR_INST,b->bass_sound);
-    en_set(P_AC_CUT,l->lead_cut);
-    en_set(P_AC_RES,lead>=10u?65:38);
-    en_set(P_AC_WAVE,l->lead_sound);
-    en_set(P_BRIGHT,v->pad_bright);
-    en_set(P_PADTONE,v->pad_sound);
-    en_set(P_PE_ATK,pad<=2u?35:pad==12u?45:15);
-    en_set(P_PE_REL,pad<=2u||pad==13u?73:44);
+    UrbanSong *s=&urban_port.rt.ui.song;
+    UrbanStylePatch overall=urban_style_patch(s->genre,s->subgenre);
+    UrbanStylePatch d=urban_style_patch(s->tracks[0].genre,
+                                        s->tracks[0].subgenre);
+    UrbanStylePatch h=urban_style_patch(s->tracks[1].genre,
+                                        s->tracks[1].subgenre);
+    UrbanStylePatch bass=urban_style_patch(s->tracks[2].genre,
+                                           s->tracks[2].subgenre);
+    UrbanStylePatch lead=urban_style_patch(s->tracks[3].genre,
+                                           s->tracks[3].subgenre);
+    UrbanStylePatch pad=urban_style_patch(s->tracks[4].genre,
+                                          s->tracks[4].subgenre);
+    en_set(P_KIT_KICK,d.drum_kit);
+    en_set(P_KIT_SNARE,d.drum_kit);
+    en_set(P_KIT_HAT,h.hat_kit);
+    en_set(P_KIT_PERC,h.drum_kit);
+    en_set(P_SWING,urban_groove(s->genre,s->subgenre).swing);
+    en_set(P_DRIVE,overall.drive);
+    en_set(P_REVERB,overall.reverb);
+    en_set(P_ECHO,overall.echo);
+    en_set(P_DR_INST,bass.bass);
+    en_set(P_DR_CUT,bass.bass_cut);
+    en_set(P_DR_RES,bass.bass==9u?20:51);
+    en_set(P_BASSOCT,bass.bass==9u||bass.bass==8u?-1:0);
+    en_set(P_AC_WAVE,lead.lead);
+    en_set(P_AC_CUT,lead.lead_cut);
+    en_set(P_AC_RES,lead.lead==2u?68:43);
+    en_set(P_AC_ENV,lead.lead==4u||lead.lead==15u?32:59);
+    en_set(P_PADTONE,pad.pad);
+    en_set(P_BRIGHT,urban_timbre[s->tracks[4].genre%URBAN_GENRES].pad_bright);
+    en_set(P_PE_ATK,pad.pad==7u||pad.pad==3u?36:12);
+    en_set(P_PE_REL,pad.pad==7u||pad.pad==3u?72:40);
+    en_set(P_NOISE,s->genre==1u||s->genre==4u||s->genre==6u?14:0);
+}
+/* Song sections are actually orchestrated: the intro/bridge/break strip
+ * layers, a hook raises melodic energy, and the drop restores full drums.
+ * Repeated hooks keep identical motifs and balanced synthesis settings.
+ */
+static void urban_port_section_mix(void) {
+    const UrbanSong *s=&urban_port.rt.ui.song;
+    static const uint8_t levels[URBAN_SEQUENCES][4]={
+        /* drums, bass, lead, pad */
+        {30,39,25,55}, /* Intro */
+        {75,77,53,45}, /* Verse A */
+        {86,86,79,66}, /* Hook */
+        {77,79,61,48}, /* Verse B */
+        {29,48,34,73}, /* Bridge */
+        {94,94,86,65}, /* Drop */
+        {16,34,19,67}, /* Break */
+        {34,42,27,46}  /* Outro */
+    };
+    unsigned sec=s->current%URBAN_SEQUENCES;
+    en_set(P_PULSE,levels[sec][0]);
+    en_set(P_BASS,levels[sec][1]);
+    en_set(P_ACID,levels[sec][2]);
+    en_set(P_PAD,levels[sec][3]);
 }
 static void urban_port_generate(void) {
     UrbanHypPort *p=&urban_port;
@@ -126,6 +155,7 @@ static void urban_port_generate(void) {
         p->last_sixteenth=en_bars;
     }
     urban_port_sound_profile();
+    urban_port_section_mix();
     urban_port_stage_pattern();
     if(song_generate && s->playing)en_play(1);
 }
@@ -164,6 +194,7 @@ static void urban_port_step(void) {
      * advances the song arrangement and before HYP's pattern boundary. */
     if(p->rt.transport.step==URBAN_STEPS-1u)
         urban_port_stage_pattern();
+    uint8_t previous=p->rt.ui.song.current;
     urban_runtime_tick(&p->rt,&frame);
     /* URBAN's 96 PPQN clock is advanced 24 ticks per HYP sixteenth;
      * capture the initial event before its empty intermediate ticks. */
@@ -173,6 +204,7 @@ static void urban_port_step(void) {
     }
     for(i=2;i<=4;i++)
         urban_port_note(i,frame.event[i],frame.glide[i]);
+    if(p->rt.ui.song.current!=previous)urban_port_section_mix();
 }
 static void urban_port_poll(void) {
     UrbanHypPort *p=&urban_port;
@@ -203,6 +235,7 @@ static void urban_port_play(void) {
     } else {
         p->last_sixteenth=en_bars;
         urban_port_stage_pattern();
+        urban_port_section_mix();
         en_play(1);
     }
 }
@@ -220,6 +253,7 @@ static void urban_port_set_mode(int automatic) {
     p->rt.transport.step=0;
     p->last_sixteenth=en_bars;
     urban_port_stage_pattern();
+    urban_port_section_mix();
     if(was)en_play(1);
 }
 static void urban_port_restart(void) {
@@ -264,6 +298,7 @@ static void urban_port_init(uint32_t seed) {
     for(i=0;i<URBAN_TRACKS;i++) urban_runtime_refresh_track(&p->rt,i);
     urban_song_set_mode(&p->rt.ui.song,1); /* SONG MODE by default */
     urban_port_sound_profile();
+    urban_port_section_mix();
     urban_port_stage_pattern();
     p->last_sixteenth=en_bars;
 }
