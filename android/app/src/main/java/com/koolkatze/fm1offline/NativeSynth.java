@@ -27,6 +27,13 @@ public final class NativeSynth {
 
     public static native String boot(byte[] fwsc, int mhz, String identity, String saveDirectory);
     public static native void stop();
+    /** Reopen only AAudio for a Bluetooth/USB/speaker route change.
+     * Firmware CPU, song, MIDI, flash and LCD remain running.
+     * Returns OK:<sample-rate> or ERROR:<reason>. Call off UI thread. */
+    public static native String recoverAudio();
+    /** Bit 0 AAudio error; bit 1 no output stream; higher bits
+     * count actual hardware callback invocations for watchdog. */
+    public static native long audioHealth();
     public static native void midi(byte[] bytes);
     public static native void control(int kind, int key, int value);
     public static native byte[] lcd();
