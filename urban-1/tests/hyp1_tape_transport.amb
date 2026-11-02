@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Native HYP pitched tape start/stop, long PLAY intro, ENV/LFO pages
+expect urbantapeon 1
+tap ENV
+expect urbanview 3
+spin K1 5
+tap LFO
+expect urbanview 4
+tap HOME
+expect urbanview 0
+tap PLAY
+wait 800
+expect playing 1
+expect urbantapestartframes >1000
+press PLAY
+wait 750
+release PLAY
+expect playing 1
+expect urbanmode 1
+expect urbanbar 0
+tap PLAY
+expect playing 0
+expect urbantapepending 1
+wait 800
+expect urbantapepending 0
+tap FX
+spin PRESET 3
+expect urbanbank 3
+spin K1 -1
+expect urbantapeon 0
+tap FX
+tap PLAY
+expect playing 1
+tap PLAY
+expect playing 0
+expect urbantapepending 0
+shot urban-tape-switch.png
