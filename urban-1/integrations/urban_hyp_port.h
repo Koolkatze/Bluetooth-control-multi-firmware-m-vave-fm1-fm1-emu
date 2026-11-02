@@ -627,6 +627,9 @@ static void urban_port_play(void) {
                       60000u/(p->rt.ui.song.tempo?p->rt.ui.song.tempo:120u);
             p->tape_stop_pending=1u;
             en_fx(p->editor.performance_mask|(1u<<FX_STOP));
+            /* Stop NOTE transport now; the ring tape still has sound,
+             * and its FX_STOP head ramps down independently. */
+            en_play(0);
         } else en_play(0);
     } else {
         if(p->tape_stop_pending) {
@@ -1048,19 +1051,19 @@ static void urban_port_input(void) {
     UrbanHypPort *p=&urban_port;
     UrbanSong *s=&p->rt.ui.song;
     uint32_t b=plat_buttons(),down=b&~p->held_buttons;
-    uint32_t up=p->held_buttons&~b;
     int32_t d;
     p->held_buttons=b;
     if(down&(1u<<B_PLAY)) {
         p->play_press_ms=plat_ms();p->play_long_done=0u;
+        urban_port_play(); /* tap happens on the press, as on HYP */
     }
     if((b&(1u<<B_PLAY))&&!p->play_long_done&&
        plat_ms()-p->play_press_ms>=650u&&s->song_mode) {
         p->play_long_done=1u;
         urban_port_restart();
     }
-    if((up&(1u<<B_PLAY))&&!p->play_long_done)
-        urban_port_play();
+    /* Release is not another transport click; holding PLAY >650ms
+     * restarts INTRO after the original press. */
     if(down&(1u<<B_REC)||p->rec_screen) {
         urban_port_rec_input(b,down);
         if(p->rec_screen) {
