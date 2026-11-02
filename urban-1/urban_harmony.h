@@ -34,9 +34,9 @@ static uint8_t urban_harmonize_note(const UrbanSong *s,uint8_t note,unsigned bar
     if(target>111)target=111;
     return (uint8_t)target;
 }
-static unsigned urban_build_chord(const UrbanSong *s,unsigned bar,
+static unsigned urban_build_chord_colored(const UrbanSong *s,unsigned bar,
+                                  unsigned color,
                                   const uint8_t previous[4],uint8_t out[4]) {
-    unsigned color=s->chord_colors[bar%4u];
     static const int degrees[6][4]={
         {0,2,4,0}, /* triad */
         {0,2,4,6}, /* 7th */
@@ -65,5 +65,10 @@ static unsigned urban_build_chord(const UrbanSong *s,unsigned bar,
     }
     for(unsigned i=n;i<4u;i++)out[i]=0u;
     return n;
+}
+static unsigned urban_build_chord(const UrbanSong *s,unsigned bar,
+                                  const uint8_t previous[4],uint8_t out[4]) {
+    return urban_build_chord_colored(s,bar,s->chord_colors[bar%4u],
+                                    previous,out);
 }
 #endif
