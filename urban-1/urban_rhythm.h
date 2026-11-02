@@ -16,9 +16,9 @@ static UrbanGroove urban_groove(uint8_t genre,uint8_t subgenre) {
       /* 0 trap        */ {0x0429,0x0100,0x5555,0x0100,0x2000,0x0000,18, 7,7},
       /* 1 goth trap   */ {0x0821,0x0100,0x5155,0x0100,0x2000,0x0400,16,10,7},
       /* 2 sad trap    */ {0x0109,0x0100,0x5555,0x0100,0x0000,0x0000, 9, 8,7},
-      /* 3 hip-hop     */ {0x1049,0x1010,0x5555,0x1010,0x0000,0x0040,15,29,2},
+      /* 3 hip-hop     */ {0x0489,0x1010,0x5555,0x0000,0x0000,0x0040, 6,29,4},
       /* 4 trip-hop    */ {0x0441,0x1010,0x4444,0x1000,0x0200,0x0008,13,33,4},
-      /* 5 underground */ {0x1089,0x1010,0x5555,0x1000,0x0000,0x0800,19,31,2},
+      /* 5 underground */ {0x0889,0x1010,0x5555,0x0000,0x0000,0x0800, 9,31,4},
       /* 6 horrorcore  */ {0x0481,0x0100,0x5555,0x0100,0x2000,0x0280,20,16,7},
       /* 7 reggaeton   */ {0x1119,0x0444,0x5555,0x0888,0x2000,0x0888,11, 6,3},
       /* 8 dnb         */ {0x0441,0x1010,0xffff,0x1010,0x2020,0x0080,24, 7,5},
@@ -45,18 +45,18 @@ static UrbanGroove urban_groove(uint8_t genre,uint8_t subgenre) {
       {{0x0101,0x0100,0x1111,0x0000,0x0000,0x0000, 3, 0,7},
        {0x0809,0x1010,0x4444,0x1000,0x0000,0x0040, 8, 8,4},
        {0x0009,0x0100,0x4444,0x0000,0x0000,0x0000, 2, 0,7}},
-      /* Hip-hop: Jazz Rap / G-Funk / Lo-fi */
-      {{0x0849,0x1010,0x4444,0x1010,0x0000,0x4444,16,31,4},
-       {0x2089,0x1010,0xaaaa,0x1010,0x2020,0x0080,17, 6,4},
-       {0x0109,0x1010,0x4444,0x1000,0x0000,0x0040, 7,22,4}},
+      /* Hip-hop: jazz break / G-Funk's 808 and lightly open hat / dusty lo-fi */
+      {{0x0489,0x1010,0x5555,0x0000,0x0000,0x0040, 6,25,4},
+       {0x0889,0x1010,0x5555,0x1000,0x2000,0x0000, 7, 7,7},
+       {0x0109,0x1010,0x5555,0x0000,0x0000,0x0000, 2,22,4}},
       /* Trip-hop: Downtempo / Abstract / Dub */
       {{0x0109,0x1010,0x4444,0x1000,0x0000,0x0040, 6,24,4},
        {0x0a21,0x1010,0x2222,0x0000,0x0000,0x2222,19,18,5},
        {0x0441,0x1010,0x4444,0x0800,0x0200,0x2828,13,20,4}},
-      /* Underground Hip-hop: Jazz / Experimental / Break */
-      {{0x0849,0x1010,0x4444,0x1000,0x0000,0x4444,13,32,4},
-       {0x0a89,0x1010,0xaaaa,0x1010,0x2020,0x1111,20,11,5},
-       {0x2449,0x1090,0xaaaa,0x1010,0x0000,0x0480,26,17,4}},
+      /* Underground: spacious jazz, abstract cuts, funky breakbeat */
+      {{0x0489,0x1010,0x5555,0x0000,0x0000,0x0040, 8,32,4},
+       {0x0889,0x1010,0x4444,0x0000,0x0000,0x0100, 9,11,4},
+       {0x048b,0x1010,0x5555,0x0000,0x0000,0x0080,12,17,4}},
       /* Horrorcore: Cinematic / Industrial / Dark */
       {{0x0101,0x0100,0x1111,0x0000,0x0000,0x0020, 6, 0,7},
        {0x0889,0x1010,0xaaaa,0x1010,0x2000,0x2222,25, 2,6},
@@ -137,8 +137,11 @@ static void urban_drum_lanes(const UrbanSong *s,unsigned section,unsigned sectio
     for(unsigned n=0;n<edits;n++) {
         unsigned step=accents[urban_rng(&figure)%8u];
         uint16_t bit=(uint16_t)(1u<<step);
-        if((urban_rng(&figure)&1u)!=0u) out[0]|=bit;
-        else out[0]&=(uint16_t)~bit;
+        if(d->genre!=3u && d->genre!=5u) {
+            /* Never randomly move the backbone of a sampled-style beat. */
+            if((urban_rng(&figure)&1u)!=0u) out[0]|=bit;
+            else out[0]&=(uint16_t)~bit;
+        }
         if((urban_rng(&figure)%4u)==0u)out[5]^=bit;
     }
     /* Signature kick beats must be present, avoiding a new song that
@@ -157,8 +160,11 @@ static void urban_drum_lanes(const UrbanSong *s,unsigned section,unsigned sectio
     } else if(section==URBAN_HOOK || section==URBAN_DROP) {
         /* stronger hats and claps on hooks, 4-bar buildup into drops */
         out[3]|=hg.hat&0xaaaa;
-        out[2]|=g.snare;
-        if(section==URBAN_DROP)out[0]|=0x0101u;
+        /* Tripled claps on top of both snare backbeats make hip-hop
+         * sound plastic; retain only authored claps for these styles. */
+        if(d->genre!=3u && d->genre!=5u)out[2]|=g.snare;
+        if(section==URBAN_DROP && d->genre!=3u && d->genre!=5u)
+            out[0]|=0x0101u;
     }
     /* Four-bar phrase development: bar 1 establishes the riff, bar 2
      * answers the beat, bar 3 varies percussion/hat placement, bar 4
@@ -192,8 +198,12 @@ static void urban_drum_lanes(const UrbanSong *s,unsigned section,unsigned sectio
     }
     if(s->complexity>0u && section_bar%4u==3u &&
        section!=URBAN_INTRO && section!=URBAN_OUTRO) {
-        /* fill one bar in four, with genre-specific probabilities */
-        for(unsigned step=12u;step<16u;step++) {
+        /* Sample-based hip-hop: one optional intentional late ghost,
+         * not four independent random snare and hat retriggers. */
+        if(d->genre==3u || d->genre==5u) {
+            if(s->complexity>=2u)out[0]|=0x2000u;
+            if(s->complexity>=3u)out[1]|=0x4000u;
+        } else for(unsigned step=12u;step<16u;step++) {
             if((urban_rng(&r)%100u)<g.extras*s->complexity/2u) out[1]|=(uint16_t)(1u<<step);
             if((urban_rng(&r)%100u)<hg.extras*s->complexity)out[3]|=(uint16_t)(1u<<step);
         }
