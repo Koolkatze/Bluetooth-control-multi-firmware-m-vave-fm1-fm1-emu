@@ -26,6 +26,8 @@ extern volatile uint32_t urban_sfx_rendered_events;
 void urban_piano_roll_arm(const uint8_t *notes,unsigned count,unsigned gap_ms);
 void urban_piano_roll_stop(void);
 void urban_jazz_programs(unsigned chord,unsigned lead);
+extern uint8_t urban_jazz_chord_mode,urban_jazz_lead_mode;
+extern volatile uint32_t urban_jazz_note_onsets,urban_jazz_rendered_frames;
 extern volatile uint32_t urban_piano_note_onsets;
 extern volatile uint32_t urban_piano_rolled_chords;
 
