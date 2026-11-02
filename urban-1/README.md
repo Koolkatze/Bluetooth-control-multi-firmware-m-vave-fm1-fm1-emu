@@ -40,9 +40,40 @@ No Android APK changes or reinstallations are necessary. **Not a finished commer
 - **FX**: mute, **GLO**: solo, **EDIT**: lock track against regeneration.
 - Song harmonic progression and all other track-generation seeds remain
   unchanged during a one-track regeneration.
-- Current FM-1/HYP DSP voices: 6 drum lanes, bass/drone, lead/acid,
-  chord/pad. Tracks 5–7 are logical tracks but **not independent audible
-  synth voices**. Independent voice count is a hardware/audio-engine task.
+- Actual HYP DSP voices: six drum lanes, bass/drone, lead/acid,
+  chord/pad, atmospheric noise (track 6), and now a **separate procedural
+  Sound FX voice (track 7)**. Track 8 ("Extra 2") remains reserved.
+- **Sound FX** obeys individual genre, subgenre, regeneration, mute and solo.
+  No existing drum, bass, lead, pad or atmosphere track was removed.
+- On **FX** or **EDIT**, turn **ALGORITHM** to page **7/8 Sound FX**
+  (master is page 0), then adjust four live knobs: **Sound** (-1 AUTO
+  palette / ten manual types), **Level**, **Length**, **Density**.
+  Automatic style selection follows the chosen genre/subgenre.
+
+## Sound FX track (v0.4.0)
+
+Track 7 is now an actual audible synth layer with its **own HYP DSP**
+voice, not a sample name in a playlist. Its ten procedural FX are:
+vinyl scratch, tape stop, reverse swell, sub impact, dub siren,
+glitch zap, noise riser, downlifter, vinyl pop, and air whoosh.
+There are **56 dedicated primary/secondary FX choices** across the
+14 genre families and 4 subgenres. For example Boom Bap uses scratch /
+vinyl pop, G-Funk dub siren / tape stop, underground dusty scratches,
+Trip-hop reversed sweeps, Trap drops/risers and Dubstep impacts/downlifters.
+
+The cues are quantized to the 16-step grid and placed deliberately at
+phrase boundaries, transitions and selected late-bar moments. They are
+not a stream of random fills. A track's sequence seed determines its
+variations and regenerates with SAVE; its LOCK prevents regeneration.
+FX/EDIT expose manual SOUND, LEVEL, LENGTH and DENSITY control on
+Sound FX's separate track page (ALGORITHM). Level or density 0 silences
+new effects; mute and solo work as on the other tracks.
+
+**Limitation:** these are *synthesized* approximations of effects, not
+commercial scratch/crowd/foley recordings. One dedicated monophonic SFX
+voice plays at a time to stay within the FM-1's resources. SFX timing
+is tied to the HYP audio transport; the native FM-1 host and emulator
+still need subjective listening validation on the user's device.
 
 ## Genre implementation (14 genre families, four named substyles each)
 
