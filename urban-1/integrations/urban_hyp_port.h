@@ -192,7 +192,13 @@ static void urban_port_generate(void) {
     UrbanSong *s=&p->rt.ui.song;
     uint8_t song_generate=(uint8_t)(p->rt.ui.page==URBAN_PAGE_SONG);
     if(song_generate && s->playing)en_play(0);
-    urban_runtime_generate(&p->rt);
+    /* A different take for every SAVE press, including fast repeated taps
+     * in the Android emulator. UI serial is always distinct; plat_ms and
+     * current engine clock additionally randomize timing-dependent gestures.
+     * No 24-ms hardware ADC RNG read is needed while audio plays. */
+    uint32_t entropy=urban_mix_seed((uint32_t)plat_ms() ^
+          (en_bars*0x9e3779b9u) ^ p->rt.ui.generation_serial);
+    urban_runtime_generate_entropy(&p->rt,entropy);
     if(song_generate) {
         urban_port_release();
         p->rt.transport.step=0;
