@@ -12,6 +12,7 @@
 #include "urban/urban_style.h"
 #include "urban/urban_instruments.h"
 #include "urban/urban_chord_score.h"
+#include "urban/urban_mix.h"
 
 typedef struct {
     UrbanRuntime rt;
@@ -143,9 +144,18 @@ static void urban_port_sound_profile(void) {
     int rvb=(int)overall.reverb+(int)((color_rng>>8)%13u)-6;
     if(drv<0)drv=0;if(drv>100)drv=100;
     if(rvb<0)rvb=0;if(rvb>100)rvb=100;
-    en_set(P_DRIVE,drv);
-    en_set(P_REVERB,rvb);
-    en_set(P_ECHO,overall.echo);
+    UrbanMixPlan initial=urban_mix_plan(s,s->current,urban_phrase_bar(s));
+    en_set(P_DRIVE,drv<=(int)initial.drive?drv:initial.drive);
+    en_set(P_REVERB,rvb<=(int)initial.reverb?rvb:initial.reverb);
+    en_set(P_ECHO,initial.echo);
+    /* Per-lane trims: snare/clap/hats must not all be mixed at kit 100.
+     * In HYP-1 these trims are distinct from global P_PULSE. */
+    en_set(P_LANE_LVL(0),initial.kick);
+    en_set(P_LANE_LVL(1),initial.snare);
+    en_set(P_LANE_LVL(2),initial.clap);
+    en_set(P_LANE_LVL(3),initial.hat);
+    en_set(P_LANE_LVL(4),initial.open);
+    en_set(P_LANE_LVL(5),initial.perc);
     en_set(P_NZ_COLOR,atmosphere.noise_color);
     en_set(P_NZ_TONE,s->genre<=2u?25:52);
     en_set(P_NZ_PUMP,s->genre==8u||s->genre==10u?55:24);
@@ -161,33 +171,27 @@ static void urban_port_sound_profile(void) {
     en_set(P_BRIGHT,brightness);
     en_set(P_PE_ATK,pad.pad==7u||pad.pad==3u?36:12);
     en_set(P_PE_REL,pad.pad==7u||pad.pad==3u?72:40);
-    en_set(P_NOISE,s->tracks[5].muted?0:atmosphere.noise_amount);
+    /* Noise fader belongs to the same headroom-controlled mix as the
+     * other layers, not a separately unbounded atmospheric constant. */
 }
 /* Song sections are actually orchestrated: the intro/bridge/break strip
  * layers, a hook raises melodic energy, and the drop restores full drums.
  * Repeated hooks keep identical motifs and balanced synthesis settings.
  */
-static void urban_port_section_mix(void) {
+static void urban_port_mix_levels(void) {
     const UrbanSong *s=&urban_port.rt.ui.song;
-    /* Change timbres on section boundaries, not at every note.
-     * The eight-bar hook reprise uses the same seed and patch. */
+    UrbanMixPlan m=urban_mix_plan(s,s->current,urban_phrase_bar(s));
+    en_set(P_PULSE,m.drums);
+    en_set(P_BASS,m.bass);
+    en_set(P_ACID,m.lead);
+    en_set(P_PAD,m.chords);
+    en_set(P_NOISE,m.noise);
+}
+static void urban_port_section_mix(void) {
+    /* Programme changes at SECTION boundaries; the lead volume may also
+     * be muted for intentionally silent BARs, updated in port_step. */
     urban_port_sound_profile();
-    static const uint8_t levels[URBAN_SEQUENCES][4]={
-        /* drums, bass, lead, pad */
-        {30,39,25,55}, /* Intro */
-        {75,77,53,45}, /* Verse A */
-        {86,86,79,66}, /* Hook */
-        {77,79,61,48}, /* Verse B */
-        {29,48,34,73}, /* Bridge */
-        {94,94,86,65}, /* Drop */
-        {16,34,19,67}, /* Break */
-        {34,42,27,46}  /* Outro */
-    };
-    unsigned sec=s->current%URBAN_SEQUENCES;
-    en_set(P_PULSE,levels[sec][0]);
-    en_set(P_BASS,levels[sec][1]);
-    en_set(P_ACID,levels[sec][2]);
-    en_set(P_PAD,levels[sec][3]);
+    urban_port_mix_levels();
 }
 static void urban_port_generate(void) {
     UrbanHypPort *p=&urban_port;
@@ -297,6 +301,7 @@ static void urban_port_step(void) {
     if(p->rt.transport.step==URBAN_STEPS-1u)
         urban_port_stage_pattern();
     uint8_t previous=p->rt.ui.song.current;
+    unsigned previous_bar=urban_phrase_bar(&p->rt.ui.song);
     urban_runtime_tick(&p->rt,&frame);
     /* URBAN's 96 PPQN clock is advanced 24 ticks per HYP sixteenth;
      * capture the initial event before its empty intermediate ticks. */
@@ -309,6 +314,8 @@ static void urban_port_step(void) {
     for(i=2;i<=3;i++)
         urban_port_note(i,frame.event[i],frame.glide[i]);
     if(p->rt.ui.song.current!=previous)urban_port_section_mix();
+    else if(urban_phrase_bar(&p->rt.ui.song)!=previous_bar)
+        urban_port_mix_levels();
 }
 static void urban_port_poll(void) {
     UrbanHypPort *p=&urban_port;
