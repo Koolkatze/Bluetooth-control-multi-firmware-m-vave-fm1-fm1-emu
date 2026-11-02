@@ -85,8 +85,8 @@ urban_trance_test: urban_trance_test.c urban_lead.h urban_music.h urban_song.h
 urban_scales_test: urban_scales_test.c urban_scales.h urban_song.h urban_harmony.h urban_bass.h urban_music.h urban_ui.h
 	$(CC) $(CFLAGS) -o $@ urban_scales_test.c
 
-urban_groove_v2_test urban_jazz_test: urban_groove_v2_test urban_jazz_test.c urban_bass.h urban_chord_score.h urban_rhythm.h urban_song.h
-	$(CC) $(CFLAGS) -o $@ urban_groove_v2_test urban_jazz_test.c
+urban_groove_v2_test: urban_groove_v2_test.c urban_bass.h urban_chord_score.h urban_rhythm.h urban_song.h
+	$(CC) $(CFLAGS) -o $@ urban_groove_v2_test.c
 
 urban_jazz_test: urban_jazz_test.c urban_instruments.h urban_song.h
 	$(CC) $(CFLAGS) -o $@ urban_jazz_test.c
