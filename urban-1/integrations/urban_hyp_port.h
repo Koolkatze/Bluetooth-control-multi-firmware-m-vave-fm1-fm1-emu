@@ -475,9 +475,16 @@ static void urban_port_frame(void) {
     char bar[12]="BAR 01/56";
     char phrase[20]="BAR 1/4 (LOOP)";
     char trnum[14]="TRACK 1/8";
+    char take[20]="STOPPED   TAKE 00";
     unsigned tr;
     urban_port_input();
     tr=p->rt.ui.selected_track;
+    if(s->playing) {
+        take[0]='P';take[1]='L';take[2]='A';take[3]='Y';
+        take[4]='I';take[5]='N';take[6]='G';
+    }
+    take[15]=(char)('0'+(p->rt.ui.generation_serial/10u)%10u);
+    take[16]=(char)('0'+p->rt.ui.generation_serial%10u);
     seq[4]=(char)('A'+s->current);
     seq[13]=(char)('A'+s->queued);
     phrase[4]=(char)('1'+urban_phrase_bar(s));
@@ -497,7 +504,7 @@ static void urban_port_frame(void) {
         draw_text_box(0,128,240,&FONT_S,
               urban_style_name(s->genre,s->subgenre),C_WHITE,1);
         draw_text_box(0,148,240,&FONT_S,
-              s->playing?"PLAYING":"STOPPED",RGB(255,165,110),1);
+              take,RGB(255,165,110),1);
         if(s->song_mode) {
             lcd_fill(15,168,210,5,RGB(49,55,70));
             lcd_fill(15,168,(int)(210u*n/s->arrangement_len),5,RGB(255,165,110));
