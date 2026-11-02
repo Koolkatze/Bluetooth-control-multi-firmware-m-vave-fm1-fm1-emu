@@ -17,6 +17,7 @@ import android.content.res.Configuration;
 import android.graphics.Insets;
 import android.media.AudioManager;
 import android.media.AudioDeviceInfo;
+import android.media.AudioDeviceCallback;
 import android.media.midi.MidiDevice;
 import android.media.midi.MidiDeviceInfo;
 import android.media.midi.MidiOutputPort;
@@ -63,6 +64,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Fully offline FM-1 emulator shell.
@@ -104,6 +108,22 @@ public final class MainActivity extends Activity {
     private boolean shuttingDown = false;
     private volatile boolean nativeActive = false;
 
+    // A Bluetooth/USB route switch invalidates an AAudio stream, NOT the
+    // FM-1 firmware. Recover the audio stream on a background thread so
+    // Bluetooth and dialogs cannot block the main UI or firmware worker.
+    private AudioManager outputAudioManager;
+    private AudioDeviceCallback outputDeviceCallback;
+    private final ExecutorService routeWorker = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "FM1-AAudio-Route-Recovery");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final AtomicBoolean recoveringAudio = new AtomicBoolean(false);
+    private long lastAudioCallbackCount = -1L;
+    private int stoppedAudioChecks = 0;
+    private int audioRecoveryFailures = 0;
+    private long lastAudioRecoveryAttemptMs = 0L;
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -123,6 +143,8 @@ public final class MainActivity extends Activity {
                     View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         }
         midiManager = (MidiManager) getSystemService(MIDI_SERVICE);
+        outputAudioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
+        registerOutputDeviceMonitor();
         Log.i(TAG, "Rust AAudio native library loaded: " + NativeSynth.AVAILABLE);
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
 
@@ -520,6 +542,121 @@ public final class MainActivity extends Activity {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 
+    /** Register once: Android reports audio output additions/removals when
+     * Bluetooth A2DP, SCO, USB DAC and speaker routes change. The callback
+     * only posts a DEBOUNCED request; it never restarts the whole emulator. */
+    private void registerOutputDeviceMonitor() {
+        if (!NativeSynth.AVAILABLE || outputAudioManager == null) return;
+        outputDeviceCallback = new AudioDeviceCallback() {
+            @Override
+            public void onAudioDevicesAdded(AudioDeviceInfo[] devices) {
+                if (containsOutput(devices)) scheduleAudioRouteRecovery("salida de audio conectada");
+            }
+            @Override
+            public void onAudioDevicesRemoved(AudioDeviceInfo[] devices) {
+                if (containsOutput(devices)) scheduleAudioRouteRecovery("salida de audio desconectada");
+            }
+        };
+        outputAudioManager.registerAudioDeviceCallback(outputDeviceCallback, ui);
+        ui.postDelayed(audioRouteWatchdog, 1000);
+    }
+
+    private static boolean containsOutput(AudioDeviceInfo[] devices) {
+        if (devices == null) return false;
+        for (AudioDeviceInfo device : devices)
+            if (device != null && device.isSink()) return true;
+        return false;
+    }
+
+    private void scheduleAudioRouteRecovery(String reason) {
+        if (shuttingDown || !nativeActive || !NativeSynth.AVAILABLE) return;
+        Log.i(TAG, "AAudio route change: " + reason);
+        ui.removeCallbacks(reopenAudioRoute);
+        // Bluetooth negotiates A2DP/SCO routes asynchronously. Wait for the
+        // new output to stabilize, then reopen without rebooting firmware.
+        ui.postDelayed(reopenAudioRoute, 650);
+    }
+
+    private final Runnable reopenAudioRoute = () -> {
+        if (shuttingDown || !nativeActive || !NativeSynth.AVAILABLE) return;
+        if (!recoveringAudio.compareAndSet(false, true)) {
+            ui.postDelayed(reopenAudioRoute, 550);
+            return;
+        }
+        lastAudioRecoveryAttemptMs = android.os.SystemClock.uptimeMillis();
+        routeWorker.execute(() -> {
+            String result;
+            try {
+                result = NativeSynth.recoverAudio();
+            } catch (Throwable error) {
+                result = "ERROR:" + error;
+            }
+            final String response = result;
+            ui.post(() -> {
+                recoveringAudio.set(false);
+                if (shuttingDown || !nativeActive) return;
+                if (response != null && response.startsWith("OK:")) {
+                    audioRecoveryFailures = 0;
+                    stoppedAudioChecks = 0;
+                    lastAudioCallbackCount = -1;
+                    Log.i(TAG, "AAudio route restored at " + response.substring(3)
+                            + " Hz; FM-1 firmware session preserved");
+                    updateStatus("Salida de audio reconectada (" +
+                            response.substring(3) + " Hz). Firmware intacto.");
+                } else {
+                    audioRecoveryFailures++;
+                    Log.w(TAG, "AAudio device switch failed; retry "
+                            + audioRecoveryFailures + ": " + response);
+                    updateStatus("Reconectando audio… " + response);
+                    // Bluetooth can take several seconds to finish negotiating.
+                    if (audioRecoveryFailures <= 6)
+                        ui.postDelayed(reopenAudioRoute,
+                                Math.min(3000, 500 * audioRecoveryFailures));
+                }
+            });
+        });
+    };
+
+    // Some Android versions stop calling AAudio without notifying the
+    // AudioDeviceCallback. Also watch its native error flag and actual
+    // callback activity. No busy loop or audio-thread calls are involved.
+    private final Runnable audioRouteWatchdog = new Runnable() {
+        @Override public void run() {
+            if (shuttingDown) return;
+            if (nativeActive && NativeSynth.AVAILABLE) {
+                try {
+                    long health = NativeSynth.audioHealth();
+                    long callbacks = health >>> 2;
+                    boolean badStream = (health & 3L) != 0;
+                    if (callbacks == lastAudioCallbackCount) stoppedAudioChecks++;
+                    else {
+                        lastAudioCallbackCount = callbacks;
+                        stoppedAudioChecks = 0;
+                    }
+                    if (badStream || stoppedAudioChecks >= 4) {
+                        long now = android.os.SystemClock.uptimeMillis();
+                        // Prevent an error loop from constantly churning
+                        // streams on a device without a usable output.
+                        if (!recoveringAudio.get() &&
+                                now - lastAudioRecoveryAttemptMs >=
+                                (audioRecoveryFailures > 6 ? 10000L : 1200L)) {
+                            scheduleAudioRouteRecovery(
+                                    badStream ? "AAudio desconectado" :
+                                            "sin llamadas de audio durante 4 s");
+                            stoppedAudioChecks = 0;
+                        }
+                    }
+                } catch (UnsatisfiedLinkError error) {
+                    Log.w(TAG, "AAudio watchdog unavailable", error);
+                }
+            } else {
+                lastAudioCallbackCount = -1L;
+                stoppedAudioChecks = 0;
+            }
+            ui.postDelayed(this, 1000);
+        }
+    };
+
     /** This bridge is available only to the packaged, origin-restricted local page. */
     public final class NativeBridge {
         @JavascriptInterface
@@ -561,6 +698,11 @@ public final class MainActivity extends Activity {
                 String result = NativeSynth.boot(packageBytes, clockMhz, fingerprint,
                         getFilesDir().getAbsolutePath());
                 nativeActive = result != null && result.startsWith("OK:");
+                if (nativeActive) {
+                    lastAudioCallbackCount = -1L;
+                    stoppedAudioChecks = 0;
+                    audioRecoveryFailures = 0;
+                }
                 runOnUiThread(() -> {
                     if (nativeActive) {
                         updateStatus("Rust + AAudio: " + result.substring(3) + " Hz · audio nativo activo");
@@ -618,6 +760,7 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public void stopNative() {
+            ui.removeCallbacks(reopenAudioRoute);
             if (NativeSynth.AVAILABLE) NativeSynth.stop();
             nativeActive = false;
             runOnUiThread(() -> {
@@ -917,6 +1060,11 @@ public final class MainActivity extends Activity {
     protected void onDestroy() {
         shuttingDown = true;
         if (firmwareUpdater != null) firmwareUpdater.close();
+        ui.removeCallbacks(reopenAudioRoute);
+        ui.removeCallbacks(audioRouteWatchdog);
+        if (outputAudioManager != null && outputDeviceCallback != null)
+            outputAudioManager.unregisterAudioDeviceCallback(outputDeviceCallback);
+        routeWorker.shutdown();
         if (NativeSynth.AVAILABLE) NativeSynth.stop();
         nativeActive = false;
         stopBleScan();
