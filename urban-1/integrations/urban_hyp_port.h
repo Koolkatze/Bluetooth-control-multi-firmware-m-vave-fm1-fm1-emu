@@ -590,6 +590,10 @@ static int urban_port_editor_value(int id) {
     if(id==UC_KEY)return s->key;
     if(id==UC_SCALE)return s->scale;
     if(id==UC_COMPLEX)return s->complexity;
+    if(id==UC_SFX_SOUND)return urban_port.sfx_type_override;
+    if(id==UC_SFX_LEVEL)return urban_port.sfx_level;
+    if(id==UC_SFX_LENGTH)return urban_port.sfx_length;
+    if(id==UC_SFX_DENSITY)return urban_port.sfx_density;
     int bit=urban_editor_special_bit(id);
     if(bit>=0)return (int)((ed->performance_mask>>(unsigned)bit)&1u);
     if(id>=0 && id<P_NPARAMS)
@@ -646,6 +650,9 @@ static void urban_port_editor_write(int id,int delta) {
     else if(id==UC_KEY){hi=11;}
     else if(id==UC_SCALE){hi=URBAN_SCALE_COUNT-1;}
     else if(id==UC_COMPLEX){hi=3;}
+    else if(id==UC_SFX_SOUND){lo=-1;hi=URBAN_SFX_COUNT-1;}
+    else if(id==UC_SFX_LEVEL || id==UC_SFX_LENGTH ||
+            id==UC_SFX_DENSITY){hi=100;}
     else if(urban_editor_special_bit(id)>=0){hi=1;}
     int value=old+delta;
     if(value<lo)value=lo;
@@ -670,6 +677,14 @@ static void urban_port_editor_write(int id,int delta) {
     } else if(id==UC_COMPLEX) {
         s->complexity=(uint8_t)value;
         urban_port_editor_refresh_notes();
+    } else if(id==UC_SFX_SOUND) {
+        urban_port.sfx_type_override=(int8_t)value;
+    } else if(id==UC_SFX_LEVEL) {
+        urban_port.sfx_level=(uint8_t)value;
+    } else if(id==UC_SFX_LENGTH) {
+        urban_port.sfx_length=(uint8_t)value;
+    } else if(id==UC_SFX_DENSITY) {
+        urban_port.sfx_density=(uint8_t)value;
     } else {
         int bit=urban_editor_special_bit(id);
         if(bit>=0) {
