@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Playable four-voice chords, Generate reproducibly changes score, no APK.
+expect playing 0
+expect urbantake 0
+tap PLAY
+wait 330
+expect playing 1
+expect urbanchord >1
+expect urbanscale <10
+tap SAVE
+wait 400
+expect urbantake 1
+expect urbanchord >1
+tap SAVE
+wait 400
+expect urbantake 2
+expect urbanchord >1
+shot novel-composition.png
+tap PLAY
+wait 100
+expect playing 0
+expect urbanchord 0
