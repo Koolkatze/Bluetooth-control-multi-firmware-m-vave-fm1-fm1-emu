@@ -48,6 +48,15 @@ def main() -> None:
                     root / "firmware/src/app/urban_editor.h")
     shutil.copyfile(HERE / "integrations/urban_hyp_port.h",
                     root / "firmware/src/app/urban_hyp_port.h")
+    # HYP-1's Break kit applies random ghost kicks/snares and 32nd-roll
+    # retriggers *after* reading the six authored pattern lanes. These
+    # unscored hits sound like glitches in URBAN-1, where all fills and
+    # ratchets must come from the subgenre's explicit drum score.
+    # Keep the kit's tone, drive, crusher and decay: disable ONLY its
+    # autonomous stochastic chop for this URBAN-1 integration.
+    replace_once(root / "firmware/src/dsp/amb.c",
+        'const float chop = KK->chop * (0.4f + 0.6f * evolve);',
+        'const float chop = 0.0f; /* URBAN: no stochastic kit retriggers */')
     # One shared port implementation in both the FM-1 and HYP-1 host simulator.
     replace_once(root / "firmware/src/main.c",
         '#include "app/main_fm1.c"',
