@@ -76,6 +76,10 @@ def main() -> None:
         '    else if (!strcmp(what, "sixteenths"))',
         '    else if (!strcmp(what, "urbanmode")) got = urban_port.rt.ui.song.song_mode;\n'
         '    else if (!strcmp(what, "urbansub")) got = urban_port.rt.ui.song.subgenre;\n'
+        '    else if (!strcmp(what, "urbanroot1")) got = urban_port.rt.ui.song.chord_degrees[1];\n'
+        '    else if (!strcmp(what, "urbandrumkick")) got = urban_groove(urban_port.rt.ui.song.tracks[0].genre, urban_port.rt.ui.song.tracks[0].subgenre).kick;\n'
+        '    else if (!strcmp(what, "urbanbasssub")) got = urban_port.rt.ui.song.tracks[2].subgenre;\n'
+        '    else if (!strcmp(what, "urbanbasssound")) got = urban_instrument_program(&urban_port.rt.ui.song,2u,urban_port.rt.ui.song.current).patch.bass;\n'
         '    else if (!strcmp(what, "urbanphrase")) got = urban_phrase_bar(&urban_port.rt.ui.song);\n'
         '    else if (!strcmp(what, "urbanchord")) got = urban_port.chord_count;\n'
         '    else if (!strcmp(what, "urbantake")) got = urban_port.rt.ui.generation_serial;\n'
