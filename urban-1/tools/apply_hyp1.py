@@ -58,6 +58,8 @@ def main() -> None:
                     root / "firmware/src/app/urban_piano_roll_engine.h")
     shutil.copyfile(HERE / "integrations/urban_jazz_engine.h",
                     root / "firmware/src/app/urban_jazz_engine.h")
+    shutil.copyfile(HERE / "integrations/urban_echo_engine.h",
+                    root / "firmware/src/app/urban_echo_engine.h")
     # HYP-1's Break kit applies random ghost kicks/snares and 32nd-roll
     # retriggers *after* reading the six authored pattern lanes. These
     # unscored hits sound like glitches in URBAN-1, where all fills and
@@ -99,7 +101,8 @@ def main() -> None:
     replace_once(dsp,
         'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];',
         'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];\n'
-        '#include "../app/urban_jazz_engine.h"')
+        '#include "../app/urban_jazz_engine.h"\n'
+        '#include "../app/urban_echo_engine.h"')
     replace_once(dsp,
         'static void render_pad(uint32_t n)\n{',
         'static void render_pad(uint32_t n)\n{\n'
@@ -119,6 +122,15 @@ def main() -> None:
     replace_once(dsp,
         '    render_acid(n);\n    render_noise(n);',
         '    render_acid(n);\n    urban_jazz_render(n);\n    render_noise(n);')
+    # Shared Echo and Throw use the same actual DRY master mix at distinct
+    # gains. Upstream Echo only feeds extremely faint per-voice esend,
+    # which made the knob ineffective in actual songs despite the P_ECHO
+    # register responding. Preserve tape/Echoplex delay and wet mix.
+    replace_once(dsp,
+        '        echoes(esend[j] * eg + throw_amt * 0.5f * (mixl[j] + mixr[j]), &el, &er, &xl, &xr);',
+        '        echoes(urban_echo_bus_input(mixl[j],mixr[j],esend[j],eg,throw_amt),'
+        ' &el, &er, &xl, &xr);\n'
+        '        urban_echo_tap_meter(el,er,eg,throw_amt);')
     # New monophonic procedural SFX audio voice: 10 modelled transients.
     # The engine lives inside HYP's DSP mix; no stolen drum/lead lanes.
     # Include after the mixer buffers and sine oscillator have been defined.
@@ -220,6 +232,9 @@ def main() -> None:
         '    else if (!strcmp(what, "urbanview")) got = urban_port.editor.view;\n'
         '    else if (!strcmp(what, "urbantarget")) got = urban_port.editor.target;\n'
         '    else if (!strcmp(what, "urbanbank")) got = urban_port.editor.bank;\n'
+        '    else if (!strcmp(what, "urbanfxechosend")) got = urban_echo_normal_input_frames;\n'
+        '    else if (!strcmp(what, "urbanfxechowet")) got = urban_echo_normal_tap_frames;\n'
+        '    else if (!strcmp(what, "urbanfxthrowsend")) got = urban_echo_throw_input_frames;\n'
         '    else if (!strcmp(what, "urbanfxecho")) got = urban_port_editor_value(P_ECHO);\n'
         '    else if (!strcmp(what, "urbanfxreverb")) got = urban_port_editor_value(P_REVERB);\n'
         '    else if (!strcmp(what, "urbanfxoverride")) got = urban_port.editor.changed[P_ECHO];\n'
