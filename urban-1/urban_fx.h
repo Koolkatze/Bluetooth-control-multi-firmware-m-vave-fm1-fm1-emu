@@ -136,6 +136,22 @@ static UrbanFxPlan urban_fx_plan(const UrbanSong *s) {
         f.lead_accent=(uint8_t)(14u+ls*3u);
         f.lead_resonance=(uint8_t)(14u+ls*2u);
     }
+    if(lg==12u) {
+        /* Trance lead engine is not one resonant legato patch for all.
+         * Psy/Tech require short plucks, Progressive a softer offbeat,
+         * and Uplifting broad but distinct note attacks. Long slide and
+         * huge release formerly smudged the note attacks across drums. */
+        static const uint8_t env[4]={34u,56u,42u,36u};
+        static const uint8_t dec[4]={43u,59u,20u,27u};
+        static const uint8_t slide[4]={8u,15u,5u,6u};
+        static const uint8_t acc[4]={23u,40u,52u,38u};
+        static const uint8_t res[4]={25u,35u,44u,32u};
+        f.lead_env=env[ls];
+        f.lead_decay=dec[ls];
+        f.lead_slide=slide[ls];
+        f.lead_accent=acc[ls];
+        f.lead_resonance=res[ls];
+    }
     if(dg==3u || dg==5u) {
         f.snare_decay=(uint8_t)(31u+ds*3u);
         /* Exact HYP Bristol Trip-hop kick envelope and clean gain;
