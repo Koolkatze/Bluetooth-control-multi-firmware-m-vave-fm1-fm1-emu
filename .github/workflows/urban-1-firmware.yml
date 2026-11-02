@@ -7,7 +7,7 @@ on:
       - '.github/workflows/urban-1-firmware.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -51,9 +51,9 @@ jobs:
         run: |
           python3 urban-1/tools/apply_hyp1.py --hyp-root hyp1
           cd hyp1
-          ./build.sh --release 0.1.0
-          test -s build/amb-0.1.0.fwsc
-          cp build/amb-0.1.0.fwsc build/URBAN-1-0.1.0-EXPERIMENTAL.fwsc
+          ./build.sh --release 0.2.0
+          test -s build/amb-0.2.0.fwsc
+          cp build/amb-0.1.0.fwsc build/URBAN-1-v0.2.0-SONG4-LOOP.fwsc
       - name: Verify package with HYP-1 updater tests
         run: |
           cd hyp1
@@ -64,6 +64,29 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: URBAN-1-experimental-fm1-not-hardware-tested
+          name: URBAN-1-v0.2.0-firmware-only
           path: hyp1/build/URBAN-1-0.1.0-EXPERIMENTAL.fwsc
           if-no-files-found: error
+
+      - name: Publish permanent firmware-only download (GitHub Releases)
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          fw="hyp1/build/URBAN-1-v0.2.0-SONG4-LOOP.fwsc"
+          test -s "$fw"
+          (cd hyp1/build && sha256sum URBAN-1-v0.2.0-SONG4-LOOP.fwsc > SHA256SUMS-URBAN1-v0.2.0.txt)
+          tag="urban1-firmware-v0.2.0"
+          notes="Firmware-only release for M-VAVE FM-1 and the existing Android FM-1 emulator. No APK update needed. Song Mode: 56 bars and four-bar A-H phrases (64 sixteenths per phrase); LOOP: repeat current four-bar phrase indefinitely and change A-H at the next one-bar boundary; KNOB3 picks the song subgenre (SELECT picks key); 56 genre-specific synth/drum/FX patches, 14 grooves, harmony and section-aware orchestration. Experimental GPL-3.0 HYP-1-based firmware: 8 logical tracks but only HYP-1's existing drum, bass, lead and pad audio engines; 16-step drum timing cannot represent hi-hat subdivisions faster than 16ths. Validated by host integration, native C tests, cross-compile and updater package checks; not physically tested. Import the .fwsc into the emulator firmware picker."
+          if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.2.0.txt --repo "$GH_REPO" --clobber
+          else
+            gh release create "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.2.0.txt \
+              --repo "$GH_REPO" --target "$GITHUB_SHA" \
+              --title "URBAN-1 firmware v0.2.0 – Song 4-bar + Loop + genre patches" \
+              --notes "$notes" --prerelease
+          fi
+          gh release view "$tag" --repo "$GH_REPO" --json assets,url \
+            --jq '.url, (.assets[] | .name + " " + .url)'
