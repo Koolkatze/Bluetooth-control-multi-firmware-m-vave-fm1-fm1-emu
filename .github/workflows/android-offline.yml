@@ -117,6 +117,18 @@ jobs:
           This Android APK includes offline FM-1 firmware emulation, native
           Rust/AAudio synthesis and MIDI USB/BLE support.
 
+          In v0.2.7, fixes a firmware-update persistence issue:
+          the original APK's bundled catalog could display URBAN-1 v0.3.4
+          again on app restart even after installing a newer .fwsc.
+          The UI now restores version badges from Android's persistent
+          installed.json, loads valid installed packages before old
+          IndexedDB snapshots, refuses silent fallback to stale firmware
+          when a saved update is corrupt, and validates local files.
+          The updater can redownload a package when its URL changes even
+          if its version does not. The new APK bundles the current
+          URBAN-1 v0.3.9 firmware if available at packaging time.
+          This is an emulator-only update, not a hardware flash.
+
           In v0.2.5 the Firmware tab adds two explicit update actions:
           "Actualizar seleccionado" checks the chosen firmware, while
           "Actualizar todos" checks all built-in open-source firmwares.
