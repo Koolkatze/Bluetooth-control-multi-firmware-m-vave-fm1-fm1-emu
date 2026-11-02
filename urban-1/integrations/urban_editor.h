@@ -18,9 +18,10 @@ enum {
     UC_GATE16, UC_GATE8, UC_CRUSH, UC_THROW, UC_LOWPASS,
     UC_HIGHPASS, UC_REVERSE, UC_FILL, UC_STOP,
     UC_REPEAT4, UC_REPEAT8, UC_SFX_SOUND, UC_SFX_LEVEL,
-    UC_SFX_LENGTH, UC_SFX_DENSITY, UC_TAPE_TRANSPORT
+    UC_SFX_LENGTH, UC_SFX_DENSITY, UC_TAPE_TRANSPORT,
+    UC_LEAD_LFO_RATE, UC_LEAD_LFO_DEPTH
 };
-#define URBAN_EDITOR_CUSTOM_LAST UC_TAPE_TRANSPORT
+#define URBAN_EDITOR_CUSTOM_LAST UC_LEAD_LFO_DEPTH
 typedef struct {
     const char *title;
     int16_t param[4];
@@ -138,7 +139,7 @@ static const UrbanEditorBank urban_lfo_pad[]={
     {"PAD LFO", {P_PL_RATE,P_PL_DEPTH,P_PL_SHAPE,P_PL_DEST}}
 };
 static const UrbanEditorBank urban_lfo_lead[]={
-    {"LEAD FILTER / SWEEP", {P_AC_CUT,P_AC_ENV,P_AC_RES,P_AC_DEC}}
+    {"LEAD LFO CUTOFF", {UC_LEAD_LFO_RATE,UC_LEAD_LFO_DEPTH,P_AC_CUT,P_AC_RES}}
 };
 #define UE_SIZE(a) ((unsigned)(sizeof(a)/sizeof((a)[0])))
 static const UrbanEditorBank *urban_editor_banks(
@@ -228,6 +229,8 @@ static const char *urban_editor_label(int id) {
       case UC_FILL:return "FILL";
       case UC_STOP:return "STOP";
       case UC_TAPE_TRANSPORT:return "PLAY TAPE";
+      case UC_LEAD_LFO_RATE:return "LFO RATE";
+      case UC_LEAD_LFO_DEPTH:return "LFO DEPTH";
       case UC_REPEAT4:return "RPT 1/4";
       case UC_REPEAT8:return "RPT 1/8";
       case UC_SFX_SOUND:return "SFX SOUND";
