@@ -1,12 +1,13 @@
 # Experimental physical FM-1 controller firmware. This is NOT the Android APK.
 # Never flashes hardware. APK updates cannot install a physical FM-1 firmware.
-name: Build Workbench Remote for physical FM-1 (experimental)
+name: Build Blackhole Remote MIDI controller for physical FM-1 (experimental)
 
 on:
   workflow_dispatch:
   push:
     paths:
       - "tools/patch_ctl1_workbench.py"
+      - "tools/blackhole_remote_display.inc"
       - ".github/workflows/ctl1-workbench-remote.yml"
 
 permissions:
@@ -42,18 +43,23 @@ jobs:
           cd build/ctl1-upstream
           ./build.sh --no-ble
         )
-        cp build/ctl1-upstream/app/build/ctl-usb.fwsc build/physical-fm1-remote/Workbench-Remote-USB-EXPERIMENTAL.fwsc
+        cp build/ctl1-upstream/app/build/blackhole-usb.fwsc build/physical-fm1-remote/Blackhole-Remote-USB-EXPERIMENTAL.fwsc
         (
           cd build/ctl1-upstream
           ./build.sh
         )
-        cp build/ctl1-upstream/app/build/ctl.fwsc build/physical-fm1-remote/Workbench-Remote-BLE-EXPERIMENTAL.fwsc
+        cp build/ctl1-upstream/app/build/blackhole.fwsc build/physical-fm1-remote/Blackhole-Remote-BLE-EXPERIMENTAL.fwsc
       test: |
         set -euo pipefail
         python3 -m py_compile tools/patch_ctl1_workbench.py
-        test -s build/physical-fm1-remote/Workbench-Remote-USB-EXPERIMENTAL.fwsc
-        test -s build/physical-fm1-remote/Workbench-Remote-BLE-EXPERIMENTAL.fwsc
+        test -s build/physical-fm1-remote/Blackhole-Remote-USB-EXPERIMENTAL.fwsc
+        test -s build/physical-fm1-remote/Blackhole-Remote-BLE-EXPERIMENTAL.fwsc
         grep -q 'wb_remote_input();' build/ctl1-upstream/app/ui.c
         grep -q '#define WB_REMOTE_ONLY 1' build/ctl1-upstream/app/ui.c
         grep -q '102u, 42u' build/ctl1-upstream/app/ui.c
+        grep -q 'bh_remote_keyboard' build/ctl1-upstream/app/blackhole_remote_display.inc
+        grep -q 'bh_remote_leds' build/ctl1-upstream/app/blackhole_remote_display.inc
+        grep -q 'int plat_battery_percent(void)' build/ctl1-upstream/base/device/plat_fm1.c
+        grep -q 'int plat_usb_midi_connected(void)' build/ctl1-upstream/base/device/plat_fm1.c
+        grep -q 'BLACKHOLE REMOTE' build/ctl1-upstream/app/app.h
       packages: build/physical-fm1-remote/*.fwsc
