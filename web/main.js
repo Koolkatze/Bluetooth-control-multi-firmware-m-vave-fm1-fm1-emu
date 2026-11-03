@@ -719,8 +719,9 @@ async function installSelectedPhysicalFirmware() {
       throw new Error("El instalador rechazó el firmware .fwsc: comprueba el diagnóstico.");
     uploadStarted = false;
     preparingPhysicalFirmware = false;
-    physicalInstallStatus.textContent = "Selecciona el FM-1 USB. "
-      + "Se comprobará su identidad y se te preguntará si asumes los riesgos.";
+    physicalInstallStatus.textContent = "Buscando automáticamente el FM-1 por USB-MIDI. "
+      + "Si aún no está conectado, enchúfalo con un cable de datos. "
+      + "Tras verificar su identidad, se te pedirá confirmar los riesgos.";
   } catch (error) {
     if (uploadStarted) nativeWindow.FM1Android?.abortPhysicalFirmwareUpload?.();
     physicalInstallStatus.textContent = "Instalación no iniciada: " + (error?.message || String(error));
