@@ -302,6 +302,8 @@ def main() -> None:
         '    else if (!strcmp(what, "urbanreclastnote")) got = urban_port.recorder.count ? urban_port.recorder.event[urban_port.recorder.count-1].note : 0;\n'
         '    else if (!strcmp(what, "urbanacidlevel")) got = (int)(en_acid_level*1000.0f);\n'
         '    else if (!strcmp(what, "urbanrecevents")) got = urban_port.recorder.count;\n'
+        '    else if (!strcmp(what, "urbanrecvoices")) got = urban_rec_voices_count(&urban_port.rec_voices);\n'
+        '    else if (!strcmp(what, "urbanrecclock")) got = urban_port.rec_clock_started;\n'
         '    else if (!strcmp(what, "urbanrecdub")) got = urban_port.recorder.overdub;\n'
         '    else if (!strcmp(what, "urbanrecposition")) got = urban_port.recorder.position;\n'
         '    else if (!strcmp(what, "urbantapeon")) got = urban_port.tape_enabled;\n'
