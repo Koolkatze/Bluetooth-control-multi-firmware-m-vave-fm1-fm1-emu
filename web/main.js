@@ -735,6 +735,10 @@ canvas.addEventListener("pointerdown", (e) => {
     // Rotating on the dial uses a real 300-degree arc, not vertical
     // scrolling or an endless 360-degree potentiometer.
     p.gesture = beginKnobGesture(p.grab, x, y);
+    // The visual notch snaps to the finger's angular starting point,
+    // WITHOUT sending a fake encoder turn or rewriting a song parameter.
+    // Subsequent motion emits only genuine relative 0..100 detents.
+    if (p.grab < 7) encClicks[p.grab] = p.gesture.percent;
     if (p.grab === 7) {
       p.masterStart = pot;
       p.masterPercentStart = p.gesture.percent;
