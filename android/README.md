@@ -160,20 +160,66 @@ no se interrumpe el audio mientras se actualiza. El selector muestra la versión
 local disponible al cargarla. Los firmwares nuevos que no figuran en el catálogo
 de la APK requieren una aplicación actualizada o importación manual.
 
-## M-VAVE físico: MIDI y dos pantallas
+## Móvil como pantalla + FM-1 físico como controlador
 
-El modo deseado es **CTL-1 en el FM-1 real** (su pantalla propia muestra los
-controles MIDI) y un **firmware sintetizador emulado en Android** (la pantalla
-principal del móvil muestra ese sintetizador y el móvil genera el sonido).
-No se captura ni se duplica la LCD del FM-1 físico. Instalar CTL-1 en el FM-1
-real **sí requiere un flasheo inicial voluntario**; cambiar después el
-sintetizador del móvil no modifica el FM-1.
+**Requisito imprescindible para que todo el panel físico funcione:** instala
+**Workbench Remote** (firmware controlador) en el **M-VAVE FM-1 real**, además
+de instalar la **APK Workbench** en el teléfono Android. CTL-1 estándar
+**NO** manda eventos individuales para todos los botones ni para los
+encoders SELECT y ALGORITHM; instalar o actualizar solamente la APK no
+puede solucionar esos mensajes ausentes.
 
-La aplicación usa `MidiManager` para entradas USB MIDI y
-`MidiManager.openBluetoothDevice` para dispositivos BLE MIDI anunciados con
-el UUID estándar `03B80E5A-EDE8-4B33-A751-6CE34EC4C700`. Pide permisos
-Bluetooth al buscar. El **enlace extremo a extremo con CTL-1 en el hardware**
-todavía necesita pruebas reales de puerto, canal y mapeo de mensajes.
+La arquitectura combinada es la siguiente:
+
+- **FM-1 físico con Workbench Remote**: escanea la matriz de 27 teclas y
+  14 botones, los encoders SELECT, PRESETS, ALGORITHM y KNOB1–4, y MASTER.
+  Envía cada evento mediante MIDI USB o Bluetooth BLE al teléfono.
+- **Móvil Android con Workbench**: recibe los controles y ejecuta el
+  firmware de síntesis emulado seleccionado (por ejemplo, URBAN-1). Su
+  pantalla muestra **la LCD del firmware emulado**, no un vídeo o captura
+  de la pantalla LCD del FM-1 físico; el sonido lo genera Android.
+- **Comunicación**: la APK detecta automáticamente el saludo
+  **canal 16 / CC102 = 42** de Workbench Remote y puede aplicar el mapeo
+  uno a uno. También se puede elegir el perfil manualmente en
+  **▲ → MIDI → Modo de mapeo → Workbench Remote**.
+
+### Instalación y conexión
+
+1. Instala Workbench en Android y usa la APK para seleccionar el
+   firmware sintetizador que quieras ejecutar.
+2. Instala **Workbench Remote en el dispositivo FM-1 físico** (paquete
+   de control con BLE+USB o paquete solo USB, según necesites), solo
+   después de contar con copia de seguridad y un método de rescate.
+   **Este paso es necesario para el control completo de todos los botones.**
+3. Conecta el FM-1 desde **▲ → MIDI**, mediante USB MIDI o
+   **Buscar MIDI Bluetooth (BLE)**. No confundir BLE-MIDI con audio
+   Bluetooth ni depender únicamente del emparejamiento de Android.
+4. Elige **Automático** o **Workbench Remote** en Modo de mapeo;
+   en **Diagnóstico MIDI** verifica que aumentan los mensajes recibidos
+   y que SELECT, ALGORITHM y los botones generan eventos de panel.
+5. Usa el FM-1 físico como controlador; usa el teléfono como interfaz
+   gráfica del firmware virtual y como sintetizador. Cambiar el firmware
+   emulado en el móvil **no flashea ni modifica el FM-1 físico**.
+
+**Alternativas:** para utilizar solo la APK y su panel táctil,
+**no necesitas ningún firmware físico**. Con el CTL-1 estándar podrás
+tocar notas y usar algunos CC, pero **no el panel completo**.
+La APK no puede inventar pulsaciones que el firmware físico no transmite.
+
+**Advertencia:** Workbench Remote físico sigue siendo experimental. Su
+compilación automatizada no sustituye las pruebas en un FM-1 real.
+Flashear un firmware no validado implica riesgo de dejar el dispositivo
+inoperativo; verifica que dispones de un procedimiento de recuperación.
+Workbench no instala el firmware físico desde su apartado «Actualizar
+todos» (esas actualizaciones son de **firmwares emulados del móvil**).
+
+La app Android utiliza `MidiManager` para USB-MIDI y
+`MidiManager.openBluetoothDevice` para BLE-MIDI, con servicio estándar
+`03B80E5A-EDE8-4B33-A751-6CE34EC4C700`. Los enlaces USB/BLE
+y las pulsaciones largas deben confirmarse con hardware real.
+
+[Documentación del protocolo y tabla de controles](../docs/midi-mapping.md) ·
+[Compilación experimental del firmware físico](../.github/workflows/ctl1-workbench-remote.yml)
 
 ## Compilación propia
 
