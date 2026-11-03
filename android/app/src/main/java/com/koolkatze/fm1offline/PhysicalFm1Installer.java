@@ -119,6 +119,14 @@ final class PhysicalFm1Installer {
         }
     }
 
+    boolean abortUpload() {
+        synchronized (uploadLock) {
+            if (!occupied || writing) return false;
+            cleanupUpload();
+            return true;
+        }
+    }
+
     boolean finish() {
         final Fm1OtaProtocol.Package pkg;
         synchronized (uploadLock) {
