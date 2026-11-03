@@ -126,6 +126,50 @@ El protocolo es una especificación de Workbench, **no** una funcionalidad
 afirmada del CTL-1 publicado. Adaptar el firmware hardware sería un proyecto
 separado; para probar la APK no hace falta flashearlo.
 
+### Adaptador de código fuente del CTL-1 (opcional, sin flasheo automático)
+
+El repositorio incluye `tools/patch_ctl1_workbench.py` para transformar
+**un clon local** del código fuente `charlesvestal/fm1-ctl` en un controlador
+compatible con el modo **Workbench Remote**:
+
+```sh
+git clone --recursive https://github.com/charlesvestal/fm1-ctl.git
+python3 tools/patch_ctl1_workbench.py ./fm1-ctl --dry-run
+python3 tools/patch_ctl1_workbench.py ./fm1-ctl
+```
+
+Este script modifica **solo** `fm1-ctl/app/ui.c`, conserva
+`ui.workbench-backup.c`, verifica cada punto de inserción y se detiene si
+la estructura del archivo cambió. NO descarga un firmware, NO compila, NO
+flashea y NO se conecta al FM-1.
+
+La extensión envía transiciones reales de las 27 teclas físicas en el
+canal 16 antes del procesamiento específico de página, 14 botones
+`CC80–93`, 7 encoders `CC94–100` y el potenciómetro MASTER `CC101`.
+Separa las notas del teclado físico del MIDI de su secuenciador para evitar
+que una misma pulsación suene por duplicado: las notas físicas siguen
+sonando en el sintetizador GM local, pero ya no se mandan como notas
+convencionales simultáneamente por USB/BLE. El MIDI generado por el
+secuenciador/arpegiador no se altera. En modo Remote, deja el canal musical
+CTL-1 entre 1 y 15 para reservar el canal 16 a los controles.
+
+**Para usar el modo Remote con un FM-1 real**, además de seleccionar ese
+perfil en la APK, es imprescindible compilar `ctl.fwsc` con el toolchain
+JieLi, las bibliotecas BLE y las dependencias descritas por el autor en
+[BUILDING.md de CTL-1](https://github.com/charlesvestal/fm1-ctl/blob/main/BUILDING.md),
+y **flashear voluntariamente** dicho firmware en el dispositivo físico.
+No existe un binario validado adjunto a Workbench: el parche es código
+fuente sin una prueba con el dispositivo real y podría necesitar ajustes
+para cambios de versión upstream. No flashees hasta tener el método
+de recuperación preparado. El funcionamiento de USB/BLE debe comprobarse
+en hardware.
+
+El firmware local del FM-1 conserva sus propias páginas y pantalla,
+pero cuando se usa Workbench Remote **las funciones que editen ajustes
+locales del CTL-1 no necesariamente cambian esos mismos parámetros en el
+firmware emulado**: el evento físico acciona el botón/knob equivalente
+en el panel virtual, que determina el comportamiento de su propio firmware.
+
 ## Verificación
 
 La suite `tests/MidiPanelMapperTest.java` comprueba la matriz de teclas,
