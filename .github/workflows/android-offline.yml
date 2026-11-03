@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - "android/**"
+      - "tests/**"
       - "tools/package_offline_android.mjs"
       - "tools/check_offline_android.mjs"
       - "tools/android_emulator_smoke.sh"
@@ -60,6 +61,14 @@ jobs:
             android/app/src/main/java/com/koolkatze/fm1offline/MidiPanelMapper.java \
             tests/MidiPanelMapperTest.java
           java -cp .midi-tests com.koolkatze.fm1offline.MidiPanelMapperTest
+
+      - name: Test physical FM-1 firmware install protocol and risk guardrails
+        run: |
+          mkdir -p .ota-tests
+          javac -d .ota-tests \
+            android/app/src/main/java/com/koolkatze/fm1offline/Fm1OtaProtocol.java \
+            tests/Fm1OtaProtocolTest.java
+          java -cp .ota-tests com.koolkatze.fm1offline.Fm1OtaProtocolTest
 
       - name: Verify Workbench Remote CTL-1 patch against pinned upstream source
         run: |
@@ -173,6 +182,21 @@ jobs:
 
           This Android APK includes offline FM-1 firmware emulation, native
           Rust/AAudio synthesis and MIDI USB/BLE support.
+
+          In v0.2.12, Firmware adds "Instalar firmware seleccionado en FM-1",
+          separate from updating emulator packages. Every selected FM-1
+          compatible .fwsc can be staged, including custom imports.
+          Physical flashing is USB MIDI only; the installer verifies
+          SHA-256 and FM-1 package identity, probes the real device,
+          and asks "Are you sure? Install custom firmware at your own
+          risk" BEFORE writing. The M-UPGRADE implementation serves
+          check/read/write requests, handles loader reconnection,
+          verifies the rebooted identity, and reports progress and
+          failures. It rejects mismatched SMK-37 firmware and missing
+          required loader markers. Flashing is NEVER automatic, and
+          has NOT been tested on physical hardware; have a rescue
+          method ready. Complementary -res.bin resource installation
+          is not implemented.
 
           In v0.2.10, SELECT, PRESETS, ALGORITHM, KNOB1-4, MASTER,
           OCT-/OCT+ and every FX, SEL, ENV, LFO, EDIT, GLO, HOME,
