@@ -6,11 +6,34 @@
 
 - **📱 [FM-1 Workbench para Android — APK v0.2.14](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/v0.2.14/FM-1-Workbench-v0.2.14.apk)** · Emulador, sintetizador y pantalla principal en el móvil.
 - **🎛️ Blackhole Remote HD — MIDI controller v0.1.0 beta 2 (FM-1 físico):** [⬇ Bluetooth + USB (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.2/Blackhole-Remote-HD-v0.1.0-beta.2-Bluetooth-USB.fwsc) · [⬇ Solo USB (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.2/Blackhole-Remote-HD-v0.1.0-beta.2-USB-Only.fwsc) · [Ver release y notas](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/blackhole-remote-v0.1.0-beta.2). Controlador completo para manejar Workbench con los botones, knobs y teclado del FM-1.
-- **🎵 [URBAN-1 — firmware v0.4.17 (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/urban1-firmware-v0.4.17/URBAN-1-v0.4.17-FX-EDIT-MASTER-TRACKS.fwsc)** · Firmware de sintetizador, compatible con el emulador de Workbench. [Ver release](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/urban1-firmware-v0.4.17).
+- **🎵 [URBAN-1 — firmware v0.4.18 (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/urban1-firmware-v0.4.18/URBAN-1-v0.4.18-FX-EDIT-MASTER-TRACKS.fwsc)** · Corrección de REC: la grabación se conserva al pausar, se reinicia con una canción/pista nueva o al cambiar género/subgénero y se silencian las notas sostenidas al detener. [Ver release](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/urban1-firmware-v0.4.18).
 
 **Aviso de Blackhole Remote:** es una **prerelease experimental**, todavía sin pruebas sobre un FM-1 físico. Flashear puede dejar el dispositivo inutilizable; conserva una copia del firmware funcional y un procedimiento de recuperación. El cable USB se utiliza para instalarlo; Bluetooth es para control MIDI.
 
 
+
+## URBAN-1 v0.4.18 — corrección del grabador REC
+
+- **Pause conserva la grabación**: las notas y automatizaciones permanecen
+  disponibles para reanudar la reproducción. La grabación activa se cierra
+  en edición, sin borrar los eventos anteriores.
+- **Nueva canción o pista mediante SAVE**: todos los eventos REC,
+  cuantización, programa, cursores y estado de overdub se reinician.
+- **Cambio de género o subgénero**, tanto global como en una pista:
+  se invalida y borra la grabación anterior para no mezclarla con la
+  nueva composición.
+- **Sin notas bloqueadas al pausar**: el motor de URBAN-1 registra
+  las voces activas de REC y emite Note Off al detener, incluso si
+  la página REC sigue visible. Las automatizaciones específicas de REC
+  se retiran al descartar una toma; los ajustes manuales no afectados
+  se conservan.
+
+Las pruebas nativas del grabador, las pruebas de reproducción real
+de HYP-1 y la compilación del firmware del FM-1 han pasado. El catálogo
+de actualización de Workbench ya incluye la versión v0.4.18.
+
+[Descargar URBAN-1 v0.4.18 (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/urban1-firmware-v0.4.18/URBAN-1-v0.4.18-FX-EDIT-MASTER-TRACKS.fwsc) ·
+[Ver release y verificaciones](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/urban1-firmware-v0.4.18)
 
 ## Instalación del firmware seleccionado en un FM-1 físico (USB-MIDI)
 
