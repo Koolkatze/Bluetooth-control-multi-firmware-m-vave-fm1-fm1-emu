@@ -33,9 +33,9 @@ int main(void) {
     urban_rec_toggle_note(&r,8u,64u);
     assert(r.count==5u);
     urban_rec_toggle_note(&r,8u,64u);
-    assert(r.count==4u);
+    assert(r.count==3u); /* paired note-off removed too */
     urban_rec_overdub(&r);
-    assert(r.state==UR_REC_RECORD&&r.count==4u&&r.overdub);
+    assert(r.state==UR_REC_RECORD&&r.count==3u&&r.overdub);
     r.quant=0u; /* no quantization, preserve 32nd position */
     assert(urban_rec_capture(&r,UR_REC_NOTE_ON,67u,100u,0u,9u));
     assert(r.event[r.count-1u].pos==9u);
