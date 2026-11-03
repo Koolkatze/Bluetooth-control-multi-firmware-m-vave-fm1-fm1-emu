@@ -34,6 +34,41 @@ SMK-37, archivos corruptos o imágenes arbitrarias; BLE no se usa para
 flashear. Algunos paquetes necesitan recursos complementarios -res.bin
 que este botón aún no instala.
 
+## Blackhole Remote: MIDI controller — firmware físico del M-VAVE FM-1
+
+**Nuevo nombre:** Blackhole Remote: MIDI controller sustituye al antiguo
+Workbench Remote físico; **conserva exactamente el protocolo Workbench
+Remote v1** (MIDI canal 16 y saludo CC102=42), de modo que Workbench
+Android sigue reconociéndolo automáticamente mediante USB/BLE.
+
+La interfaz ha sido rehecha para la **pantalla CUADRADA real de 240 × 240
+píxeles**, no una maqueta panorámica. El encendido enseña una ilustración
+**pixel art original de un agujero negro**, pintada por el propio firmware
+sin depender de Internet ni de la pantalla del teléfono. Al terminar,
+muestra un HUD oscuro de estética violeta, magenta y cian inspirado en
+URBAN-1, con tres elementos permanentes:
+
+- **Batería en porcentaje (EST.)**: estimación de 0 a 100 % a partir
+  del ADC del FM-1; no es un medidor de carga calibrado. Antes de la
+  primera lectura se muestra «--%».
+- **USB MIDI**: estado **LINK/OFF** según el enlace USB configurado;
+  **Bluetooth MIDI**: **LINK/WAIT/OFF** (o N/A en el firmware sin radio).
+- **Piano de 27 teclas**: 16 blancas y 11 negras, exactamente en la
+  disposición del FM-1 físico. Las teclas en pantalla se resaltan al
+  pulsarlas realmente y las **luces de las teclas del hardware se
+  encienden y apagan con la misma matriz física**, no con una animación
+  simulada.
+
+Los 14 botones, los 7 encoders y MASTER continúan enviando eventos
+dedicados a Workbench; el diseño de pantalla no modifica el mapeo MIDI.
+Los paquetes físicos experimentales se compilan en dos variantes
+(USB+Bluetooth y solo USB). Flashear sigue requiriendo consentimiento
+y disponer de un método de recuperación; **las imágenes del firmware
+no están validadas todavía en hardware real**.
+
+[Compilar Blackhole Remote en GitHub](.github/workflows/ctl1-workbench-remote.yml) ·
+[Imagen de pantalla en código](tools/blackhole_remote_display.inc)
+
 ## Requisito para usar el móvil como pantalla y el FM-1 como controlador
 
 **Instalación obligatoria para controlar TODO el panel físico:** si quieres
