@@ -1,16 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * URBAN-1 / pixel-art Kitsune boot cover.
- * Two 240px-wide canvas transfers avoid a full-frame LCD buffer.
- * Uses a 7200-byte packed 4bpp palette image (120x120, scaled 2x),
- * decoded 60 bytes per row from flash. Only the UI thread touches it;
- * neither the DSP audio interrupt nor the MIDI queue is involved.
+ * URBAN-1 Kitsune Neo-Tokyo splash (original widescreen composition).
+ * Whole 1672x941 image is letterboxed as 240x136 in the 240x240 LCD:
+ * 52px above and below, no horizontal/vertical crop and no stretching.
+ * 4 KiB indexed art is stored in firmware flash, with only 60 bytes
+ * stack for one row. Reuses existing two LCD canvas bands, not a new
+ * full-screen framebuffer. Pure UI; no blocking sleeps or audio work.
  */
 #ifndef URBAN_SPLASH_ENGINE_H
 #define URBAN_SPLASH_ENGINE_H
 #include "urban_splash_art.h"
-#define URBAN_SPLASH_W 120u
-#define URBAN_SPLASH_H 120u
-#define URBAN_SPLASH_PACKED_BYTES 7200u
 #define URBAN_SPLASH_IN_MS 180u
 #define URBAN_SPLASH_OUT_MS 220u
 
@@ -22,12 +20,11 @@ static unsigned urban_splash_b64_value(char c) {
     if(c=='/')return 63u;
     return 0u;
 }
-/* Exactly 80 Base64 characters per 120px source row (60 packed bytes).
- * Decode only the row currently being drawn into 60B of UI stack:
- * zero new persistent RAM and no allocations from the constrained .pool.
- * Each source row is decoded once for two scaled LCD raster rows. */
+/* Every 80-character row decodes to 60 packed bytes: 120 4bpp pixels.
+ * Row-local buffer avoids extra .pool RAM on the constrained FM-1. */
 static void urban_splash_decode_row(unsigned row,uint8_t out[60]) {
-    const char *source=urban_splash_image_b64+row*80u;
+    const char *source=urban_splash_image_b64+
+                       row*URBAN_SPLASH_ART_ROW_B64;
     for(unsigned n=0u;n<20u;n++) {
         unsigned p=n*4u;
         unsigned a=urban_splash_b64_value(source[p]);
@@ -39,56 +36,48 @@ static void urban_splash_decode_row(unsigned row,uint8_t out[60]) {
         out[n*3u+2u]=(uint8_t)((c<<6u)|d);
     }
 }
-/* phase 1: reveal with horizontal digital tearing; phase 2: steady;
- * phase 3: tear out into HOME. 4-5 bounded frames per transition. */
+/* Intro/outro digital tearing is lightweight. Steady phase 2 is a
+ * pixel-exact scaled copy of the ENTIRE original composition, including
+ * the left and right borders and original embedded title/prompt.
+ * There is no replacement text panel painted over the image. */
 static void urban_splash_render_band(unsigned y0,unsigned h,
                                      unsigned phase,unsigned step) {
-    unsigned severity=0u;
-    if(phase==1u)severity=step>=3u?0u:3u-step;
-    else if(phase==3u)severity=step>3u?3u:step;
+    unsigned severity=phase==1u?(step>=3u?0u:3u-step):
+                      phase==3u?(step>=3u?4u:step+1u):0u;
     cv_begin(240u,h,RGB(8,13,31));
     uint8_t row_pixels[60];
-    unsigned decoded_y=URBAN_SPLASH_H;
+    unsigned decoded_y=URBAN_SPLASH_SOURCE_H;
     for(unsigned y=0u;y<h;y++) {
-        unsigned abs_y=y0+y;
-        unsigned art_y=abs_y>>1u;
+        unsigned py=y0+y;
+        if(py<URBAN_SPLASH_IMAGE_Y ||
+           py>=URBAN_SPLASH_IMAGE_Y+URBAN_SPLASH_SOURCE_H*2u)
+            continue; /* 52px letterbox on both edges; no crop */
+        unsigned art_y=(py-URBAN_SPLASH_IMAGE_Y)>>1u;
         if(art_y!=decoded_y) {
             urban_splash_decode_row(art_y,row_pixels);
             decoded_y=art_y;
         }
-        const uint8_t *src=row_pixels;
         int shift=0;
-        if(severity && (((abs_y>>2u)+step*7u)&15u)<severity*2u)
-            shift=(int)(((abs_y>>2u)*13u+step*11u)%23u)-11;
+        if(severity &&
+           ((((py-URBAN_SPLASH_IMAGE_Y)>>2u)+step*7u)&15u)<severity*2u)
+            shift=(int)((py*13u+step*11u)%15u)-7;
         uint16_t *dst=&cv_px[y*240u];
         for(unsigned x=0u;x<240u;x++) {
             int sx=(int)x+shift;
             if(sx<0)sx=0;
             if(sx>239)sx=239;
-            uint8_t packed=src[(unsigned)sx>>2u];
-            unsigned index=((unsigned)sx&2u)?packed&15u:packed>>4u;
-            dst[x]=swap16(urban_splash_palette[index]);
+            uint8_t packed=row_pixels[(unsigned)sx>>2u];
+            unsigned col=((unsigned)sx&2u)?(packed&15u):(packed>>4u);
+            dst[x]=swap16(urban_splash_palette[col]);
         }
     }
-    /* Repaint the obsolete v0.4.11 bitmap's cropped title panel with
-     * current firmware-neutral branding. The fox itself is unmodified. */
-    if(y0==0u) {
-        cv_rect(0,0,137,29,RGB(8,14,35));
-        cv_text(7,4,&FONT_B,"URBAN-1",RGB(255,106,82));
-        cv_rect(0,30,137,2,RGB(244,76,105));
-    } else {
-        cv_rect(39,205-144,163,27,RGB(8,14,35));
-        cv_rect(39,205-144,163,1,RGB(252,91,110));
-        cv_text(62,212-144,&FONT_S,"PRESS PLAY",RGB(255,174,147));
-    }
-    if(severity) {
-        /* Sparse RGB-split-like interference, not a full-screen strobe. */
-        for(unsigned i=0u;i<severity;i++) {
-            unsigned line=(i*71u+step*29u+phase*13u)%240u;
-            if(line>=y0 && line<y0+h)
-                cv_rect(0,(int)(line-y0),240,1u,
-                        i&1u?RGB(66,202,244):RGB(254,74,123));
-        }
+    if(severity)for(unsigned i=0u;i<severity;i++) {
+        unsigned line=URBAN_SPLASH_IMAGE_Y+
+                    (i*37u+step*29u+phase*13u)%
+                    (URBAN_SPLASH_SOURCE_H*2u);
+        if(line>=y0 && line<y0+h)
+            cv_rect(0,(int)(line-y0),240,1,
+                    i&1u?RGB(66,202,244):RGB(254,74,123));
     }
     cv_blit(0u,y0);
 }
