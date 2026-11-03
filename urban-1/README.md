@@ -1,5 +1,11 @@
 # URBAN-1 — experimental generative groovebox for M-VAVE FM-1
 
+**v0.4.16 — Approved square Kitsune + motorcyclist splash (latest artwork):**
+
+- Replaces the widescreen/letterboxed splash with **the exact latest 1254 × 1254 pixel-art image approved by the user** (orange nine-tailed kitsune, motorcyclist, Neo-Tokyo, URBAN-1/PRESS PLAY lettering). The approved square composition is shown **full bleed on the FM-1 240 × 240 LCD** with no additional crop or bars. The image is downsampled to screen-native 240 × 240 and represented in 64 RGB565 palette colours. Every pixel of the LCD comes from that original image; no new artwork, UI text overlays or alternate compositions are generated.
+- The unchanged **180 ms digital-glitch entrance and exit** use small horizontal tears and neon scanlines only during transition frames; the resting cover is completely still. PLAY dismisses the cover and starts the arrangement after the exit, while other keys dismiss without playback.
+- The 240×240 indexed image is held only in firmware **read-only storage**, with no full-screen RAM framebuffer and no PNG decoder. The existing two 240 × 144 / 240 × 96 canvas bands are reused. Build tests check source pixel integrity across all screen edges, glitch transitions, audio regressions and valid OTA packaging. Firmware-only; the Android APK is unchanged.
+
 **v0.4.15 — original full-frame Kitsune artwork, NO CROP:**
 
 - The same approved **1672×941 Neo-Tokyo pixel-art image**, fully visible on the FM-1 LCD. It is aspect-fit into a **240×136** widescreen area within the existing **240×240** screen, leaving equal **52-pixel dark letterbox bars** at the top and bottom. The original text, fox, nine tails, motorcycle and city remain inside the complete frame. The 2× nearest-neighbor pixel conversion uses 120×68 source samples and 64 indexed colours. Nothing is cropped, stretched, redrawn or covered with new titles.
