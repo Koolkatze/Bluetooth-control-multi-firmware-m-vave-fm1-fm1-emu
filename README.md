@@ -62,7 +62,10 @@ URBAN-1, con tres elementos permanentes:
 Los 14 botones, los 7 encoders y MASTER continúan enviando eventos
 dedicados a Workbench; el diseño de pantalla no modifica el mapeo MIDI.
 Los paquetes físicos experimentales se compilan en dos variantes
-(USB+Bluetooth y solo USB). Flashear sigue requiriendo consentimiento
+(USB+Bluetooth y solo USB), con identidad propia **FM-1_900** para distinguirlos
+de las compilaciones CTL-1. Ambos artefactos .fwsc han superado la
+[compilación y pruebas JieLi del FM-1](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/actions/runs/41722447617).
+Flashear sigue requiriendo consentimiento
 y disponer de un método de recuperación; **las imágenes del firmware
 no están validadas todavía en hardware real**.
 
