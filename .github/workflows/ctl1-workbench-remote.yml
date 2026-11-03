@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: physical-remote-fm1-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   experimental-physical-firmware:
     uses: zvenson/fm1-build/.github/workflows/build.yml@v1
