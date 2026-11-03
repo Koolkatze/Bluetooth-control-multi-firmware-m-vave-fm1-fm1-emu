@@ -75,6 +75,13 @@
           <button type="button" id="update-selected-firmware">↻ Actualizar seleccionado</button>
           <button type="button" id="update-all-firmwares">↻ Actualizar todos</button>
         </div>
+        <div class="row firmware-updates" id="physical-firmware-install-row" hidden>
+          <button type="button" id="install-selected-physical-firmware"
+            title="Instala el firmware seleccionado en el M-VAVE FM-1 FÍSICO por USB MIDI; exige confirmación de riesgo">
+            Instalar firmware seleccionado en FM-1
+          </button>
+        </div>
+        <span id="physical-firmware-install-status" role="status" aria-live="polite"></span>
         <span id="firmware-update-status" role="status" aria-live="polite"></span>
         <label>Clock <select id="mhz" aria-label="Emulated clock"></select></label>
         <div class="row">
