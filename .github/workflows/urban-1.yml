@@ -1,7 +1,7 @@
 name: URBAN-1 host synthesis smoke test
 on:
   push:
-    branches: [feature/urban-1, feature/urban-rec-full-instruments, fix/urban-rec-audition-octave, feature/urban-kitsune-splash, fix/urban-kitsune-no-crop-v014, fix/urban-splash-fullframe-v0414]
+    branches: [feature/urban-1, feature/urban-rec-full-instruments, fix/urban-rec-audition-octave, feature/urban-kitsune-splash, fix/urban-kitsune-no-crop-v014, fix/urban-splash-fullframe-v0414, feature/urban-splash-approved-square-v0416]
     paths:
       - 'urban-1/**'
       - '.github/workflows/urban-1.yml'
@@ -73,19 +73,38 @@ jobs:
           assert ImageChops.difference(a,h).getbbox() is not None, 'Splash did not exit'
           orange=sum(1 for r,gg,bb in a.getdata() if r>120 and r>gg*1.25 and gg>25)
           assert orange>2500, f'Original orange Kitsune pixels missing: {orange}'
-          # The approved illustration must fit the full widescreen frame:
-          # 240 x 136 in the middle with 52px unpainted letterbox each end.
-          assert a.getpixel((0,0)) == a.getpixel((239,0)), 'Upper letterbox changed'
-          assert a.getpixel((0,239)) == a.getpixel((239,239)), 'Lower letterbox changed'
-          assert a.getpixel((0,0)) == a.getpixel((20,30)), 'Upper letterbox must remain clear'
-          assert a.getpixel((0,239)) == a.getpixel((100,210)), 'Lower letterbox must remain clear'
-          assert a.getpixel((0,51)) == a.getpixel((0,0)), 'Image overlaps upper letterbox'
-          assert a.getpixel((0,188)) == a.getpixel((0,239)), 'Image overlaps lower letterbox'
-          assert a.getpixel((0,52)) != a.getpixel((0,0)), 'Full artwork top edge not shown'
-          assert a.getpixel((120,187)) != a.getpixel((0,239)), 'Full artwork bottom edge not shown'
-          colors = a.crop((0,52,240,188)).getcolors(240*136)
-          assert colors is not None and len(colors)>=32, 'Full-frame Kitsune palette unexpectedly lost'
-          print('Full-frame 64-color Kitsune, letterbox and transitions pass:',orange)
+          # The newest USER-APPROVED illustration is the square Kitsune
+          # AND rider image, shown native 240x240 with no letterboxing.
+          from pathlib import Path
+          import re
+          header=Path('urban-1/integrations/urban_splash_art.h').read_text()
+          assert '1254x1254' in header and 'SOURCE_W 240u' in header
+          assert 'SOURCE_H 240u' in header and 'IMAGE_Y 0u' in header
+          paltext=header.split('static const uint16_t urban_splash_palette[64]',1)[1].split('};',1)[0]
+          palette=[int(h,16) for h in re.findall(r'0x([0-9a-fA-F]{4})',paltext)]
+          assert len(palette)==64
+          src=header.split('static const char urban_splash_image_b64[] =',1)[1].split(';',1)[0]
+          symbols=''.join(re.findall(r'"([A-Za-z0-9+/]+)"',src))
+          assert len(symbols)==240*240
+          alpha='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+          def rgb565(c):
+              return ((c>>11&31)*255//31, (c>>5&63)*255//63, (c&31)*255//31)
+          # LCD capture must faithfully show the full source at screen
+          # edges, all corners, and the fox/biker (not a center crop).
+          for x,y in [(0,0),(239,0),(0,239),(239,239),
+                      (8,30),(22,185),(103,60),(125,125),
+                      (198,41),(226,201),(120,238)]:
+              expected=rgb565(palette[alpha.index(symbols[y*240+x])])
+              actual=a.getpixel((x,y))
+              assert max(abs(int(p)-int(q)) for p,q in zip(expected,actual))<=9, (
+                  f'Pixel missing/altered at {x},{y}: {actual}, expected {expected}')
+          for y in [0,1,10,52,120,188,230,239]:
+              assert len(set(a.crop((0,y,240,y+1)).getdata()))>7, (
+                  f'LCD image row {y} is blank/letterboxed')
+          colors=a.getcolors(240*240)
+          assert colors is not None and len(colors)>=40, '64-color graphic lost detail'
+          assert orange>6500, f'Fox/rider approved orange palette lost: {orange}'
+          print('Approved square Kitsune+rider full-bleed 240x240, glitch-in/out and LCD pixel exactness pass:',orange)
           PY
           python3 - <<'PY'
           import wave
