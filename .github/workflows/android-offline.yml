@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-offline
+  group: android-offline-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -52,6 +52,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
+
+      - name: Regression: 7-to-5 o'clock knobs and web interface
+        run: node --test web/knob-sweep.test.mjs web/main.test.mjs
 
       - name: Build native Rust / AAudio synthesizer (ARM64 + x86-64)
         run: |
@@ -159,6 +162,49 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish URBAN-1's separate Android emulator APK
+        if: github.ref == 'refs/heads/feature/urban-1' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          version=$(sed -n "s/^[[:space:]]*versionName '\\([^']*\\)'.*/\\1/p" android/app/build.gradle | head -1)
+          tag="urban1-emulator-v${version%-native}"
+          apk="URBAN-1-Android-Emulator-v${version%-native}.apk"
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$apk"
+          sha256sum "$apk"
+          cat > urban1-release.md <<EOF
+          # URBAN-1 Android emulator ${version%-native}
+
+          Dedicated standalone app: com.koolkatze.fm1offline.urban1, installable
+          alongside the original FM-1 Mobile application.
+
+          **New rotary gesture:** FM-1 numeric knobs use a 300-degree circular
+          touch gesture from 7 o'clock (0%) through noon (50%) to 5 o'clock
+          (100%). They have hard end stops and no wrap through the bottom.
+          All original FM-1 encoder detents stay relative inside the firmware;
+          song tempo, genres and note divisions retain their actual ranges.
+          The MASTER potentiometer follows the same angular gesture.
+
+          Bundled URBAN-1 firmware includes the new continuously adjustable
+          0..100 Low Pass / High Pass FX, recorder, ENV/LFO, tape start-stop
+          and independent jazz modulation from v0.4.10.
+
+          Note: This is a test-signed APK. Installing over a prior test build
+          may require uninstalling that build if Android signing keys differ.
+          Back up any private patches/settings first. Physical FM-1 flashing
+          is NOT performed.
+          EOF
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$apk" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" "$apk" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "URBAN-1 Android Emulator v${version%-native}" \
+              --notes-file urban1-release.md --prerelease
+          fi
 
       - name: Publish the current Android APK to an installable GitHub release
         if: github.ref == 'refs/heads/master' && github.event_name == 'push'
