@@ -40,9 +40,9 @@ El botón **▲ → MIDI** abre conexión USB o búsqueda BLE, **Modo de mapeo**
 | KNOB3 en banco A/B/C/D | CC 1/75/18/22 | **KNOB3**, hardware ID 4 |
 | KNOB4 en banco A/B/C/D | CC 7/76/19/23 | **KNOB4**, hardware ID 5 |
 | PRESETS | Program Change | Encoder PRESETS, hardware ID 6 (cambios relativos) |
-| PLAY | MIDI Start / Stop | Pulso de PLAY, tecla ID 12 |
-| ENV | CC64 | Botón ENV, tecla ID 4 |
-| REC (panic) | CC123 | Pulso de REC, tecla ID 13 |
+| PLAY (CTL-1 estándar) | MIDI Start / Stop | Transporte MIDI, **no** pulsación del panel |
+| ENV (CTL-1 estándar) | CC64 | Sustain MIDI, **no** botón ENV del panel |
+| REC (panic, CTL-1 estándar) | CC123 | All Notes Off MIDI, **no** botón REC |
 | MASTER (configurable) | En CTL-1: EDIT → Sound → MASTER → CC11 | MASTER 0–1023 |
 | Secuenciador / drums, canal 10 | Notas | Siguen entrando como MIDI musical |
 
@@ -86,7 +86,11 @@ emulado.
 | MASTER | CC canal 16, número **101** | ADC 0–1023 |
 | Otros mensajes, canales 1–15 | Note/CC/Clock/Program Change | MIDI musical sin alterar |
 
-Los encoders son relativos: CC valor **1..6** = +1..+6 clicks;
+El firmware remoto emite **CC102 valor 42 en canal 16** al conectarse y
+periódicamente. Workbench, en modo **Automático**, cambia entonces al mapa
+completo sin depender del nombre del dispositivo. La detección no se realiza
+a partir de un CC musical normal. El saludo también reenvía el estado de las\nteclas/botones mantenidos para recuperar pulsaciones después de una reconexión;
+la APK ignora estados idénticos repetidos.\n\nLos encoders son relativos: CC valor **1..6** = +1..+6 clicks;
 CC valor **127..122** = −1..−6 clicks; 0 o 64 = sin movimiento.
 Para evitar saltos/mensajes erróneos se rechazan cambios de magnitud >12.
 Las posiciones absolutas y el cambio de banco local no necesitan
@@ -143,15 +147,26 @@ Este script modifica **solo** `fm1-ctl/app/ui.c`, conserva
 la estructura del archivo cambió. NO descarga un firmware, NO compila, NO
 flashea y NO se conecta al FM-1.
 
-La extensión envía transiciones reales de las 27 teclas físicas en el
-canal 16 antes del procesamiento específico de página, 14 botones
-`CC80–93`, 7 encoders `CC94–100` y el potenciómetro MASTER `CC101`.
-Separa las notas del teclado físico del MIDI de su secuenciador para evitar
-que una misma pulsación suene por duplicado: las notas físicas siguen
-sonando en el sintetizador GM local, pero ya no se mandan como notas
-convencionales simultáneamente por USB/BLE. El MIDI generado por el
-secuenciador/arpegiador no se altera. En modo Remote, deja el canal musical
-CTL-1 entre 1 y 15 para reservar el canal 16 a los controles.
+La extensión envía transiciones de las 27 teclas físicas (canal 16,
+notas 48–74), 14 botones (`CC80–93`), los 7 encoders (`CC94–100`) y
+MASTER (`CC101`). Además, emite periódicamente `CC102=42` como
+identificador del protocolo. Es un **modo controlador exclusivo**:
+desactiva el bucle de interpretación local de CTL-1, que de otro modo
+emitiría simultáneamente notas, cambios de programa, transporte y CC
+que generarían activaciones duplicadas o incorrectas en Workbench.
+El sintetizador GM, los arpegios y las páginas locales de CTL-1 dejan
+de estar operativos mientras esta variante remota esté instalada; la
+pantalla del FM-1 físico no puede mostrar los parámetros del firmware
+del móvil porque la comunicación sigue siendo unidireccional.
+
+El botón físico **PLAY** se corresponde con el único botón PLAY del panel
+emulado; pulsarlo de nuevo permite que el firmware emulado ejecute
+PLAY/STOP o PLAY/PAUSE según su lógica. No existe un botón STOP físico
+independiente que deba inventarse. **REC, FX, SEL/SCL, ENV, LFO, EDIT,
+GLO, HOME, SAVE, ARP, SEQ y OCT±** transmiten `down`/`up` reales
+para que cada firmware emulado gestione tanto la pulsación corta como la
+larga. **SELECT, PRESETS y ALGORITHM** transmiten incrementos relativos
+independientes de los cuatro knobs de parámetros.
 
 **Para usar el modo Remote con un FM-1 real**, además de seleccionar ese
 perfil en la APK, es imprescindible compilar `ctl.fwsc` con el toolchain
