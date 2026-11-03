@@ -62,7 +62,15 @@ jobs:
         grep -q 'bh_remote_keyboard' build/ctl1-upstream/app/blackhole_remote_display.inc
         grep -Fq 'bh_art_splash[34560]' build/ctl1-upstream/app/blackhole_bitmap.h
         grep -Fq 'bh_art_widget[2816]' build/ctl1-upstream/app/blackhole_bitmap.h
-        grep -q 'bh_boot_splash_until' build/ctl1-upstream/app/ui.c
+        grep -Fq 'bh_intro_step()' build/ctl1-upstream/app/ui.c
+        grep -Fq 'bh_intro_start();' build/ctl1-upstream/app/ui.c
+        grep -Fq 'bh_glitch_image(0u, 0)' build/ctl1-upstream/app/app.c
+        grep -Fq 'cv_px[i] = swap16(bh_art_palette[bh_art_splash[i]])' build/ctl1-upstream/app/blackhole_remote_display.inc
+        grep -Fq 'BH_WAIT_KEY' build/ctl1-upstream/app/blackhole_remote_display.inc
+        grep -Fq 'bh_intro_pending' build/ctl1-upstream/app/blackhole_remote_display.inc
+        grep -Fq 'bh_glass_rect(5, 83, 71, 53)' build/ctl1-upstream/app/blackhole_remote_display.inc
+        grep -Fq 'bh_mix565' build/ctl1-upstream/app/blackhole_remote_display.inc
+        ! grep -Fq 'bh_boot_splash_until' build/ctl1-upstream/app/ui.c
         grep -q 'bh_remote_leds' build/ctl1-upstream/app/blackhole_remote_display.inc
         grep -q 'int plat_battery_percent(void)' build/ctl1-upstream/base/device/plat_fm1.c
         grep -q 'int plat_usb_midi_connected(void)' build/ctl1-upstream/base/device/plat_fm1.c
