@@ -66,6 +66,17 @@ final class FirmwareUpdater {
     // Metadata is stored separately from the bundled firmware and from the
     // emulated firmware's flash settings, which are keyed by package SHA-256.
     private File metadata(String device) { return new File(folder(device), "installed.json"); }
+    private File savedCatalog(String device) { return new File(folder(device), "catalog-latest.json"); }
+    String catalogJson(String device) {
+        if (!validDevice(device)) return "{\"entries\":[]}";
+        try {
+            File f = savedCatalog(device);
+            if (f.isFile()) return new String(readFile(f, MAX_CATALOG), StandardCharsets.UTF_8);
+        } catch (Exception error) {
+            Log.w(TAG, "Saved firmware catalog invalid", error);
+        }
+        return "{\"entries\":[]}";
+    }
 
     private synchronized JSONObject installed(String device) {
         JSONObject empty = new JSONObject();
@@ -160,6 +171,12 @@ final class FirmwareUpdater {
         event.put("kind", "catalog");
         event.put("device", device);
         event.put("entries", safe);
+        // A catalog snapshot survives Workbench restarts, even when new Hub
+        // firmware IDs were not in the original offline APK bundle.
+        File dir = folder(device);
+        if (!dir.isDirectory() && !dir.mkdirs())
+            throw new IllegalStateException("Cannot save Hub catalog");
+        writeManifest(savedCatalog(device), event);
         final String js = "window.fm1FirmwareUpdateProgress?.(" + event.toString() + ")";
         activity.runOnUiThread(() -> {
             if (!activity.isFinishing()) web.evaluateJavascript(js, null);
@@ -352,7 +369,7 @@ final class FirmwareUpdater {
     }
 
     private static void writeManifest(File file, JSONObject manifest) throws Exception {
-        File temp = new File(file.getParentFile(), "installed.json.tmp");
+        File temp = new File(file.getParentFile(), file.getName() + ".tmp");
         try (FileOutputStream out = new FileOutputStream(temp)) {
             out.write(manifest.toString().getBytes(StandardCharsets.UTF_8));
             out.getFD().sync();
