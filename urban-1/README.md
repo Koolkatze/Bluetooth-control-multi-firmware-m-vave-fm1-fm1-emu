@@ -1,5 +1,7 @@
 # URBAN-1 — experimental generative groovebox for M-VAVE FM-1
 
+**v0.4.10 – Numerical 0–100 master filters:** FX → MASTER → FILTER / FX now has **LOWPASS (K1)** and **HIGHPASS (K2)** continuously adjustable in the inclusive **0–100** range, instead of ON/OFF toggles. These values drive actual stereo state-variable filters in the HYP audio engine, with smooth response. The original short-term keyboard FX filter shortcuts still override the stored knob amount only while held. New genre/subgenre resets filter knobs to 0 as part of rebuilding sound/FX. Host regression confirms both knobs, no accidental FX-mask toggling, and actual DSP requested cutoff values. The separate Android/web emulator panel requires its own app update for absolute 7–5 o'clock angular interaction; firmware alone cannot change an existing APK's touchscreen gesture geometry.
+
 **v0.4.9 – Live MIDI recorder, modulation pages and tape transport:**
 
 - **ENV** opens real knob-controlled synth envelopes, and **LFO** opens real LFO rate/depth/shape/destination. In Tracks these start at the current instrument; in Song they start at Master, and ALGORITHM navigates across tracks. The Lead LFO is now a separate active DSP oscillator with RATE/DEPTH modulating acid-filter cutoff; native HYP Bass and Pad LFO controls are retained. On Tracks, `SEL+ENV` locks and `SEL+LFO` mutes, so those actions no longer steal the primary ENV/LFO buttons.
