@@ -198,6 +198,20 @@ de confirmar; mantén alimentación y cable USB estables. La detección
 del puerto depende de que Android exponga el FM-1 como dispositivo MIDI
 bidireccional.
 
+### Blackhole Remote: MIDI controller
+
+Workbench Remote físico se ha renombrado a **Blackhole Remote: MIDI
+controller**. El paquete físico mantiene el **protocolo Workbench
+Remote v1**, por lo que la APK Android utiliza el mismo mapeo exacto
+de teclas, encoders y botones y sigue reconociendo el saludo CC102=42.
+
+La LCD del controlador es **cuadrada de 240 × 240 píxeles**, con
+splash pixel art de agujero negro, porcentaje de batería estimado,
+estado USB y Bluetooth y piano con visualización y LEDs físicos de
+las 27 teclas según las pulsaciones reales. La LCD del teléfono sigue
+perteneciendo al firmware emulado y no refleja la imagen de la LCD
+del hardware.
+
 ## Móvil como pantalla + FM-1 físico como controlador
 
 **Requisito imprescindible para que todo el panel físico funcione:** instala
