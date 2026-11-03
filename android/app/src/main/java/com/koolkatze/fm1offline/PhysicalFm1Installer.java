@@ -22,8 +22,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -288,6 +289,12 @@ final class PhysicalFm1Installer {
 
     private void install(MidiDeviceInfo selected, Fm1OtaProtocol.Package pkg) {
         try {
+            // The FM-1's loader can re-enumerate under a generic USB MIDI
+            // descriptor. Save USB IDs that existed before the OTA, and also
+            // accept devices which appear ONLY after its reboot. Never probe
+            // arbitrary pre-existing MIDI gear just because it is connected.
+            Set<Integer> usbBaseline = new HashSet<>();
+            for (MidiDeviceInfo dev : usbDevices()) usbBaseline.add(dev.getId());
             Fm1OtaProtocol.Identity target;
             Link link = Link.open(midi, selected, ui);
             try {
@@ -309,8 +316,8 @@ final class PhysicalFm1Installer {
                 notifyPage("loader", "FM-1 ya está en modo actualización: reanudando…", 8);
             }
             try (Link ota = target.loader
-                    ? waitFor(id -> id.loader, 15000, selected)
-                    : waitFor(id -> id.loader, 30000, selected)) {
+                    ? waitFor(id -> id.loader, 15000, selected, usbBaseline)
+                    : waitFor(id -> id.loader, 30000, selected, usbBaseline)) {
                 if (ota == null) throw new IOException("No apareció el cargador USB de actualización. "
                         + "Reconecta el FM-1 en modo actualización y reintenta con el mismo archivo.");
                 notifyPage("writing", "Escribiendo firmware en FM-1. NO desconectes el cable.", 10);
@@ -320,7 +327,7 @@ final class PhysicalFm1Installer {
             }
             notifyPage("reboot", "Esperando el reinicio y verificando la identidad…", 99);
             sleep(3000);
-            try (Link restarted = waitFor(id -> !id.loader, 40000, selected)) {
+            try (Link restarted = waitFor(id -> !id.loader, 40000, selected, usbBaseline)) {
                 if (restarted == null)
                     throw new IOException("El FM-1 no volvió a conectarse. "
                             + "No se puede confirmar la instalación; revisa el modo de recuperación.");
@@ -425,8 +432,8 @@ final class PhysicalFm1Installer {
         boolean accepts(Fm1OtaProtocol.Identity identity);
     }
 
-    private Link waitFor(IdentityFilter filter, long timeout, MidiDeviceInfo selected)
-            throws Exception {
+    private Link waitFor(IdentityFilter filter, long timeout, MidiDeviceInfo selected,
+                         Set<Integer> usbBaseline) throws Exception {
         long until = System.currentTimeMillis() + timeout;
         while (System.currentTimeMillis() < until) {
             for (MidiDeviceInfo candidate : usbDevices()) {
@@ -434,6 +441,7 @@ final class PhysicalFm1Installer {
                 // same USB port during reboot are allowed. Identity validation
                 // below remains mandatory before any firmware bytes are sent.
                 if (candidate.getId() != selected.getId()
+                        && usbBaseline.contains(candidate.getId())
                         && !looksLikeFm1(candidate)) continue;
                 try {
                     Link link = Link.open(midi, candidate, ui);
