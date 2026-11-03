@@ -972,12 +972,18 @@ public final class MainActivity extends Activity {
                 "Automático — detecta Workbench Remote por MIDI",
                 "Solo instrumento MIDI — notas, CC y reloj",
                 "CTL-1 original — compatibilidad limitada",
-                "Workbench Remote — panel completo (requiere firmware compatible)"
+                "Workbench Remote — requiere firmware en FM-1 físico"
         };
         final String[] ids = { "auto", "midi", "ctl1", "remote" };
         String selected = getPreferences(MODE_PRIVATE).getString(MIDI_MODE_PREF, "auto");
         int checked = Arrays.asList(ids).indexOf(selected);
         new AlertDialog.Builder(this).setTitle("M-VAVE FM-1 → Panel Workbench")
+                .setMessage("MÓVIL COMO PANTALLA + FM-1 COMO CONTROLADOR COMPLETO:\n"
+                        + "Es NECESARIO instalar Workbench Remote en el FM-1 físico. "
+                        + "La APK muestra y ejecuta el firmware de síntesis virtual "
+                        + "en el teléfono; NO captura la LCD física.\n\n"
+                        + "CTL-1 original solo permite MIDI parcial. "
+                        + "Seleccionar Remote en la app NO instala ese firmware en el FM-1.")
                 .setSingleChoiceItems(names, Math.max(0, checked), (dialog, which) -> {
                     getPreferences(MODE_PRIVATE).edit().putString(MIDI_MODE_PREF, ids[which]).apply();
                     midiPanelMapper.releaseKeys(midiSink);
@@ -1003,7 +1009,13 @@ public final class MainActivity extends Activity {
     private void showMidiMappingTable() {
         new AlertDialog.Builder(this)
                 .setTitle("M-VAVE FM-1 → Workbench")
-                .setMessage("Workbench Remote (firmware físico adaptado):\n"
+                .setMessage("REQUISITO para móvil = pantalla + FM-1 = controlador completo:\n"
+                        + "Instala Workbench Remote en el FM-1 físico y la APK "
+                        + "Workbench en el móvil. Sin ese firmware físico, "
+                        + "SELECT, ALGORITHM y muchos botones NO funcionarán 1:1.\n\n"
+                        + "Móvil: pantalla y audio del firmware emulado; "
+                        + "FM-1: controles físicos vía USB/BLE; NO se duplica la LCD real.\n\n"
+                        + "Workbench Remote (firmware físico adaptado):\n"
                         + "SELECT → SELECT (encoder 0)\n"
                         + "PRESETS → PRESETS (encoder 6)\n"
                         + "ALGORITHM → ALGORITHM (encoder 1)\n"
