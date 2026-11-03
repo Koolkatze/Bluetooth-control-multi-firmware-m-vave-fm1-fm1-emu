@@ -44,6 +44,10 @@ def main() -> None:
     dst.mkdir(parents=True, exist_ok=True)
     for source in HERE.glob("urban_*.h"):
         shutil.copyfile(source, dst / source.name)
+    shutil.copyfile(HERE / "integrations/urban_splash_art.h",
+                    root / "firmware/src/app/urban_splash_art.h")
+    shutil.copyfile(HERE / "integrations/urban_splash_engine.h",
+                    root / "firmware/src/app/urban_splash_engine.h")
     shutil.copyfile(HERE / "integrations/urban_editor.h",
                     root / "firmware/src/app/urban_editor.h")
     shutil.copyfile(HERE / "integrations/urban_hyp_port.h",
