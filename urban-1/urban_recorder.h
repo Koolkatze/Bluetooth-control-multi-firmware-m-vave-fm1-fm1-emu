@@ -126,6 +126,19 @@ static void urban_rec_toggle_note(UrbanRecorder *r,unsigned pos,unsigned note) {
     for(unsigned i=0u;i<r->count;i++) {
         if(r->event[i].kind==UR_REC_NOTE_ON &&
            r->event[i].pos==q&&r->event[i].note==note) {
+            /* Remove the paired note-off as well. Otherwise a deleted
+             * note leaves an orphan OFF which can kill an overdubbed
+             * chord using the same pitch on the following pass. */
+            for(unsigned j=i+1u;j<r->count;j++) {
+                if(r->event[j].kind==UR_REC_NOTE_OFF &&
+                   r->event[j].note==note &&
+                   r->event[j].pass==r->event[i].pass) {
+                    for(unsigned k=j+1u;k<r->count;k++)
+                        r->event[k-1u]=r->event[k];
+                    r->count--;
+                    break;
+                }
+            }
             for(unsigned k=i+1u;k<r->count;k++)
                 r->event[k-1u]=r->event[k];
             r->count--;
