@@ -2,8 +2,8 @@
 
 **v0.4.14 — original full-frame Kitsune artwork, NO CROP:**
 
-- The same approved **1672×941 Neo-Tokyo pixel-art image**, fully visible on the FM-1 LCD. It is aspect-fit into a **240×136** widescreen area within the existing **240×240** screen, leaving equal **52-pixel dark letterbox bars** at the top and bottom. The original text, fox, nine tails, motorcycle and city remain inside the complete frame. The 2× nearest-neighbor pixel conversion uses 120×68 source samples and 16 indexed colours. Nothing is cropped, stretched, redrawn or covered with new titles.
-- The **180 ms glitch-in**, stable image and **220 ms glitch-out** remain unchanged. PLAY starts the song after exit; other keys/buttons dismiss it without starting playback. No new Android APK or audio changes.
+- The same approved **1672×941 Neo-Tokyo pixel-art image**, fully visible on the FM-1 LCD. It is aspect-fit into a **240×136** widescreen area within the existing **240×240** screen, leaving equal **52-pixel dark letterbox bars** at the top and bottom. The original text, fox, nine tails, motorcycle and city remain inside the complete frame. The 2× nearest-neighbor pixel conversion uses 120×68 source samples and 64 indexed colours. Nothing is cropped, stretched, redrawn or covered with new titles.
+- The **180 ms glitch-in**, stable image and **180 ms glitch-out** remain unchanged. PLAY starts the song after exit; other keys/buttons dismiss it without starting playback. No new Android APK or audio changes.
 
 **v0.4.13 — original pixel-art nine-tailed Kitsune boot cover with glitch:**
  
