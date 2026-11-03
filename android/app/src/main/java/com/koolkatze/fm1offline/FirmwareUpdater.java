@@ -77,7 +77,25 @@ final class FirmwareUpdater {
     }
 
     String installedJson(String device) {
-        return validDevice(device) ? installed(device).toString() : "{}";
+        if (!validDevice(device)) return "{}";
+        JSONObject saved = installed(device);
+        JSONObject usable = new JSONObject();
+        java.util.Iterator<String> keys = saved.keys();
+        while (keys.hasNext()) {
+            String id = keys.next();
+            if (!validId(id)) continue;
+            File file = new File(folder(device), id + ".fwsc");
+            if (!file.isFile() || file.length() < 1024 || file.length() > MAX_PACKAGE)
+                continue; // Never advertise an update whose package disappeared.
+            try {
+                JSONObject entry = saved.optJSONObject(id);
+                if (entry != null && !entry.optString("version").isEmpty())
+                    usable.put(id, entry);
+            } catch (Exception error) {
+                Log.w(TAG, "Installed firmware metadata ignored: " + id, error);
+            }
+        }
+        return usable.toString();
     }
 
     boolean start(String device, String selected) {
@@ -122,7 +140,7 @@ final class FirmwareUpdater {
                 readStream(activity.getAssets().open("site/" + catalogPath(device)), MAX_CATALOG),
                 StandardCharsets.UTF_8));
         JSONObject available = new JSONObject(new String(
-                download(CATALOG_ROOT + catalogPath(device), MAX_CATALOG), StandardCharsets.UTF_8));
+                download(CATALOG_ROOT + catalogPath(device) + "?nocache=" + System.currentTimeMillis(), MAX_CATALOG), StandardCharsets.UTF_8));
         JSONArray original = packaged.getJSONArray("firmwares");
         Map<String, JSONObject> remote = new HashMap<>();
         JSONArray newest = available.getJSONArray("firmwares");
@@ -153,14 +171,27 @@ final class FirmwareUpdater {
                 continue;
             }
             String version = candidate.optString("version");
-            String previous = versions.optJSONObject(id) != null
-                    ? versions.optJSONObject(id).optString("version")
-                    : current.optString("version");
-            if (version.isEmpty() || version.equals(previous)) {
-                notifyPage("unchanged", id, previous, label + ": ya está actualizado", changed, checked, total);
+            JSONObject existing = versions.optJSONObject(id);
+            String previous = existing != null
+                    ? existing.optString("version") : current.optString("version");
+            String address = candidate.optString("package");
+            File installedPackage = new File(folder(device), id + ".fwsc");
+            boolean savedFileOk = installedPackage.isFile()
+                    && installedPackage.length() >= 1024
+                    && installedPackage.length() <= MAX_PACKAGE;
+            /* Version alone is insufficient: an existing package may have
+             * been replaced under the same version, moved to another URL,
+             * or deleted while its metadata survived. Do not skip it then. */
+            boolean samePackage = existing == null
+                    ? version.equals(previous)
+                    : version.equals(previous)
+                      && address.equals(existing.optString("url"))
+                      && savedFileOk;
+            if (version.isEmpty() || samePackage) {
+                notifyPage("unchanged", id, previous,
+                    label + ": ya está actualizado", changed, checked, total);
                 continue;
             }
-            String address = candidate.optString("package");
             try {
                 notifyPage("progress", id, version, "Descargando " + label + " (" + version + ")…", changed, checked, total);
                 byte[] bytes = download(address, MAX_PACKAGE);
@@ -259,7 +290,9 @@ final class FirmwareUpdater {
             c.setInstanceFollowRedirects(false);
             c.setConnectTimeout(12000);
             c.setReadTimeout(20000);
-            c.setRequestProperty("User-Agent", "FM1-Mobile-Android-Updater/0.2");
+            c.setRequestProperty("User-Agent", "FM1-Mobile-Android-Updater/0.2.9");
+            c.setRequestProperty("Cache-Control", "no-cache, no-store");
+            c.setRequestProperty("Pragma", "no-cache");
             try {
                 int status = c.getResponseCode();
                 if (status >= 300 && status < 400) {
