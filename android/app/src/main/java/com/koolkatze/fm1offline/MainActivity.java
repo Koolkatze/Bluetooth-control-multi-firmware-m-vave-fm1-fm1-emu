@@ -706,6 +706,10 @@ public final class MainActivity extends Activity {
         public String installedFirmwareUpdates(String device) {
             return firmwareUpdater == null ? "{}" : firmwareUpdater.installedJson(device);
         }
+        @JavascriptInterface
+        public String installedFirmwareCatalog(String device) {
+            return firmwareUpdater == null ? "{\"entries\":[]}" : firmwareUpdater.catalogJson(device);
+        }
 
         @JavascriptInterface
         public boolean updateFirmwares(String device, String selectedId) {
