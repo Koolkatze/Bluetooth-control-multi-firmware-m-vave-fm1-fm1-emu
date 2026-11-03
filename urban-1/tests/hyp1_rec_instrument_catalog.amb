@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The 78 selectable REC programs are REAL DSP instruments; prove the
+# hardware K1 picker reaches the full catalog, and that one-shot SFX
+# can be played and captured in the same MIDI piano-roll.
+expect urbanrecstate 0
+tap REC
+expect urbanrecstate 1
+expect urbanrecprogram 32
+expect urbanrectrack 4
+# Last native poly patch -> first modelled upright bass.
+spin K1 16
+expect urbanrecprogram 48
+expect urbanrectrack 2
+# Modelled keys -> drum kit.
+spin K1 12
+expect urbanrecprogram 60
+expect urbanrectrack 0
+shot urban-rec-drum-kit.png
+# Kit family end -> procedural SFX engine.
+spin K1 8
+expect urbanrecprogram 68
+expect urbanrectrack 6
+shot urban-rec-sfx.png
+tap REC
+expect urbanrecstate 2
+tapkey 7
+wait 1000
+expect urbanrecevents >1
+expect urbansfxrendered >0
+tap REC
+expect urbanrecstate 3
+shot urban-rec-sfx-piano-roll.png
+tap REC
+expect urbanrecstate 2
+expect urbanrecdub 1
+tap HOME
+expect urbanrecscreen 0
+tap PLAY
+expect playing 0

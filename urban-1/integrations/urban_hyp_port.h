@@ -22,6 +22,7 @@
 /* The MCU builds HYP as a unity compilation; host builds amb.c as a
  * separate object. Both need the same exported DSP entry points. */
 void urban_sfx_trigger(unsigned type,unsigned level,unsigned length);
+void en_urban_drum(int lane,int velocity); /* HYP audio command queue */
 void urban_sfx_silence(void);
 extern volatile uint32_t urban_sfx_rendered_events;
 void urban_piano_roll_arm(const uint8_t *notes,unsigned count,unsigned gap_ms);
@@ -149,7 +150,9 @@ static void urban_port_release(void) {
 static void urban_port_pattern(uint8_t sequence,unsigned bar,uint8_t bank) {
     UrbanHypPort *p=&urban_port;
     uint16_t lanes[EN_NLANE]={0};
-    urban_drum_lanes(&p->rt.ui.song,sequence,bar,lanes);
+    /* A drum-kit REC take replaces the generated six-lane pattern. */
+    if(p->recorder.state==UR_REC_OFF||p->recorder.track!=0u)
+        urban_drum_lanes(&p->rt.ui.song,sequence,bar,lanes);
     for(unsigned i=0;i<EN_NLANE;i++)en_pats[bank][i]=lanes[i];
 }
 static void urban_port_stage_pattern(void) {
@@ -195,7 +198,11 @@ static void urban_port_compile_trance(void) {
     uint8_t solo=0u;
     for(unsigned i=0;i<URBAN_TRACKS;i++)solo|=s->tracks[i].solo;
     stage.enabled=(uint8_t)(lead->genre%URBAN_GENRES==12u &&
-        !lead->muted && (!solo || lead->solo));
+        !lead->muted && (!solo || lead->solo) &&
+        !((urban_port.recorder.state==UR_REC_ARM||
+           urban_port.recorder.state==UR_REC_RECORD||
+           urban_port.recorder.state==UR_REC_EDIT)&&
+          urban_port.recorder.track==3u));
     stage.song_mode=s->song_mode;
     stage.loop_queued=s->queued%URBAN_SEQUENCES;
     stage.length=s->arrangement_len;
@@ -234,6 +241,18 @@ static void urban_port_sound_profile(void) {
     UrbanInstrumentProgram pp=urban_instrument_program(s,4u,s->current);
     UrbanInstrumentProgram atmosphere=urban_instrument_program(s,5u,s->current);
     UrbanStylePatch bass=bp.patch,lead=lp.patch,pad=pp.patch;
+    /* The recording voice keeps its selected audible DSP program across
+     * song-section changes; all other tracks follow their own style. */
+    if(urban_port.recorder.state!=UR_REC_OFF) {
+        UrbanRecInstrument choice=urban_rec_instrument(urban_port.recorder.program);
+        if(choice.track==2u) {
+            bass.bass=choice.patch;bp.jazz_bass=choice.jazz;
+        } else if(choice.track==3u) {
+            lead.lead=choice.patch;lp.jazz_voice=choice.jazz;
+        } else if(choice.track==4u) {
+            pad.pad=choice.patch;pp.jazz_voice=choice.jazz;
+        }
+    }
     /* Select actual new DSP engine on each independent jazz track. */
     urban_jazz_programs(pp.jazz_voice,lp.jazz_voice,bp.jazz_bass);
     /* HYP only exposes seven diatonic modes. Every selected scale
@@ -280,6 +299,14 @@ static void urban_port_sound_profile(void) {
     urban_port_set(P_KIT_SNARE,d.drum_kit);
     urban_port_set(P_KIT_HAT,h.hat_kit);
     urban_port_set(P_KIT_PERC,h.drum_kit);
+    if(urban_port.recorder.state!=UR_REC_OFF &&
+       urban_port.recorder.track==0u) {
+        unsigned kit=urban_rec_instrument(urban_port.recorder.program).patch;
+        urban_port_set(P_KIT_KICK,(int)kit);
+        urban_port_set(P_KIT_SNARE,(int)kit);
+        urban_port_set(P_KIT_HAT,(int)kit);
+        urban_port_set(P_KIT_PERC,(int)kit);
+    }
     /* Hip-hop's laid-back feel requires timing, not just a mask.
      * HYP swing delays ONLY off-sixteenth drum triggers by up to 0.5
      * steps; keep the 2/4 snare fixed and pad/bass on the harmonic grid.
@@ -463,6 +490,24 @@ static void urban_port_chord(unsigned color,unsigned gate) {
  * HYP song clock without changing any unrelated track's generated score. */
 static void urban_port_editor_write(int id,int delta);
 static int urban_port_editor_value(int id);
+/* Preview and MIDI loop playback share one instrument router. Drums and
+ * SFX are one-shot DSP hits; melodic note OFF remains a real voice release. */
+static void urban_port_rec_note(const UrbanRecorder *r,unsigned note,
+                                unsigned velocity,unsigned on) {
+    UrbanRecInstrument ins=urban_rec_instrument(r->program);
+    int voice=urban_hyp_voice(ins.track);
+    if(voice>=0) {
+        en_note(voice,urban_hyp_key((unsigned)voice,(uint8_t)note),(int)on);
+    } else if(on && ins.track==0u) {
+        /* 27 keys repeat six real lanes: kick, snare, clap, CH/OH, perc. */
+        unsigned lane=(note+192u-53u)%6u;
+        en_urban_drum((int)lane,(int)(velocity?velocity:110u));
+    } else if(on && ins.track==6u) {
+        unsigned level=(unsigned)urban_port.sfx_level*velocity/110u;
+        if(level>100u)level=100u;
+        urban_sfx_trigger(ins.patch,level,urban_port.sfx_length);
+    }
+}
 static void urban_port_rec_timeline(void) {
     UrbanHypPort *p=&urban_port;
     UrbanRecorder *r=&p->recorder;
@@ -489,10 +534,7 @@ static void urban_port_rec_timeline(void) {
                     (int)(int8_t)e->value-urban_port_editor_value(e->parameter));
             }
         } else if(e->kind==UR_REC_NOTE_ON||e->kind==UR_REC_NOTE_OFF) {
-            int voice=urban_hyp_voice(r->track);
-            if(voice>=0)
-                en_note(voice,urban_hyp_key((unsigned)voice,e->note),
-                        e->kind==UR_REC_NOTE_ON);
+            urban_port_rec_note(r,e->note,e->value,e->kind==UR_REC_NOTE_ON);
         }
     }
 }
@@ -526,8 +568,8 @@ static void urban_port_step(void) {
                            p->rt.ui.song.current,
                            urban_phrase_bar(&p->rt.ui.song));
     if((cs.onsets>>cstep)&1u &&
-       !((p->recorder.state==UR_REC_RECORD||p->recorder.state==UR_REC_EDIT)&&
-         p->recorder.track==4u))
+       !((p->recorder.state==UR_REC_ARM||p->recorder.state==UR_REC_RECORD||
+          p->recorder.state==UR_REC_EDIT)&&p->recorder.track==4u))
         urban_port_chord(cs.color,cs.gate);
     for(i=0;i<3;i++) if(p->held[i] && p->left[i]) {
         if(--p->left[i]==0u) {
@@ -550,7 +592,8 @@ static void urban_port_step(void) {
          * polling function. Firing both would sound doubled/late. */
         if(i==3u && p->rt.ui.song.tracks[3].genre%URBAN_GENRES==12u)
             continue;
-        if((p->recorder.state==UR_REC_RECORD||
+        if((p->recorder.state==UR_REC_ARM||
+            p->recorder.state==UR_REC_RECORD||
             p->recorder.state==UR_REC_EDIT)&&p->recorder.track==i)
             continue;
         urban_port_note(i,frame.event[i],frame.glide[i]);
@@ -563,7 +606,9 @@ static void urban_port_step(void) {
     const UrbanTrack *sf=&p->rt.ui.song.tracks[6];
     uint8_t solo=0u;
     for(i=0u;i<URBAN_TRACKS;i++)solo|=p->rt.ui.song.tracks[i].solo;
-    if(!sf->muted && (!solo || sf->solo) && p->sfx_level && p->sfx_density) {
+    if(!sf->muted && (!solo || sf->solo) && p->sfx_level && p->sfx_density &&
+       !((p->recorder.state==UR_REC_ARM||p->recorder.state==UR_REC_RECORD||
+          p->recorder.state==UR_REC_EDIT)&&p->recorder.track==6u)) {
         UrbanSfxEvent cue=urban_sfx_event(&p->rt.ui.song,
                                            sfx_section,sfx_bar,cstep);
         uint32_t choice=urban_mix_seed(sf->seq[sfx_section].seed ^
@@ -982,16 +1027,25 @@ static void urban_port_rec_keys(void) {
     UrbanRecorder *r=&p->recorder;
     uint32_t keys=p->rec_screen?plat_keys():0u;
     uint32_t changed=(keys^p->rec_last_keys);
-    int voice=urban_hyp_voice(r->track);
     for(unsigned k=0u;k<27u;k++)if(changed&(1u<<k)) {
         unsigned on=(keys>>k)&1u;
         unsigned note=53u+k;
-        if(voice>=0)en_note(voice,urban_hyp_key((unsigned)voice,(uint8_t)note),on);
+        urban_port_rec_note(r,note,110u,on);
         if(r->state==UR_REC_RECORD)
             (void)urban_rec_capture(r,on?UR_REC_NOTE_ON:UR_REC_NOTE_OFF,
                                     note,on?110u:0u,0u,urban_port_rec_stamp());
     }
     p->rec_last_keys=keys;
+}
+/* Release held keys from the old DSP channel before changing programs. */
+static void urban_port_rec_release_keys(void) {
+    UrbanHypPort *p=&urban_port;
+    int voice=urban_hyp_voice(p->recorder.track);
+    if(voice>=0)
+        for(unsigned k=0u;k<27u;k++)
+            if(p->rec_last_keys&(1u<<k))
+                en_note(voice,urban_hyp_key((unsigned)voice,(uint8_t)(53u+k)),0);
+    p->rec_last_keys=0u;
 }
 static void urban_port_rec_input(uint32_t b,uint32_t down) {
     UrbanHypPort *p=&urban_port;
@@ -1000,6 +1054,8 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
         if(!p->rec_screen) {
             p->rec_screen=1u;p->editor.view=0u;
             if(r->state==UR_REC_OFF)urban_rec_arm(r);
+            urban_port_sound_profile(); /* audition selected program in ARM */
+            urban_port_stage_pattern();
         } else if(r->state==UR_REC_ARM) {
             urban_rec_start(r);
             p->rec_clock_started=0u;
@@ -1022,7 +1078,12 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
         p->rec_screen=0u; /* keep recorded loop playing in RAM */
     if(r->state==UR_REC_ARM) {
         d=plat_enc(EN_K1);
-        if(d)r->track=(uint8_t)(2u+((int)r->track-2+d%3+3)%3);
+        if(d) {
+            urban_port_rec_release_keys();
+            urban_rec_set_program(r,d);
+            urban_port_sound_profile(); /* immediate audible sound change */
+            urban_port_stage_pattern();
+        }
         d=plat_enc(EN_K2);
         if(d)urban_rec_set_bars(r,d);
         d=plat_enc(EN_K3);
@@ -1254,7 +1315,8 @@ static uint32_t urban_port_screen_signature(const UrbanHypPort *p) {
     UI_ACC(p->rec_screen);UI_ACC(p->recorder.state);
     UI_ACC(p->recorder.mod_page);UI_ACC(p->recorder.count);
     UI_ACC(p->recorder.position);UI_ACC(p->recorder.edit_cursor);
-    UI_ACC(p->recorder.track);UI_ACC(p->recorder.bars);
+    UI_ACC(p->recorder.track);UI_ACC(p->recorder.program);
+    UI_ACC(p->recorder.bars);
     UI_ACC(p->recorder.quant);UI_ACC(p->recorder.overdub);
     UI_ACC(p->recorder.edit_note);UI_ACC(p->tape_enabled);
     if(p->editor.view) {
@@ -1370,6 +1432,32 @@ static void urban_port_rec_upper(uint16_t orange,uint16_t dim) {
     note[16]=(char)('0'+current_bar%10u);
     urban_port_screen_text(131,&FONT_S,note,dim);
 }
+/* Names identify the installed synthesizer programs, not fake GM presets. */
+static const char *urban_port_rec_program_name(const UrbanRecorder *r) {
+    UrbanRecInstrument inst=urban_rec_instrument(r->program);
+    static const char *const acoustic[2]={"Upright Bass","Finger Bass"};
+    static const char *const jazz[5]={
+        "Acoustic Piano","Electric Rhodes","Breathy Flute",
+        "Vibraphone","Soft Bells"
+    };
+    if(inst.jazz) {
+        if(inst.track==2u)return acoustic[inst.jazz-1u];
+        return jazz[inst.jazz-1u];
+    }
+    if(inst.track==0u)return urban_kit_names[inst.patch];
+    if(inst.track==6u)return urban_sfx_names[inst.patch];
+    if(inst.track==2u)return urban_bass_names[inst.patch];
+    if(inst.track==3u)return urban_lead_names[inst.patch];
+    return urban_pad_names[inst.patch];
+}
+static const char *urban_port_rec_program_family(const UrbanRecorder *r) {
+    UrbanRecInstrument inst=urban_rec_instrument(r->program);
+    if(inst.track==0u)return "DRUM KIT (6 LANES)";
+    if(inst.track==6u)return "SOUND EFFECT";
+    if(inst.track==2u)return inst.jazz?"ACOUSTIC BASS":"BASS / DRONE";
+    if(inst.track==3u)return inst.jazz?"MODELLED LEAD":"SYNTH LEAD";
+    return inst.jazz?"MODELLED KEYS":"POLY KEYS / PAD";
+}
 static void urban_port_rec_lower(uint16_t orange,uint16_t dim) {
     const UrbanRecorder *r=&urban_port.recorder;
     const char *state="REC ARM";
@@ -1398,17 +1486,16 @@ static void urban_port_rec_lower(uint16_t orange,uint16_t dim) {
         }
     }
     if(r->state==UR_REC_ARM) {
-        const char *info="INST CHORDS  BARS 4";
-        if(r->track==2u)info="INST BASS  BARS 4";
-        else if(r->track==3u)info="INST LEAD  BARS 4";
-        /* Print value separately, no dynamic text allocation. */
-        urban_port_screen_text(17,&FONT_S,info,orange);
-        urban_port_screen_text(35,&FONT_S,"K1 INST   K2 BARS",C_WHITE);
-        const char *qname=r->quant==0u?"Q:OFF":
-             r->quant==1u?"Q:1/4":r->quant==2u?"Q:1/8":
-             r->quant==3u?"Q:1/16":"Q:1/32";
-        urban_port_screen_text(53,&FONT_S,qname,C_WHITE);
-        urban_port_screen_text(71,&FONT_S,"K4 GRID  REC START",dim);
+        urban_port_screen_text(15,&FONT_S,
+                               urban_port_rec_program_family(r),orange);
+        urban_port_screen_text(32,&FONT_S,
+                               urban_port_rec_program_name(r),C_WHITE);
+        urban_port_screen_text(50,&FONT_S,"K1 SOUND / K2 BARS",dim);
+        urban_port_screen_text(67,&FONT_S,"K3 QUANT / K4 GRID",dim);
+        const char *qname=r->quant==0u?"QUANT OFF":
+              r->quant==1u?"QUANT 1/4":r->quant==2u?"QUANT 1/8":
+              r->quant==3u?"QUANT 1/16":"QUANT 1/32";
+        urban_port_screen_text(84,&FONT_S,qname,orange);
     } else if(r->state==UR_REC_RECORD) {
         urban_port_screen_text(18,&FONT_S,"PLAY THE 27 KEYS",C_WHITE);
         urban_port_screen_text(38,&FONT_S,"SEL/ENV/LFO: MOD PAGE",C_WHITE);

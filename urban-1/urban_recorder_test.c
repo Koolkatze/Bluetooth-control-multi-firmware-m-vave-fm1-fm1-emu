@@ -51,6 +51,39 @@ int main(void) {
         (void)urban_rec_add(&r,UR_REC_PARAM,0u,1u,1u,i);
     assert(r.count==UR_REC_MAX_EVENTS);
     assert(!urban_rec_add(&r,UR_REC_PARAM,0u,1u,1u,0u));
+    /* Exercise the entire real patch catalog and preserve REC routing. */
+    UrbanRecorder cat;
+    urban_rec_init(&cat);
+    assert(UR_REC_PROGRAM_COUNT==78u && cat.program==32u && cat.track==4u);
+    urban_rec_set_program(&cat,-32);
+    assert(cat.program==0u && cat.track==2u);
+    unsigned family_count[5]={0};
+    for(unsigned i=0u;i<UR_REC_PROGRAM_COUNT;i++) {
+        UrbanRecInstrument p=urban_rec_instrument(cat.program);
+        assert(cat.program==i && cat.track==p.track);
+        if(i<16u) {assert(p.track==2u&&p.patch==i&&!p.jazz);family_count[0]++;}
+        else if(i<32u) {assert(p.track==3u&&p.patch==i-16u&&!p.jazz);family_count[1]++;}
+        else if(i<48u) {assert(p.track==4u&&p.patch==i-32u&&!p.jazz);family_count[2]++;}
+        else if(i<50u) {assert(p.track==2u&&p.jazz==i-47u);family_count[0]++;}
+        else if(i<55u) {assert(p.track==3u&&p.jazz==i-49u);family_count[1]++;}
+        else if(i<60u) {assert(p.track==4u&&p.jazz==i-54u);family_count[2]++;}
+        else if(i<68u) {assert(p.track==0u&&p.patch==i-60u);family_count[3]++;}
+        else {assert(p.track==6u&&p.patch==i-68u);family_count[4]++;}
+        urban_rec_set_program(&cat,1);
+    }
+    assert(cat.program==0u&&cat.track==2u);
+    assert(family_count[0]==18u&&family_count[1]==21u&&
+           family_count[2]==21u&&family_count[3]==8u&&family_count[4]==10u);
+    urban_rec_set_program(&cat,-1);
+    assert(cat.program==77u&&cat.track==6u);
+    urban_rec_set_program(&cat,78);
+    assert(cat.program==77u);
+    urban_rec_arm(&cat);
+    urban_rec_start(&cat);
+    assert(urban_rec_capture(&cat,UR_REC_NOTE_ON,60u,110u,0u,4u));
+    urban_rec_stop(&cat);
+    urban_rec_overdub(&cat);
+    assert(cat.count==1u&&cat.track==6u);
     puts("URBAN-1 recorder: looping 32nd grid, quant OFF/4/8/16/32, poly events, overdub, automation and bounded events PASS");
     return 0;
 }
