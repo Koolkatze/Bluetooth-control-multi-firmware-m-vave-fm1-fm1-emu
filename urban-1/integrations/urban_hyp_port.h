@@ -15,6 +15,7 @@
 #include "urban/urban_mix.h"
 #include "urban/urban_fx.h"
 #include "urban_editor.h"
+#include "urban_splash_engine.h"
 #include "urban/urban_drum_sync.h"
 #include "urban/urban_sfx.h"
 #include "urban/urban_recorder.h"
@@ -67,6 +68,10 @@ typedef struct {
     int8_t sfx_type_override; /* -1: keep the chosen 56-style preset */
     uint8_t sfx_level,sfx_length,sfx_density;
     uint32_t ui_signature;
+    uint32_t splash_transition_ms;
+    uint8_t splash_phase; /* 1 enter glitch, 2 steady, 3 exit glitch, 0 HOME */
+    uint8_t splash_play_on_exit, splash_last_frame;
+    uint8_t splash_has_frame;
 } UrbanHypPort;
 static UrbanHypPort urban_port;
 
@@ -757,6 +762,15 @@ static void urban_port_init(uint32_t seed) {
     p->staged_for_bar=UINT32_MAX;
     p->sfx_type_override=-1;
     urban_rec_init(&p->recorder);
+    /* Real FM-1 device and Android firmware emulation start with the
+     * illustrated cover. The ordinary host simulator bypasses it so
+     * existing audio/transport tests remain unchanged; dedicated host
+     * regression URBAN_SPLASH_TEST runs the same production UI path. */
+#if !defined(EN_HOST) || defined(URBAN_SPLASH_TEST)
+    urban_splash_prepare();
+    p->splash_phase=1u;
+    p->splash_transition_ms=plat_ms();
+#endif
     p->tape_enabled=1u;
     urban_lead_lfo_config(0u,0u);
     urban_filter_set(0u,0u);
@@ -1173,6 +1187,24 @@ static void urban_port_input(void) {
     UrbanSong *s=&p->rt.ui.song;
     uint32_t b=plat_buttons(),down=b&~p->held_buttons;
     int32_t d;
+    if(p->splash_phase) {
+        /* Splash is a UI gate, never a pause of the DSP audio loop. All
+         * buttons/key presses start the exit transition; PLAY also starts
+         * the arrangement once the tearing animation completes. */
+        if(p->splash_phase!=3u && (b||plat_keys())) {
+            p->splash_phase=3u;
+            p->splash_transition_ms=plat_ms();
+            p->splash_play_on_exit=(uint8_t)((b&(1u<<B_PLAY))!=0u);
+            p->splash_has_frame=0u;
+        }
+        p->held_buttons=b;
+        /* Avoid deferred knob edits from detents turned during splash. */
+        (void)plat_enc(EN_K1);(void)plat_enc(EN_K2);
+        (void)plat_enc(EN_K3);(void)plat_enc(EN_K4);
+        (void)plat_enc(EN_ALGO);(void)plat_enc(EN_PRESET);
+        (void)plat_enc(EN_SELECT);
+        return;
+    }
     p->held_buttons=b;
     if(down&(1u<<B_PLAY)) {
         p->play_press_ms=plat_ms();p->play_long_done=0u;
@@ -1601,6 +1633,33 @@ static void urban_port_frame(void) {
     UrbanHypPort *p=&urban_port;
     UrbanSong *s=&p->rt.ui.song;
     urban_port_input();
+    if(p->splash_phase) {
+        uint32_t age=plat_ms()-p->splash_transition_ms;
+        if(p->splash_phase==1u && age>=URBAN_SPLASH_IN_MS) {
+            p->splash_phase=2u;
+            p->splash_has_frame=0u;
+            age=0u;
+        } else if(p->splash_phase==3u &&
+                  age>=URBAN_SPLASH_OUT_MS) {
+            p->splash_phase=0u;
+            p->held_buttons=plat_buttons(); /* no double PLAY on release */
+            if(p->splash_play_on_exit)urban_port_play();
+            p->ui_drawn=0u;
+        }
+        if(p->splash_phase) {
+            unsigned step=p->splash_phase==2u?0u:
+                          (unsigned)(age/45u);
+            if(step>4u)step=4u;
+            unsigned key=(unsigned)p->splash_phase*8u+step;
+            if(!p->splash_has_frame||p->splash_last_frame!=key) {
+                urban_splash_render(p->splash_phase,step);
+                p->splash_has_frame=1u;
+                p->splash_last_frame=(uint8_t)key;
+            }
+            plat_leds(p->splash_phase==3u?0u:(1u<<B_PLAY),0u);
+            return;
+        }
+    }
     uint32_t sig=urban_port_screen_signature(p);
     if(!p->ui_drawn || sig!=p->ui_signature) {
         static const uint16_t background=RGB(14,17,25);
