@@ -1,5 +1,11 @@
 # FM-1 Mobile — sintetizador Android sin conexión, actualizaciones opcionales por Internet
 
+## URBAN-1 Android 0.2.8 — knobs de recorrido 7:00 a 5:00
+
+La variante autónoma `com.koolkatze.fm1offline.urban1` puede instalarse junto a FM-1 Mobile. El panel FM-1 responde ahora a un gesto **circular** sobre los siete encoders y el MASTER: de las **7:00 (0%)** a las **5:00 (100%)**, pasando por las **12:00 (50%)**. Son 300° de recorrido, sin saltar de 100 a 0 por debajo. El gesto de los encoders genera 100 detents relativos y el firmware sigue aplicando su rango musical real (BPM, modos, subestilos); no modifica los números de otros firmwares. El volumen MASTER también sigue el gesto circular. Las pistas numéricas Low Pass / High Pass de URBAN-1 v0.4.10 sí admiten valores reales 0–100.
+El emulador SMK-37 conserva sus gestos anteriores.
+
+
 Esta aplicación contiene **dos implementaciones del emulador FM-1**:
 el **motor nativo Rust/AAudio** de baja latencia para Android, y el
 motor WebAssembly/AudioWorklet como reserva y para el modo web. También
