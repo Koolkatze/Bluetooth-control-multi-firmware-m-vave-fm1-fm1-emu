@@ -104,14 +104,14 @@ jobs:
         run: |
           make -C urban-1 test
           python3 urban-1/tools/apply_hyp1.py --hyp-root hyp1
-          (cd hyp1 && ./build.sh --release 0.4.10)
-          test -s hyp1/build/amb-0.4.10.fwsc
-          (cd hyp1 && cc -o build/ota_test tests/ota_test.c && build/ota_test build/amb-0.4.10.fwsc)
+          (cd hyp1 && ./build.sh --release 0.4.16)
+          test -s hyp1/build/amb-0.4.16.fwsc
+          (cd hyp1 && cc -o build/ota_test tests/ota_test.c && build/ota_test build/amb-0.4.16.fwsc)
 
       - name: Bundle open-source firmwares, URBAN-1 and all web assets
         env:
-          URBAN1_FWSC: hyp1/build/amb-0.4.10.fwsc
-          URBAN1_VERSION: 0.4.10
+          URBAN1_FWSC: hyp1/build/amb-0.4.16.fwsc
+          URBAN1_VERSION: 0.4.16
         run: node tools/package_offline_android.mjs _offline_web android/app/src/main/assets/site
 
       - name: Validate true native synthesizer libraries and package files
@@ -182,7 +182,18 @@ jobs:
           Dedicated standalone app: com.koolkatze.fm1offline.urban1, installable
           alongside the original FM-1 Mobile application.
 
-          **New rotary gesture:** FM-1 numeric knobs use a 300-degree circular
+          **v0.2.9 updater repair:** When Update Selected or Update All installs a new .fwsc,
+          the currently selected firmware is automatically reloaded, with the actual version
+          shown in the Firmware tab. Missing or corrupted installed files can be downloaded
+          again even if installed.json contains the same version; version display is
+          hydrated from verified Android-private packages and cannot silently fall back
+          to an older stored snapshot. HTTPS catalog fetch bypasses stale CDN caches.
+
+          The APK already includes URBAN-1 v0.4.16 with the square orange Kitsune + rider
+          cover and its two glitch transitions, so it works even without internet.
+          The v0.4.11 lettering within the approved cover is PIXEL ART, not runtime version.
+
+          **Previous rotary gesture:** FM-1 numeric knobs use a 300-degree circular
           touch gesture from 7 o'clock (0%) through noon (50%) to 5 o'clock
           (100%). They have hard end stops and no wrap through the bottom.
           All original FM-1 encoder detents stay relative inside the firmware;
@@ -191,7 +202,7 @@ jobs:
 
           Bundled URBAN-1 firmware includes the new continuously adjustable
           0..100 Low Pass / High Pass FX, recorder, ENV/LFO, tape start-stop
-          and independent jazz modulation from v0.4.10.
+          and independent jazz modulation through URBAN-1 v0.4.16.
 
           Note: This is a test-signed APK. Installing over a prior test build
           may require uninstalling that build if Android signing keys differ.
