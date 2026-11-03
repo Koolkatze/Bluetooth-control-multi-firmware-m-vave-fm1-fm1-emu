@@ -152,13 +152,43 @@ Desde la versión **v0.2.5**, el panel **Firmware** ofrece:
 La APK consulta el catálogo del repositorio en GitHub por HTTPS. Descarga
 firmwares de sus fuentes públicas autorizadas, comprueba el formato de
 los paquetes y conserva las descargas en el almacenamiento privado de Android.
-**No modifica ni flashea el FM-1 físico**. Tampoco descarga automáticamente
+**Este actualizador del emulador no modifica ni flashea el FM-1 físico**; la instalación física se realiza únicamente desde el botón específico y tras confirmar. Tampoco descarga automáticamente
 el firmware oficial propietario de M-VAVE ni sustituye los presets antiguos,
 que siguen asociados al identificador criptográfico de su versión.
 **Para aplicar una descarga hay que volver a seleccionar o iniciar ese firmware**:
 no se interrumpe el audio mientras se actualiza. El selector muestra la versión
 local disponible al cargarla. Los firmwares nuevos que no figuran en el catálogo
 de la APK requieren una aplicación actualizada o importación manual.
+
+## Instalar firmware seleccionado EN EL FM-1 FÍSICO (experimental)
+
+Workbench Android ofrece **«Instalar firmware seleccionado en FM-1»**.
+Este botón utiliza el archivo .fwsc seleccionado (integrado, descargado
+de FW Hub o importado) y realiza una instalación **real en el FM-1 físico**,
+nunca por Bluetooth: se exige un cable de datos **USB-MIDI**.
+**«Actualizar seleccionado» y «Actualizar todos» solo actualizan la
+biblioteca del emulador**, no escriben en el hardware.
+
+El flujo comprueba el SHA-256 del archivo, identidad del paquete
+**FM-1**, cargador Felucca compatible y respuesta del dispositivo USB.
+Elige el FM-1 conectado; la app te enseña el firmware elegido y el
+firmware físico detectado, y pregunta: **«¿Seguro que quieres instalar
+firmware personalizado? ... bajo tu propia responsabilidad.»**
+**Cancelar** no inicia la escritura. Confirmar comienza la transferencia
+M-UPGRADE en dos etapas (comprobación → cargador → escritura), y verifica
+la identidad después del reinicio. Si el equipo queda en el cargador,
+puedes intentar reanudar usando el mismo paquete.
+
+Las imágenes sin formato .fwsc, paquetes corruptos, modelos SMK-37
+o paquetes FM-1 personalizados sin cargador reconocido se rechazan.
+Algunos paquetes requieren archivos de recursos complementarios
+-res.bin, que aún deben instalarse por otro método.
+
+**SIN VALIDAR EN EL FM-1 REAL.** El flasheo puede dejar inoperativo el
+aparato. Prepara copia de seguridad y un método de recuperación antes
+de confirmar; mantén alimentación y cable USB estables. La detección
+del puerto depende de que Android exponga el FM-1 como dispositivo MIDI
+bidireccional.
 
 ## Móvil como pantalla + FM-1 físico como controlador
 
