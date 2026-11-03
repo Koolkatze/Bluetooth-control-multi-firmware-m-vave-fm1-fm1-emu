@@ -30,6 +30,7 @@ public final class MidiPanelMapper {
     private boolean inSysex = false;
     private final int[] previousCc = new int[128];
     private int previousProgram = -1;
+    private final boolean[] pressed = new boolean[41];
 
     public MidiPanelMapper() { reset(); }
 
@@ -45,6 +46,24 @@ public final class MidiPanelMapper {
         inSysex = false;
         Arrays.fill(previousCc, -1);
         previousProgram = -1;
+        Arrays.fill(pressed, false);
+    }
+
+    /** Release the matrix if BLE/USB disconnects with a held key or button. */
+    public synchronized void releaseKeys(Sink sink) {
+        if (sink == null) return;
+        for (int id = 0; id < pressed.length; id++) {
+            if (pressed[id]) {
+                pressed[id] = false;
+                sink.panel(0, id, 0);
+            }
+        }
+    }
+
+    private void key(Sink sink, int id, int value) {
+        if (id < 0 || id >= pressed.length) return;
+        pressed[id] = value != 0;
+        sink.panel(0, id, value);
     }
 
     /** Handles complete messages, coalesced packets, and USB/BLE running status.
@@ -99,9 +118,9 @@ public final class MidiPanelMapper {
         }
     }
 
-    private static void pulse(Sink sink, int key) {
-        sink.panel(0, key, 1);
-        sink.panel(0, key, 0);
+    private void pulse(Sink sink, int id) {
+        key(sink, id, 1);
+        key(sink, id, 0);
     }
 
     private void route(byte[] message, Sink sink) {
@@ -113,11 +132,11 @@ public final class MidiPanelMapper {
 
         if (mode == Mode.REMOTE && channel == 16) {
             if ((kind == 0x80 || kind == 0x90) && d1 >= 48 && d1 <= 74) {
-                sink.panel(0, 14 + d1 - 48, (kind == 0x90 && d2 > 0) ? 1 : 0);
+                key(sink, 14 + d1 - 48, (kind == 0x90 && d2 > 0) ? 1 : 0);
                 return;
             }
             if (kind == 0xb0 && d1 >= 80 && d1 <= 93) {
-                sink.panel(0, d1 - 80, d2 >= 64 ? 1 : 0);
+                key(sink, d1 - 80, d2 >= 64 ? 1 : 0);
                 return;
             }
             if (kind == 0xb0 && d1 >= 94 && d1 <= 100) {
@@ -138,7 +157,7 @@ public final class MidiPanelMapper {
             // notes outside this range continue as ordinary performance MIDI.
             if (channel != 10 && (kind == 0x80 || kind == 0x90)
                     && d1 >= 53 && d1 <= 79) {
-                sink.panel(0, 14 + d1 - 53, (kind == 0x90 && d2 > 0) ? 1 : 0);
+                key(sink, 14 + d1 - 53, (kind == 0x90 && d2 > 0) ? 1 : 0);
                 return;
             }
             // CTL-1 Play page: A/B/C/D are four controller banks for KNOB1..4.
@@ -154,7 +173,7 @@ public final class MidiPanelMapper {
                     return;
                 }
                 if (d1 == 64) {
-                    sink.panel(0, 4, d2 >= 64 ? 1 : 0); // CTL-1 ENV sustain
+                    key(sink, 4, d2 >= 64 ? 1 : 0); // CTL-1 ENV sustain
                     return;
                 }
                 if (d1 == 123) { pulse(sink, 13); return; } // CTL-1 REC panic
