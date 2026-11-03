@@ -1,5 +1,16 @@
 # FM-1 Mobile Companion — multifirmware, pantalla ampliada y síntesis desde el móvil
 
+## ⬇ Descargas principales
+
+**Tres descargas diferentes** para el ecosistema FM-1; la APK se instala en Android y los archivos `.fwsc` son firmwares para FM-1.
+
+- **📱 [FM-1 Workbench para Android — APK v0.2.14](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/v0.2.14/FM-1-Workbench-v0.2.14.apk)** · Emulador, sintetizador y pantalla principal en el móvil.
+- **🎛️ Blackhole Remote HD — MIDI controller v0.1.0 beta 1 (FM-1 físico):** [⬇ Bluetooth + USB (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.1/Blackhole-Remote-HD-v0.1.0-beta.1-Bluetooth-USB.fwsc) · [⬇ Solo USB (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.1/Blackhole-Remote-HD-v0.1.0-beta.1-USB-Only.fwsc) · [Ver release y notas](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/blackhole-remote-v0.1.0-beta.1). Controlador completo para manejar Workbench con los botones, knobs y teclado del FM-1.
+- **🎵 [URBAN-1 — firmware v0.4.17 (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/urban1-firmware-v0.4.17/URBAN-1-v0.4.17-FX-EDIT-MASTER-TRACKS.fwsc)** · Firmware de sintetizador, compatible con el emulador de Workbench. [Ver release](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/urban1-firmware-v0.4.17).
+
+**Aviso de Blackhole Remote:** es una **prerelease experimental**, todavía sin pruebas sobre un FM-1 físico. Flashear puede dejar el dispositivo inutilizable; conserva una copia del firmware funcional y un procedimiento de recuperación. El cable USB se utiliza para instalarlo; Bluetooth es para control MIDI.
+
+
 
 ## Instalación del firmware seleccionado en un FM-1 físico (USB-MIDI)
 
@@ -35,6 +46,13 @@ flashear. Algunos paquetes necesitan recursos complementarios -res.bin
 que este botón aún no instala.
 
 ## Blackhole Remote: MIDI controller — firmware físico del M-VAVE FM-1
+
+**Release independiente — Blackhole Remote HD v0.1.0 beta 1:** 
+[descargar Bluetooth + USB](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.1/Blackhole-Remote-HD-v0.1.0-beta.1-Bluetooth-USB.fwsc) · 
+[descargar Solo USB](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.1/Blackhole-Remote-HD-v0.1.0-beta.1-USB-Only.fwsc) · 
+[SHA-256 de ambos archivos](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.1/SHA256SUMS.txt) · 
+[notas y descarga en GitHub](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/blackhole-remote-v0.1.0-beta.1). 
+
 
 **Nuevo nombre:** Blackhole Remote: MIDI controller sustituye al antiguo
 Workbench Remote físico; **conserva exactamente el protocolo Workbench
@@ -130,7 +148,7 @@ Los paquetes de firmware físico y la APK son archivos distintos.
 
 **Sin instalar nada:** elige un firmware compatible, pulsa **Start** y utiliza la LCD ampliada desde tu navegador. Esta edición online necesita conexión para cargar los archivos y algunos firmwares.
 
-### **[⬇ Descargar FM-1 Workbench para Android — última revisión del controlador](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/v0.2.13)**
+### **[⬇ Descargar FM-1 Workbench para Android — APK v0.2.14](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/v0.2.14/FM-1-Workbench-v0.2.14.apk)**
 
 **v0.2.13 — detección automática de FM-1 USB:** al pulsar
 «Instalar firmware seleccionado en FM-1», Workbench busca por sí mismo
