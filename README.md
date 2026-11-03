@@ -9,6 +9,12 @@ todos». Permite tomar el archivo .fwsc de **cualquier firmware FM-1 válido
 seleccionado** (incluido en Workbench, actualizado desde FW Hub o importado
 manualmente) e **instalarlo en el M-VAVE FM-1 físico** por **USB-MIDI**.
 
+La búsqueda del FM-1 USB es **automática**: si ya está conectado se
+identifica por USB-MIDI, y si lo conectas después de pulsar instalar,
+Workbench espera su aparición. No hay que escoger el puerto manualmente;
+si Android reconoce el cable pero no ofrece MIDI bidireccional, se muestra
+un diagnóstico para revisar el cable de datos, OTG y los permisos.
+
 La instalación física es distinta de «Actualizar seleccionado»: esta
 última acción solo actualiza firmwares del emulador Android. La acción
 de instalación física verifica la integridad SHA-256, el formato y la
