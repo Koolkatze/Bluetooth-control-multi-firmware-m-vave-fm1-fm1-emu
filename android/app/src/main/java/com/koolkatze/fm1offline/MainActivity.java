@@ -1063,6 +1063,8 @@ public final class MainActivity extends Activity {
                     String key = device.getAddress();
                     String label = null;
                     try { label = device.getName(); } catch (SecurityException ignored) {}
+                    if ((label == null || label.isEmpty()) && result.getScanRecord() != null)
+                        label = result.getScanRecord().getDeviceName();
                     /* The FM-1 BLE stack can advertise the MIDI service in a
                      * scan-response frame instead of its main advertisement.
                      * A strict service-UUID ScanFilter dropped such devices
