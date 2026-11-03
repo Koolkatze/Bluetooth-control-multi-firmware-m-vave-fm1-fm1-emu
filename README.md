@@ -18,8 +18,8 @@ un diagnóstico para revisar el cable de datos, OTG y los permisos.
 La instalación física es distinta de «Actualizar seleccionado»: esta
 última acción solo actualiza firmwares del emulador Android. La acción
 de instalación física verifica la integridad SHA-256, el formato y la
-identidad del paquete FM-1, permite elegir un dispositivo USB-MIDI y
-comprueba que responde como un FM-1. **Antes de comenzar a escribir**
+identidad del paquete FM-1, **detecta automáticamente el USB-MIDI**
+(ya conectado o enchufado después) y comprueba que responde como un FM-1. **Antes de comenzar a escribir**
 pregunta: **«¿Seguro que quieres instalar firmware personalizado? ...
 Será bajo tu propia responsabilidad.»** Se puede cancelar sin flashear.
 Solo entonces el cargador USB del FM-1 consulta los bloques del archivo,
