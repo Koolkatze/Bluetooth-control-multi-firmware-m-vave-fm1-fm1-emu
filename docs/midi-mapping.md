@@ -47,6 +47,21 @@ Los datos gráficos están embebidos en el código fuente del
 `app/blackhole_bitmap.h` antes de la compilación física; no se
 necesita Internet en el FM-1 para dibujar el agujero negro.
 
+### Pantalla de Blackhole Remote — arranque con pulsación obligatoria
+
+El arranque muestra el agujero negro de alta resolución con efecto glitch
+de entrada y espera **sin límite de tiempo** una nueva pulsación física
+en cualquiera de las 27 teclas o botones. Cuando se pulsa, se reproduce
+el glitch de salida y aparece el controlador. Durante toda la espera
+continúan MIDI, conexión USB/BLE y las luces de las teclas.
+
+Las paletas de bitmap se escriben con `swap16()` a `cv_px` porque la
+LCD FM-1 recibe RGB565 con bytes intercambiados. El controlador usa
+el agujero negro grande como fondo; la batería y los dos estados MIDI
+tienen fondos **40% transparentes**, calculados por RGB565 premezclado.
+El piano inferior se dibuja con fondo totalmente opaco y continúa
+vinculado al estado real de las teclas.
+
 ## Blackhole Remote: MIDI controller (nuevo nombre del firmware físico)
 
 El antiguo **Workbench Remote** pasa a llamarse **Blackhole Remote:
