@@ -6,9 +6,49 @@ set -euo pipefail
 adb install -r apk/app-debug.apk
 adb shell am start -n com.koolkatze.fm1offline/.MainActivity
 sleep 14
+# A freshly provisioned Pixel_4 system image sometimes shows the OS-level
+# "Pixel Launcher isn't responding" ANR even though our Activity is alive
+# behind that MODAL. Do not mistake Google's home-screen ANR for a Workbench
+# failure. Dismiss only the known OS launcher dialog, retrying the real
+# application UI assertions afterwards. Save diagnostics for unknown errors.
+for attempt in 1 2 3 4 5; do
+  adb shell uiautomator dump /sdcard/fm1-view.xml
+  adb pull /sdcard/fm1-view.xml android-ui.xml
+  if grep -Eq "Pixel Launcher isn.t responding" android-ui.xml; then
+    echo "Dismiss emulator Pixel Launcher system ANR, retry Workbench foreground"
+    python3 - <<'PY'
+import re, subprocess, xml.etree.ElementTree as ET
+root = ET.parse('android-ui.xml').getroot()
+texts = [n.get('text', '') for n in root.iter('node')]
+assert any('Pixel Launcher' in t and "responding" in t for t in texts), (
+    'Do not dismiss an unrelated process failure')
+buttons = [n for n in root.iter('node') if n.get('text') == 'Close app'
+           and n.get('package') == 'android']
+assert len(buttons) == 1, 'Expected exactly one OS launcher ANR close button'
+coords = list(map(int, re.findall(r'\d+', buttons[0].get('bounds', ''))))
+assert len(coords) == 4
+subprocess.run(['adb', 'shell', 'input', 'tap',
+    str((coords[0]+coords[2])//2), str((coords[1]+coords[3])//2)], check=True)
+PY
+    sleep 3
+    adb shell am start -n com.koolkatze.fm1offline/.MainActivity
+    continue
+  fi
+  if grep -q 'Mostrar controles' android-ui.xml && grep -q 'Datos de sonido' android-ui.xml; then
+    echo "Workbench native toolbar ready on attempt ${attempt}"
+    break
+  fi
+  if [[ "$attempt" -eq 5 ]]; then
+    echo "::error::Workbench controls not ready; inspect android-ui.xml and screenshot"
+    cat android-ui.xml
+    adb logcat -d -s FM1Mobile:E > android-errors.log || true
+    adb exec-out screencap -p > android-before-start.png
+    exit 1
+  fi
+  echo "Workbench controls still loading (attempt ${attempt})"
+  sleep 5
+done
 adb exec-out screencap -p > android-before-start.png
-adb shell uiautomator dump /sdcard/fm1-view.xml
-adb pull /sdcard/fm1-view.xml android-ui.xml
 # In compact mode the native toolbar must be invisible by default.
 grep -q 'Mostrar controles' android-ui.xml
 grep -q 'Datos de sonido' android-ui.xml
