@@ -986,16 +986,16 @@ public final class MainActivity extends Activity {
     private void showMidiMappingTable() {
         new AlertDialog.Builder(this)
                 .setTitle("Controles físicos → Workbench")
-                .setMessage("CTL-1 instalado (página HOME / Play):\\n"
-                        + "27 teclas F3–G5 → 27 teclas virtuales (octava original)\\n"
-                        + "KNOB 1–4, bancos A–D → KNOB 1–4 del panel\\n"
-                        + "PRESETS (Program Change) → PRESETS\\n"
-                        + "PLAY (Start/Stop) → PLAY\\n"
-                        + "ENV (CC64) → ENV; REC (CC123) → REC\\n"
-                        + "MASTER: en CTL-1 asignar CC11 → MASTER\\n\\n"
+                .setMessage("CTL-1 instalado (página HOME / Play):\n"
+                        + "27 teclas F3–G5 → 27 teclas virtuales (octava original)\n"
+                        + "KNOB 1–4, bancos A–D → KNOB 1–4 del panel\n"
+                        + "PRESETS (Program Change) → PRESETS\n"
+                        + "PLAY (Start/Stop) → PLAY\n"
+                        + "ENV (CC64) → ENV; REC (CC123) → REC\n"
+                        + "MASTER: en CTL-1 asignar CC11 → MASTER\n\n"
                         + "SELECT, ALGORITHM, OCT±, FX, SCL, LFO, EDIT, GLO, "
                         + "HOME, SAVE, ARP y SEQ no emiten una pulsación MIDI "
-                        + "individual en CTL-1 original.\\n\\n"
+                        + "individual en CTL-1 original.\n\n"
                         + "Para mapear los 14 botones, 7 encoders, MASTER y 27 teclas "
                         + "1:1 hace falta el protocolo Workbench Remote "
                         + "del firmware controlador. Véase docs/midi-mapping.md.")
@@ -1239,7 +1239,7 @@ public final class MainActivity extends Activity {
                             midiRouteLabel = "Falló BLE MIDI";
                             show("No se pudo abrir BLE MIDI. Comprueba GLO → Setup Bluetooth y reinicia CTL-1.");
                         } else {
-                            connectMidi(device, "Bluetooth MIDI • " + chosen.getAddress());
+                            connectMidi(device, "Bluetooth MIDI • " + labels.get(which));
                         }
                     }, ui);
                 })
