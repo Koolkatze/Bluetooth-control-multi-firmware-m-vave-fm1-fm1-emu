@@ -10,7 +10,8 @@ spin K3 3
 expect urbansub 3
 expect urbanedittempo 80
 expect urbanscale 2
-expect urbanjazzchord >0
+# The DSP applies the queued instrument program on its first audio block,
+# so do not check the audio-owned mode before transport starts.
 expect urbanfxreverb >0
 tap PLAY
 wait 5500
