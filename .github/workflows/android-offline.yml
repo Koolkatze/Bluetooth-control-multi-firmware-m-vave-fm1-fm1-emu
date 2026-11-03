@@ -232,6 +232,18 @@ jobs:
           name: FM1-Mobile-Offline-APK
           path: apk
 
+      # Hosted Ubuntu supplies /dev/kvm, but the runner user is not always
+      # a member of the kvm group. Without access, reactivecircus silently
+      # switches to unaccelerated x86 emulation and Android never finishes
+      # booting (the "Timeout waiting for emulator to boot" error).
+      - name: Enable KVM acceleration for Android AVD
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm || { echo "::error::Hosted runner has no /dev/kvm; cannot run the x86 Android UI test"; exit 1; }
+          sudo chmod a+rw /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
+          ls -l /dev/kvm
+
       - name: Boot virtual Android and inspect visible controls
         uses: reactivecircus/android-emulator-runner@v2
         with:
