@@ -374,11 +374,14 @@ static void urban_port_mix_levels(void) {
     UrbanMixPlan m=urban_mix_plan(s,s->current,urban_phrase_bar(s));
     /* A manually played REC instrument must stay audible even when the
      * arranger has intentionally muted its part for INTRO/BREAK, or when
-     * auditioning in ARM with transport stopped. Restore the arranger mix
-     * immediately after leaving REC; do not change unrelated tracks. */
-    unsigned audition=urban_port.rec_screen &&
-                    urban_port.recorder.state!=UR_REC_OFF ?
-                    urban_port.recorder.track:255u;
+     * auditioning in ARM with transport stopped. An already-recorded loop
+     * stays audible after SAVE/HOME hides the panel; other tracks keep
+     * their usual mix and an unrecorded ARM-only preview restores on exit. */
+    const UrbanRecorder *rec=&urban_port.recorder;
+    unsigned audition=(urban_port.rec_screen ||
+                       rec->state==UR_REC_RECORD || rec->state==UR_REC_EDIT) &&
+                      rec->state!=UR_REC_OFF ?
+                      rec->track:255u;
     urban_port_set(P_PULSE,audition==0u && m.drums<76?76:m.drums);
     urban_port_set(P_BASS,audition==2u && m.bass<76?76:m.bass);
     urban_port_set(P_ACID,audition==3u && m.lead<76?76:m.lead);
