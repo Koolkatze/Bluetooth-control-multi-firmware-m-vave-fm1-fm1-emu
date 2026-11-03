@@ -22,6 +22,7 @@
 /* The MCU builds HYP as a unity compilation; host builds amb.c as a
  * separate object. Both need the same exported DSP entry points. */
 void urban_sfx_trigger(unsigned type,unsigned level,unsigned length);
+void en_urban_drum(int lane,int velocity); /* HYP audio command queue */
 void urban_sfx_silence(void);
 extern volatile uint32_t urban_sfx_rendered_events;
 void urban_piano_roll_arm(const uint8_t *notes,unsigned count,unsigned gap_ms);
@@ -149,7 +150,9 @@ static void urban_port_release(void) {
 static void urban_port_pattern(uint8_t sequence,unsigned bar,uint8_t bank) {
     UrbanHypPort *p=&urban_port;
     uint16_t lanes[EN_NLANE]={0};
-    urban_drum_lanes(&p->rt.ui.song,sequence,bar,lanes);
+    /* A drum-kit REC take replaces the generated six-lane pattern. */
+    if(p->recorder.state==UR_REC_OFF||p->recorder.track!=0u)
+        urban_drum_lanes(&p->rt.ui.song,sequence,bar,lanes);
     for(unsigned i=0;i<EN_NLANE;i++)en_pats[bank][i]=lanes[i];
 }
 static void urban_port_stage_pattern(void) {
@@ -292,6 +295,14 @@ static void urban_port_sound_profile(void) {
     urban_port_set(P_KIT_SNARE,d.drum_kit);
     urban_port_set(P_KIT_HAT,h.hat_kit);
     urban_port_set(P_KIT_PERC,h.drum_kit);
+    if(urban_port.recorder.state!=UR_REC_OFF &&
+       urban_port.recorder.track==0u) {
+        unsigned kit=urban_rec_instrument(urban_port.recorder.program).patch;
+        urban_port_set(P_KIT_KICK,(int)kit);
+        urban_port_set(P_KIT_SNARE,(int)kit);
+        urban_port_set(P_KIT_HAT,(int)kit);
+        urban_port_set(P_KIT_PERC,(int)kit);
+    }
     /* Hip-hop's laid-back feel requires timing, not just a mask.
      * HYP swing delays ONLY off-sixteenth drum triggers by up to 0.5
      * steps; keep the 2/4 snare fixed and pad/bass on the harmonic grid.
@@ -475,6 +486,24 @@ static void urban_port_chord(unsigned color,unsigned gate) {
  * HYP song clock without changing any unrelated track's generated score. */
 static void urban_port_editor_write(int id,int delta);
 static int urban_port_editor_value(int id);
+/* Preview and MIDI loop playback share one instrument router. Drums and
+ * SFX are one-shot DSP hits; melodic note OFF remains a real voice release. */
+static void urban_port_rec_note(const UrbanRecorder *r,unsigned note,
+                                unsigned velocity,unsigned on) {
+    UrbanRecInstrument ins=urban_rec_instrument(r->program);
+    int voice=urban_hyp_voice(ins.track);
+    if(voice>=0) {
+        en_note(voice,urban_hyp_key((unsigned)voice,(uint8_t)note),(int)on);
+    } else if(on && ins.track==0u) {
+        /* 27 keys repeat six real lanes: kick, snare, clap, CH/OH, perc. */
+        unsigned lane=(note+6u-53u)%6u;
+        en_urban_drum((int)lane,(int)(velocity?velocity:110u));
+    } else if(on && ins.track==6u) {
+        unsigned level=(unsigned)urban_port.sfx_level*velocity/110u;
+        if(level>100u)level=100u;
+        urban_sfx_trigger(ins.patch,level,urban_port.sfx_length);
+    }
+}
 static void urban_port_rec_timeline(void) {
     UrbanHypPort *p=&urban_port;
     UrbanRecorder *r=&p->recorder;
@@ -576,7 +605,9 @@ static void urban_port_step(void) {
     const UrbanTrack *sf=&p->rt.ui.song.tracks[6];
     uint8_t solo=0u;
     for(i=0u;i<URBAN_TRACKS;i++)solo|=p->rt.ui.song.tracks[i].solo;
-    if(!sf->muted && (!solo || sf->solo) && p->sfx_level && p->sfx_density) {
+    if(!sf->muted && (!solo || sf->solo) && p->sfx_level && p->sfx_density &&
+       !((p->recorder.state==UR_REC_ARM||p->recorder.state==UR_REC_RECORD||
+          p->recorder.state==UR_REC_EDIT)&&p->recorder.track==6u)) {
         UrbanSfxEvent cue=urban_sfx_event(&p->rt.ui.song,
                                            sfx_section,sfx_bar,cstep);
         uint32_t choice=urban_mix_seed(sf->seq[sfx_section].seed ^
@@ -995,11 +1026,10 @@ static void urban_port_rec_keys(void) {
     UrbanRecorder *r=&p->recorder;
     uint32_t keys=p->rec_screen?plat_keys():0u;
     uint32_t changed=(keys^p->rec_last_keys);
-    int voice=urban_hyp_voice(r->track);
     for(unsigned k=0u;k<27u;k++)if(changed&(1u<<k)) {
         unsigned on=(keys>>k)&1u;
         unsigned note=53u+k;
-        if(voice>=0)en_note(voice,urban_hyp_key((unsigned)voice,(uint8_t)note),on);
+        urban_port_rec_note(r,note,110u,on);
         if(r->state==UR_REC_RECORD)
             (void)urban_rec_capture(r,on?UR_REC_NOTE_ON:UR_REC_NOTE_OFF,
                                     note,on?110u:0u,0u,urban_port_rec_stamp());
@@ -1024,6 +1054,7 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
             p->rec_screen=1u;p->editor.view=0u;
             if(r->state==UR_REC_OFF)urban_rec_arm(r);
             urban_port_sound_profile(); /* audition selected program in ARM */
+            urban_port_stage_pattern();
         } else if(r->state==UR_REC_ARM) {
             urban_rec_start(r);
             p->rec_clock_started=0u;
@@ -1050,6 +1081,7 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
             urban_port_rec_release_keys();
             urban_rec_set_program(r,d);
             urban_port_sound_profile(); /* immediate audible sound change */
+            urban_port_stage_pattern();
         }
         d=plat_enc(EN_K2);
         if(d)urban_rec_set_bars(r,d);
@@ -1411,12 +1443,16 @@ static const char *urban_port_rec_program_name(const UrbanRecorder *r) {
         if(inst.track==2u)return acoustic[inst.jazz-1u];
         return jazz[inst.jazz-1u];
     }
+    if(inst.track==0u)return urban_kit_names[inst.patch];
+    if(inst.track==6u)return urban_sfx_names[inst.patch];
     if(inst.track==2u)return urban_bass_names[inst.patch];
     if(inst.track==3u)return urban_lead_names[inst.patch];
     return urban_pad_names[inst.patch];
 }
 static const char *urban_port_rec_program_family(const UrbanRecorder *r) {
     UrbanRecInstrument inst=urban_rec_instrument(r->program);
+    if(inst.track==0u)return "DRUM KIT (6 LANES)";
+    if(inst.track==6u)return "SOUND EFFECT";
     if(inst.track==2u)return inst.jazz?"ACOUSTIC BASS":"BASS / DRONE";
     if(inst.track==3u)return inst.jazz?"MODELLED LEAD":"SYNTH LEAD";
     return inst.jazz?"MODELLED KEYS":"POLY KEYS / PAD";
