@@ -1,6 +1,33 @@
 # FM-1 Mobile Companion — multifirmware, pantalla ampliada y síntesis desde el móvil
 
 
+## Instalación del firmware seleccionado en un FM-1 físico (USB-MIDI)
+
+**Nuevo botón: «Instalar firmware seleccionado en FM-1».** Aparece en
+Workbench para Android, junto a «Actualizar seleccionado» y «Actualizar
+todos». Permite tomar el archivo .fwsc de **cualquier firmware FM-1 válido
+seleccionado** (incluido en Workbench, actualizado desde FW Hub o importado
+manualmente) e **instalarlo en el M-VAVE FM-1 físico** por **USB-MIDI**.
+
+La instalación física es distinta de «Actualizar seleccionado»: esta
+última acción solo actualiza firmwares del emulador Android. La acción
+de instalación física verifica la integridad SHA-256, el formato y la
+identidad del paquete FM-1, permite elegir un dispositivo USB-MIDI y
+comprueba que responde como un FM-1. **Antes de comenzar a escribir**
+pregunta: **«¿Seguro que quieres instalar firmware personalizado? ...
+Será bajo tu propia responsabilidad.»** Se puede cancelar sin flashear.
+Solo entonces el cargador USB del FM-1 consulta los bloques del archivo,
+escribe el firmware, reinicia y comunica su nueva identidad.
+
+**Advertencia:** esta implementación está compilándose y no se ha
+validado todavía sobre hardware real. Una desconexión, un firmware
+incompatible o un corte eléctrico pueden inutilizar el dispositivo.
+Es necesario disponer de una copia de seguridad y una vía de rescate.
+Solo acepta paquetes **.fwsc compatibles con FM-1**, nunca firmware
+SMK-37, archivos corruptos o imágenes arbitrarias; BLE no se usa para
+flashear. Algunos paquetes necesitan recursos complementarios -res.bin
+que este botón aún no instala.
+
 ## Requisito para usar el móvil como pantalla y el FM-1 como controlador
 
 **Instalación obligatoria para controlar TODO el panel físico:** si quieres
@@ -8,7 +35,7 @@ usar **el teléfono como pantalla principal y sintetizador** (firmware emulado
 seleccionable en Workbench) y el **M-VAVE FM-1 real como superficie de control
 completa**, debes instalar **Workbench Remote** en el **FM-1 físico**, además
 de instalar la APK Workbench en el teléfono. Son dos softwares distintos:
-la APK no instala ni flashea el firmware físico.
+la mera instalación de la APK no modifica el FM-1; solo el botón explícito «Instalar firmware seleccionado en FM-1» permite flashearlo con confirmación.
 
 | Uso | ¿Se requiere Workbench Remote en el FM-1 real? |
 | --- | --- |
@@ -61,8 +88,7 @@ que falten. Para el mapeo completo existe el
 y un [compilador experimental independiente del firmware físico]
 (.github/workflows/ctl1-workbench-remote.yml), que genera paquetes USB y
 BLE. Su instalación en hardware es voluntaria y requiere pruebas y
-un método de recuperación. La APK no flashea el FM-1 físico y el
-firmware del móvil (incluido URBAN-1) sigue seleccionándose sin flasheos.
+un método de recuperación. La APK **no flashea automáticamente** el FM-1 físico: solo lo hace al pulsar «Instalar firmware seleccionado en FM-1» y confirmar el riesgo. Seleccionar URBAN-1 u otro firmware para el emulador no inicia ninguna instalación física.
 
 [Tabla de mapeo y limitaciones](docs/midi-mapping.md).
 
