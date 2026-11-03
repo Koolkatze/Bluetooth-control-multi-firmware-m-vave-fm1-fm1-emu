@@ -187,10 +187,10 @@ static void wb_remote_input(void)
         "#if WB_REMOTE_ONLY\n"
         "    input();\n"
         "    dev_scan();\n"
-        "    if ((int32_t)(plat_ms() - bh_boot_splash_until) >= 0)\n"
-        "        bh_remote_frame();\n"
+        "    if (bh_intro_step())\n"
+        "        bh_remote_leds(); /* MIDI and key LEDs work during splash */\n"
         "    else\n"
-        "        bh_remote_leds();\n"
+        "        bh_remote_frame();\n"
         "    ui.frame++;\n"
         "#else\n"
         "    input();"
@@ -211,8 +211,7 @@ static void wb_remote_input(void)
     swap(
         "    lcd_fill(0, 0, 240, 240, K_BG);",
         "    lcd_fill(0, 0, 240, 240, BH_BG);\n"
-        "    bh_boot_splash_until = plat_ms() + 1600u;\n"
-        "    bh_remote_splash();"
+        "    bh_intro_start();"
     )
     return text
 
@@ -260,7 +259,8 @@ def blackhole_extensions(root: Path) -> dict[Path, str]:
                 '}',
                 'void app_splash(void)\n'
                 '{\n'
-                '    bh_remote_splash(); /* native 240x240 pixel-art black hole */\n'
+                '    bh_glitch_image(0u, 0); /* glitch IN on 240x240 display */\n'
+                '    bh_intro_caption(0u, 1);\n'
                 '}',
             ),
         ],
@@ -338,7 +338,7 @@ def main() -> None:
     changes[file] = modified
     if args.dry_run:
         print("OK: pinned CTL-1 and fm1-base accept Blackhole Remote 240x240 patch")
-        print("OK: battery ADC percentage, USB/BLE link, 27 lit keys, MIDI mapping")
+        print("OK: battery ADC percentage, USB/BLE, real key LEDs, RGB565 byte order, glitch-only transitions")
         return
     # Preflight every source and backup before writing any file.
     for source in changes:
@@ -352,7 +352,7 @@ def main() -> None:
     print("OK: Blackhole Remote MIDI controller source patched:")
     for source in changes:
         print(f"  {source}")
-    print("Blackhole display: 240x240 splash + live 27-key responsive keyboard")
+    print("Blackhole display: 240x240 glitch-in, wait for key, glitch-out, transparent HUD, opaque 27-key piano")
     print("MIDI: original Workbench Remote v1 protocol preserved on USB/BLE")
     print("No firmware was flashed; use a safe recovery method before testing.")
 
