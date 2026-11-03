@@ -8,6 +8,7 @@ on:
     paths:
       - "tools/patch_ctl1_workbench.py"
       - "tools/blackhole_remote_display.inc"
+      - "tools/generate_blackhole_bitmap.py"
       - ".github/workflows/ctl1-workbench-remote.yml"
 
 permissions:
@@ -39,6 +40,7 @@ jobs:
         python3 -c 'from PIL import features; assert features.check("raqm"), "Pillow without raqm"'
         python3 tools/patch_ctl1_workbench.py build/ctl1-upstream --dry-run
         python3 tools/patch_ctl1_workbench.py build/ctl1-upstream
+        python3 tools/generate_blackhole_bitmap.py build/ctl1-upstream/app/blackhole_bitmap.h
         (
           cd build/ctl1-upstream
           ./build.sh --no-ble
@@ -58,6 +60,9 @@ jobs:
         grep -q '#define WB_REMOTE_ONLY 1' build/ctl1-upstream/app/ui.c
         grep -q '102u, 42u' build/ctl1-upstream/app/ui.c
         grep -q 'bh_remote_keyboard' build/ctl1-upstream/app/blackhole_remote_display.inc
+        grep -q 'bh_art_splash\\[34560\\]' build/ctl1-upstream/app/blackhole_bitmap.h
+        grep -q 'bh_art_widget\\[2816\\]' build/ctl1-upstream/app/blackhole_bitmap.h
+        grep -q 'bh_boot_splash_until' build/ctl1-upstream/app/ui.c
         grep -q 'bh_remote_leds' build/ctl1-upstream/app/blackhole_remote_display.inc
         grep -q 'int plat_battery_percent(void)' build/ctl1-upstream/base/device/plat_fm1.c
         grep -q 'int plat_usb_midi_connected(void)' build/ctl1-upstream/base/device/plat_fm1.c
