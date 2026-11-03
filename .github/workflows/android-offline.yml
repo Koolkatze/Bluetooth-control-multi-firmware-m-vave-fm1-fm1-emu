@@ -88,7 +88,20 @@ jobs:
           assert '80 + ((button + 2) % NB)' in source
           assert '{94, 96, 95, 97, 98, 99, 100}' in source
           assert '102u, 42u' in source
-          assert source.count('#if WB_REMOTE_ONLY') == 1
+          assert '#include "blackhole_remote_display.inc"' in source
+          assert 'bh_remote_frame();' in source
+          assert 'WORKBENCH", "REMOTE"' not in source
+          render = Path('tools/blackhole_remote_display.inc').read_text()
+          assert 'bh_remote_splash(void)' in render
+          assert 'bh_remote_keyboard(void)' in render
+          assert 'bh_remote_leds(void)' in render
+          assert 'cv_begin(240, 144, BH_BG)' in render
+          assert 'cv_begin(240, 96, BH_BG)' in render
+          assert 'plat_battery_percent()' in render
+          assert 'plat_usb_midi_connected()' in render
+          assert 'plat_ble_connected()' in render
+          assert 'WHITE_K[i]' in render
+          assert source.count('#if WB_REMOTE_ONLY') == 2
           assert source.count('#endif') >= 1
           print('CTL-1 Workbench Remote patch anchors verified')
           PY
