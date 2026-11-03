@@ -135,6 +135,20 @@ static UrbanInstrumentProgram urban_instrument_program(
         p.jazz_voice=track==3u?
             jazz_leads[row][variation]:jazz_chords[row][variation];
     }
+    /* Lo-fi hip-hop must be an instrumental jazz/keys loop, not
+     * an electronic sustained PAD labelled 'Rhodes'. The existing
+     * HYP jazz DSP plays ORIGINAL physical-model notes: no recordings
+     * from Lofi Girl are copied or embedded. Each SAVE chooses one of
+     * four related arrangements (study / rainy / jazz / sleep). */
+    if(genre==3u && t->subgenre%4u==3u) {
+        unsigned mood=urban_lofi_mood(s);
+        if(track==4u) {
+            static const uint8_t keys[4]={2u,1u,2u,2u};
+            p.jazz_voice=keys[mood]; /* Rhodes / softly voiced piano */
+        }
+        if(track==3u && mood==2u)
+            p.jazz_voice=(uint8_t)(variation&1u?3u:4u); /* flute / vibraphone */
+    }
     if(track==2u) {
         /* The bass sound is now chosen from the named SUBGENRE, never
          * from the old genre-global alternative pool. */
@@ -195,6 +209,10 @@ static UrbanInstrumentProgram urban_instrument_program(
     };
     p.noise_color=noise[genre];
     p.noise_amount=level[genre];
+    if(genre==3u && t->subgenre%4u==3u && track==5u)
+        p.noise_color=(uint8_t)(urban_lofi_mood(s)==1u?2u:1u);
+        /* Native HYP pink/brown noise: a continuous low bed, not
+         * a copyrighted vinyl sample or fake tape recording. */
     return p;
 }
 #endif
