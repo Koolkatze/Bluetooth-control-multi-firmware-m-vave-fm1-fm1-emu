@@ -104,9 +104,12 @@ static void bh_remote_splash(void)
 
     cv_begin(240, 96, BH_BG);
     cv_rect(12, 6, 216, 2, BH_BORDER);
-    text_c(120, 15, &FONT_L, "BLACKHOLE", BH_WHITE);
-    text_c(120, 43, &FONT_B, "REMOTE", BH_PURPLE);
-    text_c(120, 65, &FONT_XS, "MIDI CONTROLLER", BH_CYAN);
+    cv_text((240 - text_w(&FONT_L, "BLACKHOLE")) / 2, 15,
+            &FONT_L, "BLACKHOLE", BH_WHITE);
+    cv_text((240 - text_w(&FONT_B, "REMOTE")) / 2, 43,
+            &FONT_B, "REMOTE", BH_PURPLE);
+    cv_text((240 - text_w(&FONT_XS, "MIDI CONTROLLER")) / 2, 65,
+            &FONT_XS, "MIDI CONTROLLER", BH_CYAN);
     cv_rect(16, 89, 208, 2, BH_BORDER);
     cv_rect(16, 89, 49, 2, BH_CYAN);
     cv_blit(0, 144);
