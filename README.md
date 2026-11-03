@@ -44,7 +44,14 @@ Android sigue reconociéndolo automáticamente mediante USB/BLE.
 La interfaz ha sido rehecha para la **pantalla CUADRADA real de 240 × 240
 píxeles**, no una maqueta panorámica. El encendido enseña una ilustración
 **pixel art original de un agujero negro**, pintada por el propio firmware
-sin depender de Internet ni de la pantalla del teléfono. Al terminar,
+sin depender de Internet ni de la pantalla del teléfono. **Revisión HD:**
+el agujero negro de la imagen cuadrada original se rasteriza a **240 × 144
+píxeles reales**, con una paleta RGB565 de 64 colores, más un área inferior
+de 96 píxeles para completar los **240 × 240**. Así se sustituye el
+antiguo agujero negro geométrico de píxeles 4 × 4; el arranque permanece
+visible al menos **1,6 segundos**, sin detener la lectura de teclas ni
+el envío MIDI. El panel activo también utiliza una miniatura de la misma
+imagen, de **64 × 44 píxeles**. Al terminar,
 muestra un HUD oscuro de estética violeta, magenta y cian inspirado en
 URBAN-1, con tres elementos permanentes:
 
@@ -68,6 +75,14 @@ de las compilaciones CTL-1. Ambos artefactos .fwsc han superado la
 Flashear sigue requiriendo consentimiento
 y disponer de un método de recuperación; **las imágenes del firmware
 no están validadas todavía en hardware real**.
+
+**Compilación HD verificada:** las dos variantes `.fwsc` han superado
+la compilación JieLi y las pruebas de empaquetado en
+[GitHub Actions — Blackhole Remote HD](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/actions/runs/41725379320).
+El código fuente de la imagen está incluido en
+[`generate_blackhole_bitmap.py`](tools/generate_blackhole_bitmap.py),
+con los píxeles necesarios incorporados en el propio script; las
+compilaciones posteriores no dependen de un enlace externo que caduque.
 
 [Compilar Blackhole Remote en GitHub](.github/workflows/ctl1-workbench-remote.yml) ·
 [Imagen de pantalla en código](tools/blackhole_remote_display.inc)
