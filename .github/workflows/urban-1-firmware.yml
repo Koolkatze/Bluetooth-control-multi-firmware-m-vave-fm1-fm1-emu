@@ -140,5 +140,5 @@ jobs:
           # release:published events; this is required for cross-workflow
           # updates of master/web/firmwares.json when GitHub Actions creates
           # the firmware release.
-          gh workflow run sync-urban1-firmware.yml --repo "$GH_REPO" --ref master -f tag=urban1-firmware-v0.4.16
+          gh workflow run sync-urban1-firmware.yml --repo "$GH_REPO" --ref master -f tag=urban1-firmware-v0.4.17
           echo "Triggered updater-catalog sync on master (APK untouched)."
