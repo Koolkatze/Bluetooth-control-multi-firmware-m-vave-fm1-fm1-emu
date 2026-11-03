@@ -2,7 +2,7 @@
  * URBAN-1 / pixel-art Kitsune boot cover.
  * Two 240px-wide canvas transfers avoid a full-frame LCD buffer.
  * Uses a 7200-byte packed 4bpp palette image (120x120, scaled 2x),
- * decoded once from flash. Only the LCD/UI thread touches the image;
+ * decoded 60 bytes per row from flash. Only the UI thread touches it;
  * neither the DSP audio interrupt nor the MIDI queue is involved.
  */
 #ifndef URBAN_SPLASH_ENGINE_H
@@ -14,9 +14,6 @@
 #define URBAN_SPLASH_IN_MS 180u
 #define URBAN_SPLASH_OUT_MS 220u
 
-static uint8_t urban_splash_pixels[URBAN_SPLASH_PACKED_BYTES]
-    __attribute__((section(".pool")));
-
 static unsigned urban_splash_b64_value(char c) {
     if(c>='A' && c<='Z')return (unsigned)(c-'A');
     if(c>='a' && c<='z')return (unsigned)(c-'a'+26);
@@ -25,19 +22,21 @@ static unsigned urban_splash_b64_value(char c) {
     if(c=='/')return 63u;
     return 0u;
 }
-/* 9600 Base64 characters -> 7200 packed bytes; exact fixed bounds.
- * No heap allocation, image decoder, floating point or pixel animation
- * runs on the audio thread. */
-static void urban_splash_prepare(void) {
-    for(unsigned n=0u;n<URBAN_SPLASH_PACKED_BYTES/3u;n++) {
+/* Exactly 80 Base64 characters per 120px source row (60 packed bytes).
+ * Decode only the row currently being drawn into 60B of UI stack:
+ * zero new persistent RAM and no allocations from the constrained .pool.
+ * Each source row is decoded once for two scaled LCD raster rows. */
+static void urban_splash_decode_row(unsigned row,uint8_t out[60]) {
+    const char *source=urban_splash_image_b64+row*80u;
+    for(unsigned n=0u;n<20u;n++) {
         unsigned p=n*4u;
-        unsigned a=urban_splash_b64_value(urban_splash_image_b64[p]);
-        unsigned b=urban_splash_b64_value(urban_splash_image_b64[p+1u]);
-        unsigned c=urban_splash_b64_value(urban_splash_image_b64[p+2u]);
-        unsigned d=urban_splash_b64_value(urban_splash_image_b64[p+3u]);
-        urban_splash_pixels[n*3u]=(uint8_t)((a<<2u)|(b>>4u));
-        urban_splash_pixels[n*3u+1u]=(uint8_t)((b<<4u)|(c>>2u));
-        urban_splash_pixels[n*3u+2u]=(uint8_t)((c<<6u)|d);
+        unsigned a=urban_splash_b64_value(source[p]);
+        unsigned b=urban_splash_b64_value(source[p+1u]);
+        unsigned c=urban_splash_b64_value(source[p+2u]);
+        unsigned d=urban_splash_b64_value(source[p+3u]);
+        out[n*3u]=(uint8_t)((a<<2u)|(b>>4u));
+        out[n*3u+1u]=(uint8_t)((b<<4u)|(c>>2u));
+        out[n*3u+2u]=(uint8_t)((c<<6u)|d);
     }
 }
 /* phase 1: reveal with horizontal digital tearing; phase 2: steady;
@@ -48,9 +47,16 @@ static void urban_splash_render_band(unsigned y0,unsigned h,
     if(phase==1u)severity=step>=3u?0u:3u-step;
     else if(phase==3u)severity=step>3u?3u:step;
     cv_begin(240u,h,RGB(8,13,31));
+    uint8_t row_pixels[60];
+    unsigned decoded_y=URBAN_SPLASH_H;
     for(unsigned y=0u;y<h;y++) {
         unsigned abs_y=y0+y;
-        const uint8_t *src=&urban_splash_pixels[(abs_y>>1u)*60u];
+        unsigned art_y=abs_y>>1u;
+        if(art_y!=decoded_y) {
+            urban_splash_decode_row(art_y,row_pixels);
+            decoded_y=art_y;
+        }
+        const uint8_t *src=row_pixels;
         int shift=0;
         if(severity && (((abs_y>>2u)+step*7u)&15u)<severity*2u)
             shift=(int)(((abs_y>>2u)*13u+step*11u)%23u)-11;
