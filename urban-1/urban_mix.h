@@ -98,8 +98,8 @@ static UrbanMixPlan urban_mix_plan(const UrbanSong *s,
                  * no excessive master volume or distorted hi-hats. */
                 m.drums=(uint8_t)(m.drums*90u/100u);
                 m.bass=(uint8_t)(m.bass*95u/100u);
-                m.chords=urban_mix_cap((unsigned)m.chords+7u,61u);
-                m.noise=urban_mix_cap((unsigned)m.noise+11u,19u);
+                m.chords=urban_mix_cap((unsigned)m.chords+7u,55u);
+                m.noise=urban_mix_cap((unsigned)m.noise+11u,13u);
                 if(urban_lofi_mood(s)==3u)
                     m.drums=(uint8_t)(m.drums*78u/100u);
             }
