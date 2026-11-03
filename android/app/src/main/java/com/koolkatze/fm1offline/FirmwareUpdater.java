@@ -16,6 +16,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -135,6 +137,34 @@ final class FirmwareUpdater {
         }
     }
 
+    /* The APK contains yesterday's catalog. Send fresh, strictly bounded
+     * catalogue metadata to the native WebView so new Hub entries become
+     * discoverable WITHOUT reinstalling the APK. The JS page never gains
+     * permission to download remote firmware itself; native Android validates
+     * package origins and writes downloaded .fwsc to private app storage. */
+    private void notifyCatalog(String device, JSONArray remote) throws Exception {
+        JSONArray safe = new JSONArray();
+        for (int i = 0; i < remote.length(); i++) {
+            JSONObject item = remote.optJSONObject(i);
+            if (item == null || !validId(item.optString("id"))) continue;
+            JSONObject view = new JSONObject();
+            for (String key : new String[] {"id","name","version","author",
+                    "license","about","repo","hub","installer","unavailable"}) {
+                if (item.has(key)) view.put(key, item.optString(key));
+            }
+            view.put("byo", item.optBoolean("byo") || item.optString("package").isEmpty());
+            safe.put(view);
+        }
+        JSONObject event = new JSONObject();
+        event.put("kind", "catalog");
+        event.put("device", device);
+        event.put("entries", safe);
+        final String js = "window.fm1FirmwareUpdateProgress?.(" + event.toString() + ")";
+        activity.runOnUiThread(() -> {
+            if (!activity.isFinishing()) web.evaluateJavascript(js, null);
+        });
+    }
+
     private void update(String device, String selected) throws Exception {
         JSONObject packaged = new JSONObject(new String(
                 readStream(activity.getAssets().open("site/" + catalogPath(device)), MAX_CATALOG),
@@ -150,30 +180,46 @@ final class FirmwareUpdater {
             if (validId(id)) remote.put(id, f);
         }
         Set<String> known = new HashSet<>();
-        for (int i = 0; i < original.length(); i++) known.add(original.getJSONObject(i).optString("id"));
-        if (!selected.isEmpty() && !known.contains(selected))
-            throw new IllegalArgumentException("El firmware seleccionado no pertenece al catálogo instalado");
-
-        JSONObject versions = installed(device);
-        int total = selected.isEmpty() ? original.length() : 1;
-        int changed = 0, checked = 0;
-        notifyPage("start", "", "", "Comprobando versiones en el catálogo oficial…", 0, 0, total);
+        List<JSONObject> all = new ArrayList<>();
         for (int i = 0; i < original.length(); i++) {
+            JSONObject item = original.getJSONObject(i);
+            String id = item.optString("id");
+            if (validId(id) && known.add(id)) all.add(item);
+        }
+        /* This was the root cause of missing Hub entries: the updater only
+         * looped over the APK's original fixed list, ignoring every new id
+         * from the up-to-date catalog on GitHub. */
+        for (int i = 0; i < newest.length(); i++) {
+            JSONObject item = newest.getJSONObject(i);
+            String id = item.optString("id");
+            if (validId(id) && known.add(id)) all.add(item);
+        }
+        if (!selected.isEmpty() && !known.contains(selected))
+            throw new IllegalArgumentException("Firmware no encontrado en el catálogo actualizado");
+        notifyCatalog(device, newest);
+        JSONObject versions = installed(device);
+        int total = selected.isEmpty() ? all.size() : 1;
+        int changed = 0, checked = 0;
+        notifyPage("start", "", "", "Comprobando versiones, incluidos firmwares nuevos de FW Hub…", 0, 0, total);
+        for (JSONObject current : all) {
             if (Thread.currentThread().isInterrupted()) return;
-            JSONObject current = original.getJSONObject(i);
             String id = current.optString("id");
             if (!selected.isEmpty() && !selected.equals(id)) continue;
             checked++;
             JSONObject candidate = remote.get(id);
             String label = current.optString("name", id);
-            if (candidate == null || !eligible(current) || !eligible(candidate)) {
+            if (candidate == null || !eligible(current) || !eligible(candidate)
+                    || candidate.optString("package").isEmpty()) {
                 notifyPage("skipped", id, "", label + ": sin actualización compatible", changed, checked, total);
                 continue;
             }
             String version = candidate.optString("version");
             JSONObject existing = versions.optJSONObject(id);
+            /* New remote-only firmware has never been bundled in the APK.
+             * Its own advertised version is NOT evidence of installation. */
             String previous = existing != null
-                    ? existing.optString("version") : current.optString("version");
+                    ? existing.optString("version")
+                    : (originalHasId(original, id) ? current.optString("version") : "");
             String address = candidate.optString("package");
             File installedPackage = new File(folder(device), id + ".fwsc");
             boolean savedFileOk = installedPackage.isFile()
@@ -218,6 +264,12 @@ final class FirmwareUpdater {
         }
         notifyPage("summary", "", "", "Comprobados: " + checked + " · Actualizados: " + changed,
                 changed, checked, total);
+    }
+
+    private static boolean originalHasId(JSONArray original, String id) {
+        for (int i = 0; i < original.length(); i++)
+            if (id.equals(original.optJSONObject(i).optString("id"))) return true;
+        return false;
     }
 
     private static boolean eligible(JSONObject f) {
