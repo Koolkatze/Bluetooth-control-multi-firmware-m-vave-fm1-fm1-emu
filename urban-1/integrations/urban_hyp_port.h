@@ -39,6 +39,8 @@ extern volatile uint32_t urban_piano_note_onsets;
 void urban_tape_start_trigger(void);
 extern volatile uint32_t urban_tape_start_frames,urban_tape_start_completed;
 void urban_lead_lfo_config(unsigned rate,unsigned depth);
+static void urban_filter_set(unsigned lp,unsigned hp);
+extern volatile uint32_t urban_filter_processed_frames;
 extern volatile uint32_t urban_lead_lfo_frames;
 extern volatile uint32_t urban_piano_rolled_chords;
 
@@ -57,6 +59,7 @@ typedef struct {
     uint32_t rec_last_keys;
     uint8_t play_long_done,tape_enabled,tape_stop_pending;
     uint8_t rec_clock_started,lead_lfo_rate,lead_lfo_depth,rec_screen;
+    uint8_t lp_filter,hp_filter;
     uint8_t ui_drawn;
     int8_t sfx_type_override; /* -1: keep the chosen 56-style preset */
     uint8_t sfx_level,sfx_length,sfx_density;
@@ -93,6 +96,8 @@ static void urban_port_style_reset(void) {
     urban_port.lead_lfo_rate=0u;
     urban_port.lead_lfo_depth=0u;
     urban_lead_lfo_config(0u,0u);
+    urban_port.lp_filter=urban_port.hp_filter=0u;
+    urban_filter_set(0u,0u);
     e->bank=0u;
 }
 
@@ -694,6 +699,7 @@ static void urban_port_init(uint32_t seed) {
     urban_rec_init(&p->recorder);
     p->tape_enabled=1u;
     urban_lead_lfo_config(0u,0u);
+    urban_filter_set(0u,0u);
     p->sfx_level=100u;
     p->sfx_length=100u;
     p->sfx_density=100u;
@@ -800,6 +806,8 @@ static int urban_port_editor_value(int id) {
     if(id==UC_COMPLEX)return s->complexity;
     if(id==UC_SFX_SOUND)return urban_port.sfx_type_override;
     if(id==UC_TAPE_TRANSPORT)return urban_port.tape_enabled;
+    if(id==UC_LOWPASS)return urban_port.lp_filter;
+    if(id==UC_HIGHPASS)return urban_port.hp_filter;
     if(id==UC_LEAD_LFO_RATE)return urban_port.lead_lfo_rate;
     if(id==UC_LEAD_LFO_DEPTH)return urban_port.lead_lfo_depth;
     if(id==UC_SFX_LEVEL)return urban_port.sfx_level;
@@ -867,6 +875,7 @@ static void urban_port_editor_write(int id,int delta) {
     else if(id==UC_SCALE){hi=URBAN_SCALE_COUNT-1;}
     else if(id==UC_COMPLEX){hi=3;}
     else if(id==UC_TAPE_TRANSPORT){hi=1;}
+    else if(id==UC_LOWPASS||id==UC_HIGHPASS){hi=100;}
     else if(id==UC_LEAD_LFO_RATE||id==UC_LEAD_LFO_DEPTH){hi=100;}
     else if(id==UC_SFX_SOUND){lo=-1;hi=URBAN_SFX_COUNT-1;}
     else if(id==UC_SFX_LEVEL || id==UC_SFX_LENGTH ||
@@ -896,6 +905,10 @@ static void urban_port_editor_write(int id,int delta) {
         urban_port_editor_refresh_notes();
     } else if(id==UC_TAPE_TRANSPORT) {
         urban_port.tape_enabled=(uint8_t)value;
+    } else if(id==UC_LOWPASS||id==UC_HIGHPASS) {
+        if(id==UC_LOWPASS)urban_port.lp_filter=(uint8_t)value;
+        else urban_port.hp_filter=(uint8_t)value;
+        urban_filter_set(urban_port.lp_filter,urban_port.hp_filter);
     } else if(id==UC_LEAD_LFO_RATE) {
         urban_port.lead_lfo_rate=(uint8_t)value;
         urban_lead_lfo_config(urban_port.lead_lfo_rate,urban_port.lead_lfo_depth);
@@ -1292,7 +1305,8 @@ static void urban_port_editor_value_text(int id,char buf[24]) {
     else if(id==UC_SCALE)urban_port_copy_text(buf,urban_scale_names[(unsigned)v%URBAN_SCALE_COUNT]);
     else if(id==UC_TAPE_TRANSPORT)
         urban_port_copy_text(buf,v?"ON":"OFF");
-    else if(id==UC_LEAD_LFO_RATE||id==UC_LEAD_LFO_DEPTH) {
+    else if(id==UC_LOWPASS||id==UC_HIGHPASS||
+            id==UC_LEAD_LFO_RATE||id==UC_LEAD_LFO_DEPTH) {
         buf[0]=(char)('0'+(v/100)%10);
         buf[1]=(char)('0'+(v/10)%10);
         buf[2]=(char)('0'+v%10);buf[3]=0;
