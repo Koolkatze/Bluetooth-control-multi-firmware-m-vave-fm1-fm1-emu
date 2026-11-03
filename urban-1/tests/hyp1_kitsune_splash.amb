@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Real HYP UI and LCD: 240x240 nine-tail Kitsune splash with brief
+# glitch on entrance and exit. Normal host tests bypass splash; this
+# script is run with -DURBAN_SPLASH_TEST to exercise production behavior.
+expect playing 0
+expect urbansplash 1
+shot urban-kitsune-glitch-enter.png
+wait 260
+expect urbansplash 2
+shot urban-kitsune-cover.png
+wait 240
+expect urbansplash 2
+shot urban-kitsune-cover-still.png
+# PLAY accepts cover and starts Song Mode only AFTER the exit animation.
+tap PLAY
+expect urbansplash 3
+wait 100
+shot urban-kitsune-glitch-exit.png
+wait 250
+expect urbansplash 0
+expect playing 1
+shot urban-kitsune-home.png
+tap PLAY
+expect playing 0
+# On a new boot the cover must be back. HOME skips it without starting song.
+reboot
+expect urbansplash 1
+wait 240
+expect urbansplash 2
+tap HOME
+wait 260
+expect urbansplash 0
+expect playing 0
