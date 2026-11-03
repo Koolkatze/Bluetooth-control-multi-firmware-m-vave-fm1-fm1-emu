@@ -51,8 +51,8 @@ static void bh_remote_splash(void)
      * fictitious BLE/USB link states during the boot screen. */
     cv_begin(240, 96, BH_BG);
     cv_rect(0, 0, 240, 2, BH_BORDER);
-    cv_round(8, 10, 224, 72, 8, BH_CARD);
-    cv_round(10, 12, 220, 68, 7, BH_BG);
+    cv_rect(8, 10, 224, 72, BH_CARD);
+    cv_rect(10, 12, 220, 68, BH_BG);
     cv_text((240 - text_w(&FONT_B, "FM-1 / MIDI")) / 2, 19,
             &FONT_B, "FM-1 / MIDI", BH_WHITE);
     cv_text((240 - text_w(&FONT_XS, "USB + BLE CONTROLLER")) / 2, 43,
