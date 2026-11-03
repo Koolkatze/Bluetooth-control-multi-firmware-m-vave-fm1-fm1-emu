@@ -86,6 +86,7 @@ public final class MainActivity extends Activity {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private WebView web;
     private FirmwareUpdater firmwareUpdater;
+    private PhysicalFm1Installer physicalFirmwareInstaller;
     private FrameLayout safeAreaRoot;
     private ValueCallback<Uri[]> fileCallback;
     private MidiManager midiManager;
@@ -256,6 +257,7 @@ public final class MainActivity extends Activity {
         // requests can reach the public firmware sources over HTTPS.
         File updateFolder = getDir("fm1_firmware_updates", MODE_PRIVATE);
         firmwareUpdater = new FirmwareUpdater(this, web, updateFolder);
+        physicalFirmwareInstaller = new PhysicalFm1Installer(this, midiManager, web);
         web.addJavascriptInterface(new NativeBridge(), "FM1Android");
 
         WebViewAssetLoader localAssets = new WebViewAssetLoader.Builder()
@@ -482,6 +484,16 @@ public final class MainActivity extends Activity {
 
     private void updateStatus(String message) {
         if (liveStatus != null && !shuttingDown) liveStatus.setText(message);
+    }
+
+    void updateStatusForPhysicalFirmware(String message) {
+        updateStatus(message);
+    }
+
+    void releaseMidiForPhysicalInstall() {
+        // USB-MIDI hardware updater needs exclusive ports, not the existing
+        // performance MIDI session used by the emulated synthesizer.
+        closeMidi();
     }
 
     private void showSoundDiagnostics() {
@@ -751,6 +763,28 @@ public final class MainActivity extends Activity {
         public boolean updateFirmwares(String device, String selectedId) {
             return firmwareUpdater != null
                     && firmwareUpdater.start(device, selectedId == null ? "" : selectedId);
+        }
+
+        /**
+         * Upload one user-selected FM-1 .fwsc (including imported custom files)
+         * to private temporary storage. This does NOT start a flash. The native
+         * installer first checks the file and the USB device's identity, then
+         * prompts for explicit human consent before touching the device.
+         */
+        @JavascriptInterface
+        public boolean preparePhysicalFirmware(String device, String name,
+                                               int length, String sha256) {
+            return physicalFirmwareInstaller != null
+                    && physicalFirmwareInstaller.begin(device, name, length, sha256);
+        }
+        @JavascriptInterface
+        public boolean physicalFirmwareChunk(int sequence, String base64) {
+            return physicalFirmwareInstaller != null
+                    && physicalFirmwareInstaller.append(sequence, base64);
+        }
+        @JavascriptInterface
+        public boolean confirmPhysicalFirmwareUpload() {
+            return physicalFirmwareInstaller != null && physicalFirmwareInstaller.finish();
         }
 
         @JavascriptInterface
@@ -1289,6 +1323,7 @@ public final class MainActivity extends Activity {
     protected void onDestroy() {
         shuttingDown = true;
         if (firmwareUpdater != null) firmwareUpdater.close();
+        if (physicalFirmwareInstaller != null) physicalFirmwareInstaller.close();
         ui.removeCallbacks(reopenAudioRoute);
         ui.removeCallbacks(audioRouteWatchdog);
         if (outputAudioManager != null && outputDeviceCallback != null)
