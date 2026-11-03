@@ -345,6 +345,16 @@ final class PhysicalFm1Installer {
                 notifyPage("cancelled", "Búsqueda USB interrumpida; no se escribió firmware.", -1);
                 cleanupUpload();
             });
+        } catch (Exception error) {
+            Log.e(TAG, "USB discovery could not continue", error);
+            ui.post(() -> {
+                if (closed || discoveryGeneration != generation) return;
+                dismissDiscoveryDialog();
+                notifyPage("error", "No se pudo detectar FM-1 por USB: "
+                        + error.getMessage() + ". Revisa los permisos USB de Android. "
+                        + "No se ha escrito ningún firmware.", -1);
+                cleanupUpload();
+            });
         }
     }
 
