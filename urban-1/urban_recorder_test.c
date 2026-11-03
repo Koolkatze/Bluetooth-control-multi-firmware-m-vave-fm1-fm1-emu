@@ -39,6 +39,8 @@ int main(void) {
     r.quant=0u; /* no quantization, preserve 32nd position */
     assert(urban_rec_capture(&r,UR_REC_NOTE_ON,67u,100u,0u,9u));
     assert(r.event[r.count-1u].pos==9u);
+    assert(urban_rec_capture(&r,UR_REC_PARAM,0u,(unsigned)-7,44u,11u));
+    assert((int)(int8_t)r.event[r.count-1u].value==-7);
     r.quant=1u; /* quarter notes */
     assert(urban_rec_quantize(&r,13u)==16u);
     r.quant=2u; /* eighths */
