@@ -58,6 +58,8 @@ typedef struct {
     uint8_t bank;
     uint8_t active_mix_section;
     UrbanRecorder recorder;
+    UrbanRecVoices rec_voices; /* Exact native DSP pitches held by REC. */
+    uint8_t rec_automated[P_NPARAMS]; /* Only REC-written editor overrides. */
     uint32_t play_press_ms,tape_stop_at,rec_step_ms;
     uint32_t rec_last_keys;
     uint8_t rec_key_pitch[27]; /* pitch latched at key-on for correct off */
@@ -127,6 +129,43 @@ static int urban_hyp_voice(unsigned track) {
     if(track==3u) return EN_V_ACID;
     if(track==4u) return EN_V_PAD;
     return -1;
+}
+/* Release just REC-triggered voices, NOT the arrangement's own voices.
+ * A NOTE_ON whose loop NOTE_OFF was never dispatched cannot leave HYP
+ * sustaining forever after PAUSE or regeneration. This runs on the UI
+ * thread, not in the DSP callback. */
+static void urban_port_rec_release_audio(void) {
+    UrbanHypPort *p=&urban_port;
+    for(unsigned voice=0u;voice<3u;voice++)
+        for(unsigned note=0u;note<128u;note++)
+            if(urban_rec_voice_active(&p->rec_voices,voice,note)) {
+                en_note((int)voice,(int)note,0);
+                urban_rec_voice_set(&p->rec_voices,voice,note,0);
+            }
+    urban_rec_voices_clear(&p->rec_voices);
+    urban_sfx_silence();
+}
+/* A NEW song/track or a selected genre/subgenre invalidates REC. PAUSE
+ * never calls this: the note/knob take survives ordinary transport stops.
+ * Clear only automation overrides applied by REC playback; leave unrelated
+ * manual FX/EDIT choices intact when regenerating a single track. */
+static void urban_port_rec_reset_take(void) {
+    UrbanHypPort *p=&urban_port;
+    urban_port_rec_release_audio();
+    for(unsigned i=0u;i<P_NPARAMS;i++)if(p->rec_automated[i]) {
+        p->editor.changed[i]=0u;
+        p->editor.valid[i]=0u;
+        p->rec_automated[i]=0u;
+    }
+    urban_rec_reset(&p->recorder);
+    p->rec_clock_started=0u;
+    p->rec_step_ms=plat_ms();
+    p->rec_screen=0u;
+    p->rec_last_keys=plat_keys(); /* don't retrigger already-held buttons */
+    memset(p->rec_key_pitch,0,sizeof(p->rec_key_pitch));
+    p->ui_drawn=0u;
+    p->ui_signature=0u;
+    p->staged_for_bar=UINT32_MAX;
 }
 static void urban_port_release(void) {
     unsigned i;
@@ -408,6 +447,10 @@ static void urban_port_generate(void) {
     UrbanHypPort *p=&urban_port;
     UrbanSong *s=&p->rt.ui.song;
     uint8_t song_generate=(uint8_t)(p->rt.ui.page==URBAN_PAGE_SONG);
+    /* A LOCKED track isn't regenerated: preserve the REC take, too. */
+    if(!song_generate &&
+       s->tracks[p->rt.ui.selected_track].locked)return;
+    urban_port_rec_reset_take(); /* SAVE is a genuinely NEW take. */
     if(song_generate && s->playing)en_play(0);
     /* A different take for every SAVE press, including fast repeated taps
      * in the Android emulator. UI serial is always distinct; plat_ms and
@@ -518,7 +561,17 @@ static void urban_port_rec_note(const UrbanRecorder *r,unsigned note,
     UrbanRecInstrument ins=urban_rec_instrument(r->program);
     int voice=urban_hyp_voice(ins.track);
     if(voice>=0) {
-        en_note(voice,urban_hyp_key((unsigned)voice,(uint8_t)note),(int)on);
+        unsigned pitch=(unsigned)urban_hyp_key((unsigned)voice,(uint8_t)note);
+        int active=urban_rec_voice_active(&urban_port.rec_voices,
+                                          (unsigned)voice,pitch);
+        /* Replayed NOTE_ON before a corresponding NOTE_OFF is a
+         * retrigger, never an unbounded accumulation of DSP voices. */
+        if(on && active)en_note(voice,(int)pitch,0);
+        if(on || active) {
+            en_note(voice,(int)pitch,(int)on);
+            urban_rec_voice_set(&urban_port.rec_voices,
+                                (unsigned)voice,pitch,(int)on);
+        }
     } else if(on && ins.track==0u) {
         /* 27 keys repeat six real lanes: kick, snare, clap, CH/OH, perc. */
         unsigned lane=(note+192u-53u)%6u;
@@ -546,6 +599,7 @@ static void urban_port_rec_timeline(void) {
             if(e->parameter<P_NPARAMS) {
                 UrbanEditor *ed=&p->editor;
                 ed->changed[e->parameter]=1u;
+                p->rec_automated[e->parameter]=1u;
                 int v=(int)(int8_t)e->value;
                 ed->override[e->parameter]=(int16_t)v;
                 urban_port_set(e->parameter,v);
@@ -700,6 +754,13 @@ static void urban_port_play(void) {
     UrbanHypPort *p=&urban_port;
     p->rt.ui.song.playing=(uint8_t)!p->rt.ui.song.playing;
     if(!p->rt.ui.song.playing) {
+        /* Stop REC playback even if the REC screen is open. Previously
+         * port_poll() skipped release() in that case, leaving a held
+         * recorded PAD/LEAD note sounding indefinitely after PAUSE. */
+        urban_port_rec_release_audio();
+        if(p->recorder.state==UR_REC_RECORD)
+            urban_rec_stop(&p->recorder); /* preserve events, stop overdub */
+        p->rec_clock_started=0u;
         urban_port_release();
         if(p->tape_enabled) {
             p->tape_stop_at=plat_ms()+
@@ -834,6 +895,7 @@ static void urban_port_init(uint32_t seed) {
  * tracks and four-bar arrangement instead of generating a new song. */
 static void urban_port_restyle_song(void) {
     UrbanHypPort *p=&urban_port;
+    urban_port_rec_reset_take();
     urban_port_style_reset();
     UrbanSong *s=&p->rt.ui.song;
     urban_song_harmony(s);
@@ -1088,7 +1150,7 @@ static void urban_port_rec_release_keys(void) {
     for(unsigned k=0u;k<27u;k++)if(p->rec_last_keys&(1u<<k)) {
         unsigned note=p->rec_key_pitch[k];
         if(voice>=0)
-            en_note(voice,urban_hyp_key((unsigned)voice,(uint8_t)note),0);
+            urban_port_rec_note(&p->recorder,note,0u,0u);
         if(p->recorder.state==UR_REC_RECORD)
             (void)urban_rec_capture(&p->recorder,UR_REC_NOTE_OFF,
                                     note,0u,0u,urban_port_rec_stamp());
@@ -1320,6 +1382,7 @@ static void urban_port_input(void) {
             urban_ui_set_genre(&p->rt.ui,(uint8_t)v,
                               s->tracks[p->rt.ui.selected_track].subgenre);
             p->overridden[p->rt.ui.selected_track]=1u;
+            urban_port_rec_reset_take();
             urban_port_style_reset();
             if(!s->tracks[p->rt.ui.selected_track].locked)
                 urban_runtime_refresh_track(&p->rt,p->rt.ui.selected_track);
@@ -1355,6 +1418,7 @@ static void urban_port_input(void) {
             if(v<0)v+=4;
             t->subgenre=(uint8_t)v;
             p->overridden[p->rt.ui.selected_track]=1u;
+            urban_port_rec_reset_take();
             urban_port_style_reset();
             if(!t->locked)
                 urban_runtime_refresh_track(&p->rt,p->rt.ui.selected_track);
