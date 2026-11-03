@@ -291,6 +291,7 @@ def main() -> None:
         '    else if (!strcmp(what, "urbanrecquant")) got = urban_port.recorder.quant;\n'
         '    else if (!strcmp(what, "urbanrecmod")) got = urban_port.recorder.mod_page;\n'
         '    else if (!strcmp(what, "urbanrectrack")) got = urban_port.recorder.track;\n'
+        '    else if (!strcmp(what, "urbanrecprogram")) got = urban_port.recorder.program;\n'
         '    else if (!strcmp(what, "urbanrecevents")) got = urban_port.recorder.count;\n'
         '    else if (!strcmp(what, "urbanrecdub")) got = urban_port.recorder.overdub;\n'
         '    else if (!strcmp(what, "urbanrecposition")) got = urban_port.recorder.position;\n'
