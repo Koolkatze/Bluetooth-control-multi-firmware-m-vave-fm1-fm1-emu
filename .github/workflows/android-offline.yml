@@ -61,6 +61,29 @@ jobs:
             tests/MidiPanelMapperTest.java
           java -cp .midi-tests com.koolkatze.fm1offline.MidiPanelMapperTest
 
+      - name: Verify Workbench Remote CTL-1 patch against pinned upstream source
+        run: |
+          python3 -m py_compile tools/patch_ctl1_workbench.py
+          mkdir -p /tmp/ctl1-workbench-validation/app
+          curl --fail --location --silent --show-error --retry 3 \
+            https://raw.githubusercontent.com/charlesvestal/fm1-ctl/772b90f8e7d84fb8f87d51857f2289cc6aac8e32/app/ui.c \
+            -o /tmp/ctl1-workbench-validation/app/ui.c
+          python3 tools/patch_ctl1_workbench.py /tmp/ctl1-workbench-validation --dry-run
+          python3 tools/patch_ctl1_workbench.py /tmp/ctl1-workbench-validation
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path('/tmp/ctl1-workbench-validation/app/ui.c').read_text()
+          assert '#define WB_REMOTE_ONLY 1' in source
+          assert 'wb_remote_input();' in source
+          assert '#if WB_REMOTE_ONLY' in source
+          assert '80 + ((button + 2) % NB)' in source
+          assert '{94, 96, 95, 97, 98, 99, 100}' in source
+          assert '102u, 42u' in source
+          assert source.count('#if WB_REMOTE_ONLY') == 1
+          assert source.count('#endif') >= 1
+          print('CTL-1 Workbench Remote patch anchors verified')
+          PY
+
       - name: Use preinstalled Android SDK (avoid sdkmanager tools compatibility issue)
         run: |
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
@@ -150,6 +173,21 @@ jobs:
 
           This Android APK includes offline FM-1 firmware emulation, native
           Rust/AAudio synthesis and MIDI USB/BLE support.
+
+          In v0.2.10, SELECT, PRESETS, ALGORITHM, KNOB1-4, MASTER,
+          OCT-/OCT+ and every FX, SEL, ENV, LFO, EDIT, GLO, HOME,
+          SAVE, ARP, SEQ, PLAY/STOP and REC switch now have an exact
+          hardware event in Workbench Remote v1. The optional CTL-1
+          source adapter is a dedicated controller mode, preventing
+          CTL-1's own local actions, musical transport and CCs from
+          double-triggering virtual firmware functions. AUTO recognizes
+          the Remote CC102/42 handshake on both USB and BLE, including
+          reconnects and held-state recovery. Explicit CTL-1 retains
+          limited compatibility; sustain CC64 and panic CC123 no
+          longer masquerade as ENV/REC and MIDI Start/Stop no longer
+          fakes PLAY button presses. MIDI Diagnostics now identifies
+          each last mapped physical control. The source adapter is
+          NOT a flashed or hardware-tested physical firmware binary.
 
           In v0.2.9, the MIDI button includes a mapping profile for the
           CTL-1 currently installed in a physical M-VAVE FM-1, with MIDI
