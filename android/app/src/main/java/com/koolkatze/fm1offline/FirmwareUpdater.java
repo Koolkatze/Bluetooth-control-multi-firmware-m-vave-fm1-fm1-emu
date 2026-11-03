@@ -26,7 +26,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Explicit, user-initiated updates of open-source firmware for the emulator.
- * Downloaded packages are private app files, never flashed to a hardware FM-1.
+ * Downloaded packages stay private in emulator storage; this updater NEVER flashes a hardware FM-1.
+ * Physical firmware installation is a separate explicit, USB-only action in PhysicalFm1Installer.
  * No periodic/background network access; JavaScript in the WebView remains
  * restricted to appassets.androidplatform.net and never receives remote URLs.
  */
