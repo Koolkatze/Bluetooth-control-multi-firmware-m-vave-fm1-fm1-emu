@@ -70,6 +70,7 @@ final class PhysicalFm1Installer {
     private String expectedDigest, selectedName;
     private volatile boolean occupied;
     private volatile boolean writing;
+    private volatile boolean flashing; // true only AFTER explicit risk consent
     private volatile boolean closed;
     private volatile int discoveryGeneration;
     private AlertDialog discoveryDialog;
@@ -376,6 +377,7 @@ final class PhysicalFm1Installer {
                 .setTitle("CONFIRMAR INSTALACIÓN · BAJO TU RESPONSABILIDAD")
                 .setMessage(text)
                 .setPositiveButton("Sí, instalar bajo mi responsabilidad", (dialog, which) -> {
+                    flashing = true;
                     notifyPage("starting", "Iniciando instalación física USB de " + pkg.product, 0);
                     worker.execute(() -> install(selected, pkg));
                 })
@@ -385,6 +387,8 @@ final class PhysicalFm1Installer {
     }
 
     private void cancel() {
+        ++discoveryGeneration;
+        dismissDiscoveryDialog();
         notifyPage("cancelled", "Instalación física cancelada. No se escribió firmware.", -1);
         cleanupUpload();
     }
@@ -446,6 +450,7 @@ final class PhysicalFm1Installer {
                     + ". Si el equipo quedó en el cargador de actualización, "
                     + "reintenta con el mismo paquete .fwsc y USB; evita apagarlo.", -1);
         } finally {
+            flashing = false;
             cleanupUpload();
         }
     }
@@ -585,10 +590,12 @@ final class PhysicalFm1Installer {
 
     void close() {
         closed = true;
-        // Once the firmware write starts, do not interrupt the worker
-        // programmatically: cutting a write halfway can brick the device.
+        ++discoveryGeneration;
+        // Only the user-confirmed flash must continue safely after the UI
+        // closes. Waiting for a USB device can be stopped without risk.
+        dismissDiscoveryDialog();
         worker.shutdown();
-        if (!writing) cleanupUpload();
+        if (!flashing) cleanupUpload();
     }
 
     /**
