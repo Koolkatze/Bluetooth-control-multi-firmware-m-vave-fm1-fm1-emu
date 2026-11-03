@@ -809,6 +809,32 @@ function setPot(v) {
   turning[7] = 10;                           // (the FM-1's knob 7: its pot; the SMK-37's K8)
   send({ type: "pot", value: pot });
 }
+
+// Android's MIDI-panel mapper sends the same hardware IDs as the touch panel.
+// When Rust/AAudio already received the control directly, this only updates
+// the drawn feedback; in the WASM fallback it sends one control to AudioWorklet.
+// In particular, physical knob changes never wait for a WebView repaint.
+nativeWindow.fm1PhysicalControl = (kind, id, value, echoOnly = false) => {
+  if (board !== 0 || !Number.isInteger(kind) || !Number.isInteger(id)
+      || !Number.isFinite(value)) return false;
+  if (kind === 0 && id >= 0 && id <= 40) {
+    if (echoOnly) down[id] = value ? 1 : 0;
+    else setKey(id, Boolean(value));
+  } else if (kind === 1 && id >= 0 && id <= 6) {
+    // Reverse the ENCS hardware mapping in crates/fm1-live/src/panel.rs.
+    const visual = [0, 2, 3, 4, 5, 6, 1][id];
+    if (echoOnly) {
+      encClicks[visual] += value;
+      turning[visual] = 10;
+    } else turn(visual, value);
+  } else if (kind === 2 && id === 0) {
+    if (echoOnly) {
+      pot = Math.max(0, Math.min(1023, Math.round(value)));
+      turning[7] = 10;
+    } else setPot(value);
+  } else return false;
+  return true;
+};
 // SMK-37: an analog input (a pad's force, a fader, a wheel)
 function setAnalog(i, v) {
   v = Math.max(0, Math.min(1023, Math.round(v)));
