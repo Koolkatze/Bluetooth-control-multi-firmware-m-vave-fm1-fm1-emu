@@ -261,6 +261,7 @@ const MIDI_NOTES = {
   choralroot: NO_NOTE, hortator: NO_NOTE, "sloop-alg": NO_NOTE, x0x: NO_NOTE,
 };
 const cards = new Map();
+let addFirmwareCard = null; // reused when native update discovers new Hub records
 const hubCard = (f) => `https://thefirmwarehub.com/#fw-${f.hub}`;
 // the FM-1 page: which entries have an SMK-37 build (that catalog names them)
 const twins = new Map();
@@ -278,8 +279,13 @@ if (DEVICE === "fm1") {
   };
   const link = (href, text) => Object.assign(document.createElement("a"), { href, textContent: text });
   const list = document.getElementById("fwlist");
-  for (const f of catalog.firmwares) {
-    const play = el("button", "", "Play");
+  addFirmwareCard = (f) => {
+    const linkOnly = !!f.byo && f.id !== "mvave";
+    const play = el("button", "", linkOnly ? "Solo ficha" : "Play");
+    if (linkOnly) {
+      play.disabled = true;
+      play.title = "FW Hub no publica un .fwsc descargable";
+    }
     play.type = "button";
     play.setAttribute("aria-label", `Play ${f.name}`);
     play.addEventListener("click", () => {
@@ -290,7 +296,12 @@ if (DEVICE === "fm1") {
       scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     });
     const links = el("div", "links");
-    if (f.byo) links.append(link(f.download, `download ${DEV.stock}`), link(f.repo, "notes ↗"));
+    if (f.byo && f.id === "mvave")
+      links.append(link(f.download, `download ${DEV.stock}`), link(f.repo, "notes ↗"));
+    else if (linkOnly) {
+      links.append(link(f.repo || hubCard(f), "autor / fuente ↗"));
+      if (f.hub) links.append(link(hubCard(f), "ver en FW Hub ↗"));
+    }
     else {
       links.append(link(f.repo, `source · ${f.license} ↗`));
       // the Hub's card has the details and installs it on a real FM-1; the author's installer otherwise
@@ -304,13 +315,15 @@ if (DEVICE === "fm1") {
     const card = el("li", "",
       el("div", "head", el("b", "", f.name), el("span", "dim", f.version), play),
       el("div", "by", by),
-      el("p", "what", f.byo && DEVICE === "fm1" ? "The firmware the FM-1 ships with: a DX7-style FM synth, both cores running. " +
+      el("p", "what", linkOnly ? "Ficha de FW Hub: sin paquete .fwsc para emulación. " + (f.about || "") :
+        f.byo && DEVICE === "fm1" ? "The firmware the FM-1 ships with: a DX7-style FM synth, both cores running. " +
         "Bring your own copy (see below)." : f.about));
     if (DEVICE === "fm1" && MIDI_NOTES[f.id]) card.append(el("div", "midi", MIDI_NOTES[f.id]));
     card.append(links);
     list.append(card);
     cards.set(f.id, card);
-  }
+  };
+  for (const f of catalog.firmwares) addFirmwareCard(f);
 }
 
 // Cached packages are pinned to their exact bytes. Checking for updates is explicit.
@@ -332,6 +345,7 @@ const installedUpdates = (() => {
 function installedUpdateIsNewer(f) {
   const item = installedUpdates[f.id];
   if (!item?.version) return false;
+  if (f.remoteOnly) return true;
   const digits = (value) => /^\d+(?:\.\d+)*$/.test(String(value || ""))
     ? String(value).split(".").map(Number) : null;
   const a = digits(item.version), b = digits(f.version);
@@ -369,6 +383,8 @@ async function keptEntry(id) {
 }
 async function packageOf(f) {
   if (f.id === "local") return { bytes: f.bytes, url: null };
+  if (f.remoteOnly && !installedUpdates[f.id]?.version)
+    throw new Error("Firmware nuevo de FW Hub: pulsa Actualizar seleccionado antes de iniciarlo.");
   if (packages.has(f.id)) return packages.get(f.id);
   if (installedUpdateIsNewer(f) && !f.byo) {
     /* Do not silently boot an older IndexedDB firmware when a newer
@@ -426,13 +442,20 @@ function showFirmware() {
   title.textContent = `${DEV.product} · ${fw.name} (emulated)`;
   for (const [id, card] of cards) {
     card.classList.toggle("on", id === fw.id);
-    card.querySelector("button").textContent = id === fw.id ? "Selected" : "Play";
+    card.querySelector("button").textContent =
+      byId.get(id)?.byo && id !== "mvave" ? "Solo ficha" :
+      id === fw.id ? "Selected" : "Play";
   }
   const b = document.createElement("b");
   b.textContent = `${fw.name} ${fw.version}`.trim();
   let parts;
   if (fw.id === "local") {
     parts = [b, "Opened from this computer; kept with its saved flash after Start."];
+  } else if (fw.byo && fw.id !== "mvave") {
+    const h = document.createElement("a");
+    h.href = fw.hub ? hubCard(fw) : fw.repo;
+    h.textContent = "Ver firmware en FW Hub / web del autor ↗";
+    parts = [b, "Este firmware figura en el catálogo, pero no tiene .fwsc disponible para cargar en el emulador. ", h];
   } else if (fw.byo) {
     const dl = document.createElement("a");
     dl.href = fw.download;
@@ -489,8 +512,44 @@ for (const item of catalog.firmwares) {
 // firmware, without touching a real FM-1. Other firmware downloads are
 // installed for their next start, avoiding unexpected song interruptions.
 let appliedFirmware = "";
+/* The Android APK cannot update its own embedded index, but its native
+ * updater may discover new FW Hub firmwares. Add them to the visible
+ * selector and cards immediately. Their .fwsc is still downloaded through
+ * the controlled native updater and loaded only from /updates/. */
+function applyRemoteFirmwareCatalog(entries) {
+  if (!Array.isArray(entries)) return;
+  let additions = 0;
+  for (const e of entries) {
+    if (!e || !/^[a-zA-Z0-9_-]{1,90}$/.test(e.id || "")) continue;
+    if (byId.has(e.id)) continue; // never overwrite the bundled package
+    const f = {
+      id: e.id, name: String(e.name || e.id).slice(0,120),
+      version: String(e.version || "").slice(0,80),
+      author: String(e.author || "community").slice(0,120),
+      license: String(e.license || "see author").slice(0,80),
+      about: String(e.about || "").slice(0,1000),
+      repo: String(e.repo || "https://thefirmwarehub.com/").slice(0,512),
+      hub: e.hub || "", byo: !!e.byo, remoteOnly: true,
+    };
+    if (e.unavailable) f.unavailable = String(e.unavailable);
+    catalog.firmwares.push(f);
+    byId.set(f.id, f);
+    if (f.hub && !byId.has(f.hub)) byId.set(f.hub, f);
+    fwSel.add(new Option(`${f.name} ${f.version}`, f.id));
+    addFirmwareCard(f);
+    additions++;
+  }
+  if (additions) {
+    updateLine.textContent = `Encontrados ${additions} firmwares nuevos en FW Hub. Usa Actualizar todos para descargar los compatibles.`;
+    updateButtonsState();
+  }
+}
 nativeWindow.fm1FirmwareUpdateProgress = async (event) => {
   if (!event || typeof event !== "object") return;
+  if (event.kind === "catalog" && event.device === updateDevice) {
+    applyRemoteFirmwareCatalog(event.entries);
+    return;
+  }
   if (event.kind === "updated" && byId.has(event.id)) {
     const item = byId.get(event.id);
     if (item && !item.byo) {
