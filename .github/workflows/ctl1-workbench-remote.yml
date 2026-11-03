@@ -1,0 +1,55 @@
+# Experimental physical FM-1 controller firmware. This is NOT the Android APK.
+# Never flashes hardware. APK updates cannot install a physical FM-1 firmware.
+name: Build Workbench Remote for physical FM-1 (experimental)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "tools/patch_ctl1_workbench.py"
+      - ".github/workflows/ctl1-workbench-remote.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  experimental-physical-firmware:
+    uses: zvenson/fm1-build/.github/workflows/build.yml@v1
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    with:
+      sdk: true
+      tests-block: true
+      build: |
+        set -euo pipefail
+        # Do not mix the phone emulator APK with a physical-device binary.
+        mkdir -p build/physical-fm1-remote
+        git clone --recursive https://github.com/charlesvestal/fm1-ctl.git build/ctl1-upstream
+        git -C build/ctl1-upstream checkout --detach 772b90f8e7d84fb8f87d51857f2289cc6aac8e32
+        git -C build/ctl1-upstream submodule update --init --recursive
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq libfribidi0
+        python3 -c 'from PIL import features; assert features.check("raqm"), "Pillow without raqm"'
+        python3 tools/patch_ctl1_workbench.py build/ctl1-upstream --dry-run
+        python3 tools/patch_ctl1_workbench.py build/ctl1-upstream
+        (
+          cd build/ctl1-upstream
+          ./build.sh --no-ble
+        )
+        cp build/ctl1-upstream/app/build/ctl-usb.fwsc build/physical-fm1-remote/Workbench-Remote-USB-EXPERIMENTAL.fwsc
+        (
+          cd build/ctl1-upstream
+          ./build.sh
+        )
+        cp build/ctl1-upstream/app/build/ctl.fwsc build/physical-fm1-remote/Workbench-Remote-BLE-EXPERIMENTAL.fwsc
+      test: |
+        set -euo pipefail
+        python3 -m py_compile tools/patch_ctl1_workbench.py
+        test -s build/physical-fm1-remote/Workbench-Remote-USB-EXPERIMENTAL.fwsc
+        test -s build/physical-fm1-remote/Workbench-Remote-BLE-EXPERIMENTAL.fwsc
+        grep -q 'wb_remote_input();' build/ctl1-upstream/app/ui.c
+        grep -q '#define WB_REMOTE_ONLY 1' build/ctl1-upstream/app/ui.c
+        grep -q '102u, 42u' build/ctl1-upstream/app/ui.c
+      packages: build/physical-fm1-remote/*.fwsc
