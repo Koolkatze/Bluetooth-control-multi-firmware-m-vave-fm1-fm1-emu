@@ -326,6 +326,23 @@ const installedUpdates = (() => {
   try { return JSON.parse(nativeWindow.FM1Android?.installedFirmwareUpdates?.(updateDevice) || "{}"); }
   catch { return {}; }
 })();
+/* The APK's bundled catalog never changes when an update is downloaded.
+ * A native update is authoritative across WebView/page restarts only when
+ * its version is at least as new as the bundled firmware version. */
+function installedUpdateIsNewer(f) {
+  const item = installedUpdates[f.id];
+  if (!item?.version) return false;
+  const digits = (value) => /^\d+(?:\.\d+)*$/.test(String(value || ""))
+    ? String(value).split(".").map(Number) : null;
+  const a = digits(item.version), b = digits(f.version);
+  if (a && b) {
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
+    }
+    return true;
+  }
+  return item.version !== f.version || !!item.url;
+}
 function updateButtonsState() {
   if (updateSelectedBtn) updateSelectedBtn.disabled = updatingFirmwares || fw.id === "local" || !!fw.byo;
   if (updateAllBtn) updateAllBtn.disabled = updatingFirmwares;
@@ -353,10 +370,14 @@ async function keptEntry(id) {
 async function packageOf(f) {
   if (f.id === "local") return { bytes: f.bytes, url: null };
   if (packages.has(f.id)) return packages.get(f.id);
-  if (installedUpdates[f.id] && !f.byo) {
+  if (installedUpdateIsNewer(f) && !f.byo) {
+    /* Do not silently boot an older IndexedDB firmware when a newer
+     * Android-private update has disappeared or become corrupt. */
     try { return await loadInstalledUpdate(f); }
     catch (error) {
       updateLine.textContent = "Actualización " + f.name + " dañada: " + error.message;
+      throw new Error("No se pudo cargar la actualización " +
+        installedUpdates[f.id].version + ". Pulsa Actualizar seleccionado para repararla.");
     }
   }
   const kept = await keptEntry(f.id);
@@ -457,10 +478,17 @@ function showFirmware() {
   updateButtonsState();
 }
 showFirmware();
+/* Show the ACTUAL installed firmware version, not the old catalogue
+ * embedded at the moment this APK was built. */
+for (const item of catalog.firmwares) {
+  if (!item.byo && installedUpdateIsNewer(item))
+    noteVersion(item, installedUpdates[item.id].version);
+}
 
-// Install changed packages only in the emulator cache; never flash hardware.
-// The currently playing synth is not interrupted. It will use the update the
-// next time its firmware is started or selected.
+// User-requested updates are immediately applied to the selected emulator
+// firmware, without touching a real FM-1. Other firmware downloads are
+// installed for their next start, avoiding unexpected song interruptions.
+let appliedFirmware = "";
 nativeWindow.fm1FirmwareUpdateProgress = async (event) => {
   if (!event || typeof event !== "object") return;
   if (event.kind === "updated" && byId.has(event.id)) {
@@ -468,12 +496,26 @@ nativeWindow.fm1FirmwareUpdateProgress = async (event) => {
     if (item && !item.byo) {
       installedUpdates[event.id] = { version: event.version };
       packages.delete(event.id);
-      try { await loadInstalledUpdate(item); }
-      catch (error) { updateLine.textContent = item.name + ": " + error.message; return; }
+      try {
+        await loadInstalledUpdate(item);
+        if (fw.id === item.id && (node || nativeRunning)) {
+          updateLine.textContent = item.name + " " + event.version + ": reiniciando firmware…";
+          const applied = await boot();
+          if (!applied) throw new Error("El firmware se descargó pero no arrancó");
+          appliedFirmware = item.name + " v" + event.version + " instalada y ejecutándose";
+        } else {
+          appliedFirmware = item.name + " v" + event.version + " instalada para el próximo inicio";
+        }
+        updateLine.textContent = appliedFirmware;
+      } catch (error) {
+        updateLine.textContent = item.name + ": " + error.message;
+      }
     }
+    return;
   }
   if (event.kind === "summary") {
-    updateLine.textContent = event.message + ". Reinicia o vuelve a seleccionar un firmware actualizado para aplicarlo.";
+    updateLine.textContent = event.message + (appliedFirmware
+      ? " · " + appliedFirmware : ". Si ya estaba actualizado, comprueba la versión indicada junto al selector.");
   } else if (event.kind === "finished") {
     updatingFirmwares = false;
     updateButtonsState();
@@ -489,6 +531,7 @@ async function updateCatalogFirmwares(selectedId = "") {
     return;
   }
   updatingFirmwares = true;
+  appliedFirmware = "";
   updateButtonsState();
   updateLine.textContent = selectedId ? "Comprobando firmware seleccionado…" :
     "Comprobando actualizaciones de todos los firmwares…";
