@@ -26,6 +26,36 @@ y no está probado con un FM-1 real: un corte de alimentación puede
 dejarlo inoperativo. Conserva el método de recuperación y el firmware
 original. Recursos adicionales -res.bin no se transfieren por esta acción.
 
+## Blackhole Remote: MIDI controller (nuevo nombre del firmware físico)
+
+El antiguo **Workbench Remote** pasa a llamarse **Blackhole Remote:
+MIDI controller** en el FM-1 real. **No se cambia el protocolo MIDI de
+Workbench Remote v1**, de modo que los perfiles y la detección
+automática existentes del teléfono siguen siendo compatibles.
+
+Su pantalla es **240 × 240 (cuadrada)**. En el arranque se dibuja un
+**agujero negro pixel art**; posteriormente muestra batería estimada
+en porcentaje, enlace USB MIDI (LINK/OFF), Bluetooth MIDI
+(LINK/WAIT/OFF) y el piano completo de **27 teclas**. Una tecla
+pulsada en el FM-1 físico se resalta en ese piano y enciende su
+**LED físico**, ya que ambos leen `plat_keys()` a través de `ui.keys`;
+soltarla apaga ambos. Ninguna animación de teclado sustituye al
+escaneo real. Los paquetes de la variante USB-only muestran
+Bluetooth como N/A.
+
+El porcentaje se obtiene del ADC mediante una **escala aproximada**,
+no de un medidor de carga calibrado: no debe tratarse como una lectura
+electroquímica exacta. La conexión USB se identifica por el estado de
+configuración USB del hardware; BLE diferencia un enlace MIDI activo
+de uno enlazado pero todavía sin suscripción.
+
+La implementación está automatizada en
+`tools/patch_ctl1_workbench.py` y el dibujo en
+`tools/blackhole_remote_display.inc`. **Estado experimental:** un
+archivo .fwsc que compile no garantiza que los indicadores funcionen
+en todos los estados reales del FM-1. Conservar firmware stock y
+procedimiento de recuperación antes de flashear.
+
 ## REQUISITO: teléfono como pantalla + FM-1 físico como controlador completo
 
 Para esta configuración **NO basta con instalar la APK en Android**.
