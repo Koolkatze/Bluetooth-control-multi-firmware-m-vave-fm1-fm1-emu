@@ -15,8 +15,11 @@ for (const rel of ["firmwares.json", "smk37/firmwares.json"]) {
   const cat = JSON.parse(await readFile(join(root, rel), "utf8"));
   assert(cat.firmwares.some(f => f.id === cat.default), rel + ": no default");
   for (const f of cat.firmwares) {
-    if (f.byo) {
-      assert(!f.package, "Do not bundle proprietary stock firmware: " + f.id);
+    if (f.byo || f.remoteOnly) {
+      // The catalog must list ALL Firmware Hub cards, including link-only
+      // and temporarily unavailable packages. They cannot be run offline;
+      // the native updater can fetch open-source remoteOnly packages later.
+      assert(!f.package, "Non-bundled entry must not advertise an offline package: " + f.id);
       continue;
     }
     assert(f.package?.startsWith("offline-fw/"), "Remote boot URL detected: " + f.id);
