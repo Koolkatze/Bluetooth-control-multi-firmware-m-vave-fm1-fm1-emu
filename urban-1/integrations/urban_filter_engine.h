@@ -8,9 +8,9 @@
 #ifndef URBAN_FILTER_ENGINE_H
 #define URBAN_FILTER_ENGINE_H
 static volatile uint32_t urban_filter_requested;
-static volatile uint32_t urban_filter_applied;
+volatile uint32_t urban_filter_applied;
 volatile uint32_t urban_filter_processed_frames;
-static void urban_filter_set(unsigned lp,unsigned hp) {
+void urban_filter_set(unsigned lp,unsigned hp) {
     if(lp>100u)lp=100u;
     if(hp>100u)hp=100u;
     urban_filter_requested=lp|(hp<<8u);
