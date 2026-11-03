@@ -75,6 +75,21 @@ def main() -> None:
     # chooses clean Break kick tone and envelope. Lo-fi alone may
     # select the mild distortion path with P_DRIVE > 35.
     dsp = root / "firmware/src/dsp/amb.c"
+    # REC drum pads need a REAL DSP trigger. HYP's en_note accepts only
+    # PAD/DRONE/ACID, so add one bounded audio-queue command and dispatch
+    # it through the existing six-lane drum_fire renderer. The UI never
+    # touches drum_t state or calls DSP functions across threads.
+    replace_once(dsp,
+        'enum { C_SET, C_POOL, C_PLAY, C_NEXT, C_FREEZE, C_SEED, C_PANIC, C_CLOCK, C_REGROW, C_SECTION, C_FX, C_MUTE, C_NOTE, C_HUSH };',
+        'enum { C_SET, C_POOL, C_PLAY, C_NEXT, C_FREEZE, C_SEED, C_PANIC, C_CLOCK, C_REGROW, C_SECTION, C_FX, C_MUTE, C_NOTE, C_HUSH, C_URBAN_DRUM };')
+    replace_once(dsp,
+        'void en_note(int voice, int note, int on) { post(C_NOTE, voice, (note & 0x7F) | (on ? 0x100 : 0)); }',
+        'void en_note(int voice, int note, int on) { post(C_NOTE, voice, (note & 0x7F) | (on ? 0x100 : 0)); }\\n'
+        'void en_urban_drum(int lane, int velocity) { if(lane>=0 && lane<EN_NLANE) post(C_URBAN_DRUM, lane, velocity<0?0:velocity>127?127:velocity); }')
+    replace_once(dsp,
+        '        case C_NOTE: note_cmd(a, b & 0x7F, b >> 8); break;',
+        '        case C_NOTE: note_cmd(a, b & 0x7F, b >> 8); break;\\n'
+        '        case C_URBAN_DRUM: if (a<EN_NLANE) drum_fire(a, (float)((unsigned)b&127u)/127.0f); break;')
     replace_once(dsp,
         'const float chop = KK->chop * (0.4f + 0.6f * evolve);',
         'const float chop = 0.0f; /* URBAN: no stochastic kit retriggers */')
