@@ -1,24 +1,28 @@
 /* SPDX-License-Identifier: MPL-2.0
- * Blackhole Remote: MIDI controller.
- * Original 240 x 240 pixel-art interface for the physical M-VAVE FM-1.
- * Included into CTL-1 app/ui.c after its panel/model definitions.
- * All coordinates and partial canvas blits stay within the square LCD.
+ * Blackhole Remote: MIDI controller, 240x240 square M-VAVE FM-1 LCD.
  *
- * No graphics are streamed from the phone. A 64-colour RGB565 bitmap
- * adapted from the square reference image is drawn natively at 240x144,
- * plus a live 64x44 image preview, without overfilling the 240x240 LCD.
- * The playable keyboard always follows plat_keys() -> ui.keys, and
- * physical note LEDs follow the same state in bh_remote_leds().
+ * Boot: short pixel-art glitch IN -> original high-resolution black-hole
+ * artwork stays on screen indefinitely -> a REAL piano key or panel button
+ * press triggers glitch OUT -> live controller.
+ *
+ * Live: the SAME 240x144 black-hole bitmap fills the background of the
+ * top section. Telemetry cards are PREBLENDED at 60% panel / 40% artwork
+ * (i.e. 40% TRANSPARENT). The 240x96 physical 27-key piano is fully opaque.
+ * Both the on-screen notes and physical LEDs follow plat_keys() / ui.keys.
+ * USB/BLE MIDI mapping and transmission are handled independently of UI.
+ *
+ * Hardware caveat: fm1-base's RGB565 canvas uses BYTE-SWAPPED pixels
+ * (see gfx.c: cv_rect(), cv_pset(), swap16()). Any direct indexed bitmap
+ * write MUST swap16() the palette entry or colours become green/incorrect.
+ * The renderer never allocates a second 240x240 frame buffer.
  */
 
 #define BH_BG       RGB(7, 7, 20)
-#define BH_VOID     RGB(0, 0, 5)
-#define BH_CARD     RGB(19, 16, 40)
+#define BH_CARD     RGB(12, 10, 28)
 #define BH_BORDER   RGB(62, 43, 101)
-#define BH_MUTED    RGB(123, 111, 163)
+#define BH_MUTED    RGB(169, 149, 200)
 #define BH_WHITE    RGB(245, 238, 255)
 #define BH_PURPLE   RGB(176, 84, 250)
-#define BH_VIOLET   RGB(100, 49, 195)
 #define BH_MAGENTA  RGB(236, 79, 206)
 #define BH_ORANGE   RGB(255, 159, 77)
 #define BH_CYAN     RGB(42, 231, 245)
@@ -26,124 +30,270 @@
 #define BH_KEYW     RGB(220, 221, 253)
 #define BH_KEYB     RGB(18, 15, 41)
 
+#include "blackhole_bitmap.h"
+
 static uint32_t bh_top_signature = 0xffffffffu;
 static uint32_t bh_key_signature = 0xffffffffu;
 
-/* 37,376 indexed colour samples generated off-line by
- * tools/generate_blackhole_bitmap.py from the approved square artwork.
- * The indexed data are ROM constants; painting into gfx.c's existing
- * 240x144 canvas does NOT allocate a second framebuffer on the FM-1. */
-#include "blackhole_bitmap.h"
+/* State 0: glitch entrance; 1: WAIT indefinitely; 2: glitch exit;
+ * 3: live controller. No timeout is allowed to leave the WAIT state. */
+enum { BH_GLITCH_IN = 0, BH_WAIT_KEY, BH_GLITCH_OUT, BH_CONTROLLER };
+#define BH_GLITCH_IN_MS 360u
+#define BH_GLITCH_OUT_MS 360u
+#define BH_GLITCH_FRAME_MS 65u
+static uint8_t bh_intro_state;
+static uint8_t bh_intro_pending;
+static uint32_t bh_intro_started_ms;
+static uint32_t bh_intro_last_draw_ms;
+static uint32_t bh_intro_previous_keys;
+static uint32_t bh_intro_previous_buttons;
 
-static uint32_t bh_boot_splash_until;
-
-static void bh_remote_splash(void)
+/* Blend two RGB565 values BEFORE swapping to match the physical LCD.
+ * 40% of the image is visible through the HUD card (60% dark panel). */
+static uint16_t bh_mix565(uint16_t art, uint16_t panel)
 {
-    uint32_t i;
-    /* 240x144 real raster pixels: no more 4x4 procedural tiles. */
-    cv_begin(240, 144, BH_BG);
-    for (i = 0; i < 240u * 144u; ++i)
-        cv_px[i] = bh_art_palette[bh_art_splash[i]];
-    cv_blit(0, 0);
-
-    /* Native 96-pixel bottom band completes the exact 240x240 square.
-     * Draw useful brand information, never invented percentages or
-     * fictitious BLE/USB link states during the boot screen. */
-    cv_begin(240, 96, BH_BG);
-    cv_rect(0, 0, 240, 2, BH_BORDER);
-    cv_rect(8, 10, 224, 72, BH_CARD);
-    cv_rect(10, 12, 220, 68, BH_BG);
-    cv_text((240 - text_w(&FONT_B, "FM-1 / MIDI")) / 2, 19,
-            &FONT_B, "FM-1 / MIDI", BH_WHITE);
-    cv_text((240 - text_w(&FONT_XS, "USB + BLE CONTROLLER")) / 2, 43,
-            &FONT_XS, "USB + BLE CONTROLLER", BH_CYAN);
-    cv_text((240 - text_w(&FONT_XS, "INITIALIZING...")) / 2, 61,
-            &FONT_XS, "INITIALIZING...", BH_PURPLE);
-    cv_rect(20, 88, 200, 3, BH_BORDER);
-    cv_rect(20, 88, 120, 3, BH_CYAN);
-    cv_blit(0, 144);
+    uint32_t r = (((uint32_t)(art >> 11) & 31u) * 2u +
+                  ((uint32_t)(panel >> 11) & 31u) * 3u + 2u) / 5u;
+    uint32_t g = (((uint32_t)(art >> 5) & 63u) * 2u +
+                  ((uint32_t)(panel >> 5) & 63u) * 3u + 2u) / 5u;
+    uint32_t b = (((uint32_t)art & 31u) * 2u +
+                  ((uint32_t)panel & 31u) * 3u + 2u) / 5u;
+    return (uint16_t)((r << 11) | (g << 5) | b);
 }
 
-/* A real 64x44 cropped image of the accretion disk, on the live HUD.
- * It uses the SAME RGB565 palette as the detailed splash image. */
-static void bh_draw_live_hole(int32_t left, int32_t top)
+/* Every raw cv_px store is byte-swapped, exactly as gfx.c expects. */
+static void bh_background(void)
 {
-    uint32_t y, x;
-    for (y = 0; y < 44u; ++y) {
-        for (x = 0; x < 64u; ++x) {
-            int32_t dx = left + (int32_t)x, dy = top + (int32_t)y;
-            if ((uint32_t)dx < 240u && (uint32_t)dy < 144u)
-                cv_px[(uint32_t)dy * 240u + (uint32_t)dx] =
-                    bh_art_palette[bh_art_widget[y * 64u + x]];
+    uint32_t i;
+    cv_begin(240, 144, BH_BG);
+    for (i = 0; i < 240u * 144u; ++i)
+        cv_px[i] = swap16(bh_art_palette[bh_art_splash[i]]);
+}
+
+static void bh_glass_rect(int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    int32_t xx, yy;
+    for (yy = y; yy < y + h; ++yy) {
+        if (yy < 0 || yy >= 144) continue;
+        for (xx = x; xx < x + w; ++xx) {
+            uint32_t pos;
+            uint16_t art;
+            if (xx < 0 || xx >= 240) continue;
+            pos = (uint32_t)yy * 240u + (uint32_t)xx;
+            art = swap16(cv_px[pos]);
+            cv_px[pos] = swap16(bh_mix565(art, BH_CARD));
         }
     }
 }
 
-/* Header + persistent USB/BLE/battery HUD: 240 x 144. Percent is an
- * estimate from the FM-1 battery ADC, not a calibrated fuel gauge. */
+/* Real source art, not procedural four-pixel rectangles. The palette
+ * conversion is done once per pixel. The glitch is deliberate horizontal
+ * tearing and chromatic scanlines; it lasts only for the transitions. */
+static void bh_glitch_image(uint32_t elapsed, int exiting)
+{
+    uint32_t y, x, frame = elapsed / BH_GLITCH_FRAME_MS;
+    uint32_t duration = exiting ? BH_GLITCH_OUT_MS : BH_GLITCH_IN_MS;
+    uint32_t amount = exiting ? elapsed * 18u / duration :
+                                  (duration - elapsed) * 18u / duration;
+    if (amount > 18u) amount = 18u;
+    cv_begin(240, 144, BH_BG);
+    for (y = 0; y < 144u; ++y) {
+        int32_t tear = 0;
+        uint32_t h = (y / 5u) * 29u + frame * 67u + 13u;
+        if ((h & 7u) < 3u)
+            tear = (int32_t)(h % (amount * 2u + 1u)) - (int32_t)amount;
+        for (x = 0; x < 240u; ++x) {
+            int32_t sx = (int32_t)x + tear;
+            uint16_t c = BH_BG;
+            if (sx >= 0 && sx < 240)
+                c = bh_art_palette[bh_art_splash[y * 240u + (uint32_t)sx]];
+            if (amount && (h % 13u == 3u || h % 19u == 7u) &&
+                    (x + frame * 23u) % 17u < amount / 3u)
+                c = (h & 1u) ? BH_MAGENTA : BH_CYAN;
+            /* The final exit frame darkens only the art and immediately
+             * hands off to the live screen after the transition finishes. */
+            if (exiting && elapsed > (duration * 3u / 4u)) {
+                uint32_t q = (duration - elapsed) * 4u * 255u / duration;
+                uint32_t red = ((c >> 11) & 31u) * q / 255u;
+                uint32_t grn = ((c >> 5) & 63u) * q / 255u;
+                uint32_t blu = (c & 31u) * q / 255u;
+                c = (uint16_t)((red << 11) | (grn << 5) | blu);
+            }
+            cv_px[y * 240u + x] = swap16(c);
+        }
+    }
+    if (amount) {
+        /* Wide, short tearing bars are clipped to the image area. */
+        uint32_t k;
+        for (k = 0; k < 3u; ++k) {
+            int32_t yy = (int32_t)((frame * 31u + k * 43u) % 139u);
+            cv_rect((int32_t)((frame * 17u + k * 53u) % 65u),
+                    yy, 90 + (int32_t)((k * 19u) % 67u), 1 + (int32_t)(k & 1u),
+                    k & 1u ? BH_MAGENTA : BH_CYAN);
+        }
+    }
+    cv_blit(0, 0);
+}
+
+/* Draw the bottom 96 LCD pixels without allocating a full 240x240 FB. */
+static void bh_intro_caption(uint32_t elapsed, int glitch)
+{
+    uint32_t phase = elapsed / BH_GLITCH_FRAME_MS;
+    cv_begin(240, 96, BH_BG);
+    cv_rect(0, 0, 240, 2, BH_BORDER);
+    cv_rect(8, 8, 224, 76, BH_CARD);
+    cv_rect(10, 10, 220, 72, BH_BG);
+    cv_text((240 - text_w(&FONT_B, "BLACKHOLE REMOTE")) / 2,
+            17, &FONT_B, "BLACKHOLE REMOTE", BH_WHITE);
+    cv_text((240 - text_w(&FONT_XS, "MIDI CONTROLLER")) / 2,
+            39, &FONT_XS, "MIDI CONTROLLER", BH_PURPLE);
+    cv_text((240 - text_w(&FONT_XS, "PRESS ANY KEY")) / 2,
+            61, &FONT_XS, "PRESS ANY KEY", BH_CYAN);
+    cv_rect(18, 88, 204, 2, BH_BORDER);
+    if (glitch) {
+        cv_rect((int32_t)(phase * 29u % 132u), 24, 53, 2, BH_MAGENTA);
+        cv_rect((int32_t)(phase * 43u % 154u), 57, 57, 1, BH_CYAN);
+    }
+    cv_blit(0, 144);
+}
+
+/* App-level splash callback: readable reference, before ui_init(). */
+static void bh_remote_splash(void)
+{
+    bh_background();
+    cv_blit(0, 0);
+    bh_intro_caption(0u, 0);
+}
+
+static void bh_intro_start(void)
+{
+    bh_intro_state = BH_GLITCH_IN;
+    bh_intro_pending = 0u;
+    bh_intro_started_ms = plat_ms();
+    bh_intro_last_draw_ms = 0xffffffffu;
+    bh_intro_previous_keys = plat_keys();
+    bh_intro_previous_buttons = plat_buttons();
+    bh_top_signature = 0xffffffffu;
+    bh_key_signature = 0xffffffffu;
+    /* The first visible frame is glitched, not an instant jump to UI. */
+}
+
+/* Returns 1 while splash or transition owns the LCD, 0 in controller.
+ * Always called AFTER wb_remote_input(), which sends MIDI and updates
+ * ui.keys/ui.btn even during the splash; LEDs work in ALL states.
+ * Either a new piano-key or a new panel-button press dismisses splash.
+ */
+static int bh_intro_step(void)
+{
+    uint32_t now = plat_ms();
+    uint32_t keys = ui.keys & ((1u << NKEYS) - 1u);
+    uint32_t buttons = ui.btn & ((1u << NB) - 1u);
+    uint32_t new_keys = keys & ~bh_intro_previous_keys;
+    uint32_t new_buttons = buttons & ~bh_intro_previous_buttons;
+    uint32_t elapsed;
+    bh_intro_previous_keys = keys;
+    bh_intro_previous_buttons = buttons;
+
+    if (bh_intro_state == BH_CONTROLLER)
+        return 0;
+    if (new_keys || new_buttons)
+        bh_intro_pending = 1u;
+
+    if (bh_intro_state == BH_GLITCH_IN) {
+        elapsed = now - bh_intro_started_ms;
+        if (elapsed >= BH_GLITCH_IN_MS) {
+            bh_intro_state = BH_WAIT_KEY;
+            bh_remote_splash();
+            if (bh_intro_pending) {
+                bh_intro_state = BH_GLITCH_OUT;
+                bh_intro_started_ms = now;
+                bh_intro_last_draw_ms = 0xffffffffu;
+            }
+            return 1;
+        }
+        if (bh_intro_last_draw_ms == 0xffffffffu ||
+                now - bh_intro_last_draw_ms >= BH_GLITCH_FRAME_MS) {
+            bh_intro_last_draw_ms = now;
+            bh_glitch_image(elapsed, 0);
+            bh_intro_caption(elapsed, 1);
+        }
+        return 1;
+    }
+    if (bh_intro_state == BH_WAIT_KEY) {
+        if (bh_intro_pending) {
+            bh_intro_state = BH_GLITCH_OUT;
+            bh_intro_started_ms = now;
+            bh_intro_last_draw_ms = 0xffffffffu;
+        }
+        return 1; /* Remain here indefinitely until a REAL key press. */
+    }
+    elapsed = now - bh_intro_started_ms;
+    if (elapsed >= BH_GLITCH_OUT_MS) {
+        bh_intro_state = BH_CONTROLLER;
+        bh_top_signature = 0xffffffffu;
+        bh_key_signature = 0xffffffffu;
+        return 0;
+    }
+    if (bh_intro_last_draw_ms == 0xffffffffu ||
+            now - bh_intro_last_draw_ms >= BH_GLITCH_FRAME_MS) {
+        bh_intro_last_draw_ms = now;
+        bh_glitch_image(elapsed, 1);
+        bh_intro_caption(elapsed, 1);
+    }
+    return 1;
+}
+
+/* The black hole is a LARGE, true 240x144 bitmap BACKGROUND, not a
+ * decorative 64x44 widget. No title/logo obscures it during operation. */
 static void bh_remote_header(void)
 {
     int pct = plat_battery_percent();
     int usb = plat_usb_midi_connected();
     int ble = FM1B_BLE && plat_ble_connected();
     int ble_wait = FM1B_BLE && plat_ble_linked();
-    uint32_t phase = plat_ms() / 650u & 1u;
     uint32_t sig = ((uint32_t)(pct + 2) & 127u)
                  | ((uint32_t)usb << 8)
                  | ((uint32_t)ble << 9)
-                 | ((uint32_t)ble_wait << 10)
-                 | ((uint32_t)phase << 11);
+                 | ((uint32_t)ble_wait << 10);
     char number[16];
     if (bh_top_signature == sig)
         return;
     bh_top_signature = sig;
+    bh_background();
 
-    cv_begin(240, 144, BH_BG);
-    cv_rect(0, 0, 240, 2, BH_VIOLET);
-    cv_text(7, 8, &FONT_B, "BLACKHOLE", BH_WHITE);
-    cv_text(134, 8, &FONT_B, "REMOTE", BH_PURPLE);
-    cv_text(8, 28, &FONT_XS, "MIDI CONTROLLER", BH_CYAN);
-    cv_rect(5, 44, 230, 1, BH_BORDER);
+    /* Every card has exactly 40% image visibility / 60% dark panel.
+     * Values and indicator lines remain opaque for legibility. */
+    bh_glass_rect(5, 83, 71, 53);
+    bh_glass_rect(84, 83, 71, 53);
+    bh_glass_rect(163, 83, 72, 53);
+    cv_rect(5, 83, 71, 2, BH_PURPLE);
+    cv_rect(84, 83, 71, 2, usb ? BH_CYAN : BH_BORDER);
+    cv_rect(163, 83, 72, 2, ble ? BH_CYAN : BH_BORDER);
 
-    cv_rect(5, 49, 71, 48, BH_CARD);
-    cv_rect(84, 49, 71, 48, BH_CARD);
-    cv_rect(163, 49, 72, 48, BH_CARD);
-    cv_rect(5, 49, 71, 2, BH_PURPLE);
-    cv_rect(84, 49, 71, 2, usb ? BH_CYAN : BH_BORDER);
-    cv_rect(163, 49, 72, 2, ble ? BH_CYAN : BH_BORDER);
-
-    cv_text(10, 54, &FONT_XS, "BATT EST.", BH_MUTED);
+    cv_text(10, 87, &FONT_XS, "BATT EST.", BH_MUTED);
     if (pct < 0) {
-        cv_text(11, 69, &FONT_B, "--%", BH_WHITE);
+        cv_text(11, 104, &FONT_B, "--%", BH_WHITE);
     } else {
         put_s(put_u(number, (uint32_t)pct), "%");
-        cv_text(11, 67, &FONT_B, number, pct <= 15 ? BH_ORANGE : BH_GREEN);
-        cv_rect(10, 90, 57, 3, BH_BORDER);
-        cv_rect(10, 90, (pct * 57) / 100, 3, BH_GREEN);
+        cv_text(11, 103, &FONT_B, number, pct <= 15 ? BH_ORANGE : BH_GREEN);
+        cv_rect(10, 127, 57, 3, BH_BORDER);
+        cv_rect(10, 127, (pct * 57) / 100, 3, BH_GREEN);
     }
-
-    cv_text(89, 54, &FONT_XS, "USB MIDI", BH_MUTED);
-    cv_text(89, 70, &FONT_B, usb ? "LINK" : "OFF",
+    cv_text(89, 87, &FONT_XS, "USB MIDI", BH_MUTED);
+    cv_text(89, 105, &FONT_B, usb ? "LINK" : "OFF",
             usb ? BH_GREEN : BH_MUTED);
-    cv_rect(148, 77, 4, 4, usb ? BH_CYAN : BH_BORDER);
+    cv_rect(148, 118, 4, 4, usb ? BH_CYAN : BH_BORDER);
 
-    cv_text(168, 54, &FONT_XS, "BLUETOOTH", BH_MUTED);
-    cv_text(168, 70, &FONT_B,
+    cv_text(168, 87, &FONT_XS, "BLUETOOTH", BH_MUTED);
+    cv_text(168, 105, &FONT_B,
             !FM1B_BLE ? "N/A" : ble ? "LINK" : ble_wait ? "WAIT" : "OFF",
             ble ? BH_GREEN : ble_wait ? BH_ORANGE : BH_MUTED);
-    cv_rect(226, 77, 4, 4, ble ? BH_CYAN : BH_BORDER);
-
-    /* Small live black-hole glyph between the two activity labels. */
-    bh_draw_live_hole(88, 100);
-    cv_text(9, 118, &FONT_XS, "PHYSICAL", BH_MUTED);
-    cv_text(9, 131, &FONT_XS, "CONTROL", BH_CYAN);
-    cv_text(176, 118, &FONT_XS, "27 KEYS", BH_MUTED);
-    cv_text(176, 131, &FONT_XS, "ACTIVE", phase ? BH_CYAN : BH_PURPLE);
+    cv_rect(227, 118, 4, 4, ble ? BH_CYAN : BH_BORDER);
     cv_blit(0, 0);
 }
 
-/* Direct, continuously updated rendering from the EXACT matrix read by
- * wb_remote_input: 16 white + 11 black keys = all 27 FM-1 keys. */
+/* OPAQUE 240x96 keyboard: the image never bleeds through these pixels.
+ * 16 white + 11 black, real physical scan matrix. */
 static void bh_remote_keyboard(void)
 {
     int32_t i, x, k;
@@ -173,12 +323,11 @@ static void bh_remote_keyboard(void)
             cv_rect(x, 53, 8, 3, BH_WHITE);
     }
     cv_rect(4, 81, 232, 1, BH_BORDER);
-    cv_text(7, 85, &FONT_XS, "27-KEY PHYSICAL MIDI  /  REMOTE V2", BH_MUTED);
+    cv_text(7, 85, &FONT_XS, "27-KEY PHYSICAL MIDI / REMOTE", BH_MUTED);
     cv_blit(0, 144);
 }
 
-/* Physical key LEDs follow actual switches exactly, not a sequencer,
- * mock note animation, or page-specific CTL-1 keyboard behaviour. */
+/* Exact LED state from physical switches; no animation or fake notes. */
 static void bh_remote_leds(void)
 {
     uint32_t keys = ui.keys & ((1u << NKEYS) - 1u);
