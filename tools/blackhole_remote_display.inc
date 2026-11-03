@@ -4,8 +4,9 @@
  * Included into CTL-1 app/ui.c after its panel/model definitions.
  * All coordinates and partial canvas blits stay within the square LCD.
  *
- * No graphics are streamed from the phone. The original pixel-art
- * singularity is procedurally drawn on the hardware itself at boot.
+ * No graphics are streamed from the phone. A 64-colour RGB565 bitmap
+ * adapted from the square reference image is drawn natively at 240x144,
+ * plus a live 64x44 image preview, without overfilling the 240x240 LCD.
  * The playable keyboard always follows plat_keys() -> ui.keys, and
  * physical note LEDs follow the same state in bh_remote_leds().
  */
@@ -28,91 +29,54 @@
 static uint32_t bh_top_signature = 0xffffffffu;
 static uint32_t bh_key_signature = 0xffffffffu;
 
-/* A deliberately low-resolution, 4-pixel-tile accretion disk. Integer
- * arithmetic avoids floating-point work and keeps the source portable
- * to the AC79 device SDK and the host emulator. Tile squares are the
- * pixels — NOT antialiased vector circles. */
-static void bh_hole_pixels(int32_t cx, int32_t cy, int32_t radius,
-                           int32_t left, int32_t top, int32_t right, int32_t bottom)
-{
-    int32_t x, y, r2, dx, dy, ring_y;
-    uint32_t tile;
-    for (y = top; y < bottom; y += 4) {
-        for (x = left; x < right; x += 4) {
-            uint16_t color = BH_BG;
-            dx = x + 2 - cx;
-            dy = y + 2 - cy;
-            /* Scale elliptical radius so the hole works at splash and
-             * live-widget sizes. For r2=100, x is roughly radius. */
-            r2 = (dx * dx * 100 + dy * dy * 147) / (radius * radius);
-            tile = ((uint32_t)(x * 73 + y * 151) ^ (uint32_t)(x * y * 3)) & 31u;
-            if (r2 < 25)
-                color = BH_VOID;
-            else if (r2 < 35)
-                color = BH_MAGENTA;
-            else if (r2 < 45)
-                color = BH_ORANGE;
-            else if (r2 < 62)
-                color = tile < 12u ? BH_PURPLE : BH_VIOLET;
-            else if (r2 < 93 && tile < 20u)
-                color = BH_VIOLET;
-            else if (r2 < 165 && tile < 4u)
-                color = BH_BORDER;
+/* 37,376 indexed colour samples generated off-line by
+ * tools/generate_blackhole_bitmap.py from the approved square artwork.
+ * The indexed data are ROM constants; painting into gfx.c's existing
+ * 240x144 canvas does NOT allocate a second framebuffer on the FM-1. */
+#include "blackhole_bitmap.h"
 
-            /* The luminous, slanted accretion disk crosses behind the
-             * dark event horizon, so the centre stays truly black. */
-            ring_y = dy + dx / 8;
-            if (r2 >= 25 && r2 < 185 && (ring_y < 6 && ring_y > -6)) {
-                color = tile < 20u ? BH_ORANGE : BH_MAGENTA;
-            }
-            if (r2 < 23)
-                color = BH_VOID;
-            if (color != BH_BG)
-                cv_rect(x, y, 4, 4, color);
-        }
-    }
-}
-
-static void bh_stars(int32_t y0, int32_t y1)
-{
-    int i;
-    /* Deterministic sparse stars; no random generator, no assets. */
-    for (i = 0; i < 33; i++) {
-        int32_t x = (i * 67 + i * i * 11 + 7) % 236;
-        int32_t y = y0 + ((i * 43 + i * i * 5) % (y1 - y0));
-        if ((x > 49 && x < 194) && (y > 10 && y < 135))
-            continue;
-        cv_rect(x, y, i % 7 == 0 ? 2 : 1, i % 7 == 0 ? 2 : 1,
-                i % 4 == 0 ? BH_CYAN : BH_MUTED);
-    }
-}
+static uint32_t bh_boot_splash_until;
 
 static void bh_remote_splash(void)
 {
-    /* fm1-base's default canvas holds 240 * 144 pixels. Two bands
-     * render exactly 240 * 240 without ever overflowing that buffer. */
+    uint32_t i;
+    /* 240x144 real raster pixels: no more 4x4 procedural tiles. */
     cv_begin(240, 144, BH_BG);
-    bh_stars(4, 140);
-    bh_hole_pixels(120, 73, 68, 8, 0, 232, 144);
-    cv_rect(7, 6, 23, 2, BH_CYAN);
-    cv_rect(7, 6, 2, 16, BH_CYAN);
-    cv_rect(210, 6, 23, 2, BH_CYAN);
-    cv_rect(231, 6, 2, 16, BH_CYAN);
-    cv_rect(7, 135, 24, 2, BH_PURPLE);
-    cv_rect(208, 135, 25, 2, BH_PURPLE);
+    for (i = 0; i < 240u * 144u; ++i)
+        cv_px[i] = bh_art_palette[bh_art_splash[i]];
     cv_blit(0, 0);
 
+    /* Native 96-pixel bottom band completes the exact 240x240 square.
+     * Draw useful brand information, never invented percentages or
+     * fictitious BLE/USB link states during the boot screen. */
     cv_begin(240, 96, BH_BG);
-    cv_rect(12, 6, 216, 2, BH_BORDER);
-    cv_text((240 - text_w(&FONT_L, "BLACKHOLE")) / 2, 15,
-            &FONT_L, "BLACKHOLE", BH_WHITE);
-    cv_text((240 - text_w(&FONT_B, "REMOTE")) / 2, 43,
-            &FONT_B, "REMOTE", BH_PURPLE);
-    cv_text((240 - text_w(&FONT_XS, "MIDI CONTROLLER")) / 2, 65,
-            &FONT_XS, "MIDI CONTROLLER", BH_CYAN);
-    cv_rect(16, 89, 208, 2, BH_BORDER);
-    cv_rect(16, 89, 49, 2, BH_CYAN);
+    cv_rect(0, 0, 240, 2, BH_BORDER);
+    cv_round(8, 10, 224, 72, 8, BH_CARD);
+    cv_round(10, 12, 220, 68, 7, BH_BG);
+    cv_text((240 - text_w(&FONT_B, "FM-1 / MIDI")) / 2, 19,
+            &FONT_B, "FM-1 / MIDI", BH_WHITE);
+    cv_text((240 - text_w(&FONT_XS, "USB + BLE CONTROLLER")) / 2, 43,
+            &FONT_XS, "USB + BLE CONTROLLER", BH_CYAN);
+    cv_text((240 - text_w(&FONT_XS, "INITIALIZING...")) / 2, 61,
+            &FONT_XS, "INITIALIZING...", BH_PURPLE);
+    cv_rect(20, 88, 200, 3, BH_BORDER);
+    cv_rect(20, 88, 120, 3, BH_CYAN);
     cv_blit(0, 144);
+}
+
+/* A real 64x44 cropped image of the accretion disk, on the live HUD.
+ * It uses the SAME RGB565 palette as the detailed splash image. */
+static void bh_draw_live_hole(int32_t left, int32_t top)
+{
+    uint32_t y, x;
+    for (y = 0; y < 44u; ++y) {
+        for (x = 0; x < 64u; ++x) {
+            int32_t dx = left + (int32_t)x, dy = top + (int32_t)y;
+            if ((uint32_t)dx < 240u && (uint32_t)dy < 144u)
+                cv_px[(uint32_t)dy * 240u + (uint32_t)dx] =
+                    bh_art_palette[bh_art_widget[y * 64u + x]];
+        }
+    }
 }
 
 /* Header + persistent USB/BLE/battery HUD: 240 x 144. Percent is an
@@ -170,7 +134,7 @@ static void bh_remote_header(void)
     cv_rect(226, 77, 4, 4, ble ? BH_CYAN : BH_BORDER);
 
     /* Small live black-hole glyph between the two activity labels. */
-    bh_hole_pixels(120, 124, 28, 88, 100, 153, 144);
+    bh_draw_live_hole(88, 100);
     cv_text(9, 118, &FONT_XS, "PHYSICAL", BH_MUTED);
     cv_text(9, 131, &FONT_XS, "CONTROL", BH_CYAN);
     cv_text(176, 118, &FONT_XS, "27 KEYS", BH_MUTED);
