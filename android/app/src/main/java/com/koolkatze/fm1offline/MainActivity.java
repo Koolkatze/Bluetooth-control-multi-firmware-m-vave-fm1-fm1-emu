@@ -788,6 +788,11 @@ public final class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public boolean abortPhysicalFirmwareUpload() {
+            return physicalFirmwareInstaller != null && physicalFirmwareInstaller.abortUpload();
+        }
+
+        @JavascriptInterface
         public boolean nativeAvailable() { return NativeSynth.AVAILABLE; }
 
         /**
