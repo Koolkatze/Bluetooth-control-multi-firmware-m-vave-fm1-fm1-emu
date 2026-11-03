@@ -53,7 +53,9 @@ function ourId(h) {
 // a repository's licence (GitHub's SPDX id), for firmwares new to the list
 async function licence(repo) {
   try {
-    const r = await fetch(`https://api.github.com/repos/${repo}`, { headers: { "User-Agent": "fm1-emu hub_catalog" } });
+    const headers = { "User-Agent": "fm1-emu hub_catalog" };
+    if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+    const r = await fetch(`https://api.github.com/repos/${repo}`, { headers });
     const j = await r.json();
     const id = j.license?.spdx_id;
     return id && id !== "NOASSERTION" ? id : "see the repository";
