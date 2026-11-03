@@ -34,6 +34,7 @@ final class FirmwareUpdater {
     private static final String TAG = "FM1FirmwareUpdate";
     private static final String CATALOG_ROOT =
             "https://raw.githubusercontent.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/master/web/";
+    private static final String HUB_CATALOG = "https://thefirmwarehub.com/catalog.json";
     private static final int MAX_CATALOG = 1024 * 1024;
     private static final int MAX_PACKAGE = 15 * 1024 * 1024;
     private final Activity activity;
@@ -165,6 +166,63 @@ final class FirmwareUpdater {
         });
     }
 
+    /* The Hub changes independently of our static repository catalog.
+     * Prefer the LIVE Hub feed on every explicit update, while retaining
+     * our custom URBAN-1 and other firmware entries from GitHub.
+     * Only trusted .fwsc links with a verified open-source licence can be
+     * downloaded; unknown licences remain visible as link-only records. */
+    private static JSONArray mergeHubCatalog(JSONArray curated, JSONArray hub) throws Exception {
+        java.util.LinkedHashMap<String, JSONObject> combined = new java.util.LinkedHashMap<>();
+        Map<String, String> canonical = new HashMap<>();
+        for (int i = 0; i < curated.length(); i++) {
+            JSONObject item = curated.optJSONObject(i);
+            if (item == null || !validId(item.optString("id"))) continue;
+            combined.put(item.optString("id"), new JSONObject(item.toString()));
+            if (validId(item.optString("hub")))
+                canonical.put(item.optString("hub"), item.optString("id"));
+        }
+        // A few historical aliases differ between Workbench and FW Hub.
+        canonical.put("salt", "felucca-salt");
+        canonical.put("floyd", "sloop-floyd");
+        canonical.put("sloopbanks", "sloop-banks");
+        for (int i = 0; i < hub.length(); i++) {
+            JSONObject h = hub.optJSONObject(i);
+            if (h == null || !validId(h.optString("id"))) continue;
+            String hubId = h.optString("id");
+            String id = canonical.containsKey(hubId) ? canonical.get(hubId) : hubId;
+            JSONObject item = combined.get(id);
+            if (item == null) item = new JSONObject();
+            item.put("id", id);
+            item.put("hub", hubId);
+            item.put("name", h.optString("name", item.optString("name", id)));
+            item.put("version", h.optString("version", item.optString("version", "")));
+            item.put("author", h.optString("author", item.optString("author", "community")));
+            if (!item.has("about")) item.put("about", h.optString("what", ""));
+            if (!item.has("repo")) {
+                String upstream = h.optString("repo", "");
+                String site = h.optString("site", "");
+                item.put("repo", upstream.isEmpty() ? (site.isEmpty() ?
+                    "https://thefirmwarehub.com/" : site) : "https://github.com/" + upstream);
+            }
+            String pkg = h.optString("pkg", "");
+            if (!pkg.isEmpty()) {
+                item.put("package", new URL("https://thefirmwarehub.com/", pkg).toExternalForm());
+                item.remove("byo");
+                item.remove("unavailable");
+            } else {
+                item.remove("package");
+                item.put("byo", true);
+                item.put("unavailable", "FW Hub lists this entry without a downloadable .fwsc");
+            }
+            if (!item.has("license"))
+                item.put("license", h.optString("license", ""));
+            combined.put(id, item);
+        }
+        JSONArray out = new JSONArray();
+        for (JSONObject item : combined.values()) out.put(item);
+        return out;
+    }
+
     private void update(String device, String selected) throws Exception {
         JSONObject packaged = new JSONObject(new String(
                 readStream(activity.getAssets().open("site/" + catalogPath(device)), MAX_CATALOG),
@@ -174,6 +232,20 @@ final class FirmwareUpdater {
         JSONArray original = packaged.getJSONArray("firmwares");
         Map<String, JSONObject> remote = new HashMap<>();
         JSONArray newest = available.getJSONArray("firmwares");
+        if ("fm1".equals(device)) {
+            /* Repository snapshot can lag hundreds of Hub releases. This
+             * fetch discovers new IDs and up-to-date versions immediately. */
+            try {
+                JSONObject liveHub = new JSONObject(new String(
+                        download(HUB_CATALOG + "?nocache=" + System.currentTimeMillis(), MAX_CATALOG),
+                        StandardCharsets.UTF_8));
+                newest = mergeHubCatalog(newest, liveHub.getJSONArray("firmwares"));
+            } catch (Exception error) {
+                Log.w(TAG, "Live FW Hub unavailable; using curated GitHub snapshot", error);
+                notifyPage("warning", "", "",
+                    "FW Hub no respondió; se usa el catálogo de respaldo", 0, 0, 0);
+            }
+        }
         for (int i = 0; i < newest.length(); i++) {
             JSONObject f = newest.getJSONObject(i);
             String id = f.optString("id");
