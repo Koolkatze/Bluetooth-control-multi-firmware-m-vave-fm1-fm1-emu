@@ -70,8 +70,10 @@ public final class MidiPanelMapper {
 
     private void key(Sink sink, int id, int value) {
         if (id < 0 || id >= pressed.length) return;
-        pressed[id] = value != 0;
-        sink.panel(0, id, value);
+        boolean next = value != 0;
+        if (pressed[id] == next) return; // ignore periodic held-state snapshots
+        pressed[id] = next;
+        sink.panel(0, id, next ? 1 : 0);
     }
 
     /** Handles complete messages, coalesced packets, and USB/BLE running status.
