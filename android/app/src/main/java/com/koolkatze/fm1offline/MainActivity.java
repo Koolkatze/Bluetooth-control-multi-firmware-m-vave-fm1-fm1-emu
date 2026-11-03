@@ -1008,17 +1008,17 @@ public final class MainActivity extends Activity {
 
     private void showMidiModePicker() {
         final String[] names = {
-                "Automático — detecta Workbench Remote por MIDI",
+                "Automático — detecta Blackhole Remote por MIDI",
                 "Solo instrumento MIDI — notas, CC y reloj",
                 "CTL-1 original — compatibilidad limitada",
-                "Workbench Remote — firmware físico obligatorio",
+                "Blackhole Remote — firmware físico obligatorio",
                 "ℹ Requisitos: móvil como pantalla + FM-1 controlador"
         };
         final String[] ids = { "auto", "midi", "ctl1", "remote" };
         String selected = getPreferences(MODE_PRIVATE).getString(MIDI_MODE_PREF, "auto");
         int checked = Arrays.asList(ids).indexOf(selected);
         new AlertDialog.Builder(this)
-                .setTitle("MIDI · Control completo requiere Workbench Remote en FM-1")
+                .setTitle("MIDI · Control completo requiere Blackhole Remote en FM-1")
                 .setSingleChoiceItems(names, Math.max(0, checked), (dialog, which) -> {
                     if (which == names.length - 1) {
                         dialog.dismiss();
@@ -1050,12 +1050,12 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("M-VAVE FM-1 → Workbench")
                 .setMessage("REQUISITO para móvil = pantalla + FM-1 = controlador completo:\n"
-                        + "Instala Workbench Remote en el FM-1 físico y la APK "
+                        + "Instala Blackhole Remote en el FM-1 físico y la APK "
                         + "Workbench en el móvil. Sin ese firmware físico, "
                         + "SELECT, ALGORITHM y muchos botones NO funcionarán 1:1.\n\n"
                         + "Móvil: pantalla y audio del firmware emulado; "
                         + "FM-1: controles físicos vía USB/BLE; NO se duplica la LCD real.\n\n"
-                        + "Workbench Remote (firmware físico adaptado):\n"
+                        + "Blackhole Remote (protocolo Workbench Remote v1):\n"
                         + "SELECT → SELECT (encoder 0)\n"
                         + "PRESETS → PRESETS (encoder 6)\n"
                         + "ALGORITHM → ALGORITHM (encoder 1)\n"
@@ -1071,7 +1071,7 @@ public final class MainActivity extends Activity {
                         + "CC64 es sustain, CC123 es All Notes Off y Start/Stop es "
                         + "transporte MIDI: NO son botones ENV/REC/PLAY.\n\n"
                         + "Para el control íntegro instala voluntariamente un "
-                        + "firmware físico compatible con Workbench Remote. "
+                        + "firmware físico Blackhole Remote / compatible con Workbench Remote. "
                         + "La APK detecta su saludo MIDI automáticamente.")
                 .setPositiveButton("Cerrar", null).show();
     }
