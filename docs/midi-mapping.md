@@ -1,5 +1,31 @@
 # M-VAVE FM-1 físico ↔ Workbench: MIDI USB-C y BLE
 
+## REQUISITO: teléfono como pantalla + FM-1 físico como controlador completo
+
+Para esta configuración **NO basta con instalar la APK en Android**.
+Debes instalar **un firmware físico compatible con Workbench Remote en el
+M-VAVE FM-1 real**. De lo contrario, con el CTL-1 estándar el teléfono
+puede mostrar y ejecutar el firmware emulado, y recibir algunas notas y
+CC, pero **SELECT, ALGORITHM y otros botones físicos no podrán actuar
+como sus equivalentes del panel virtual**, porque CTL-1 no transmite
+esas pulsaciones por MIDI.
+
+- **FM-1 real**: firmware **Workbench Remote**, transmite teclas,
+  botones, encoders y potenciómetro por MIDI USB o BLE.
+- **Teléfono**: APK **FM-1 Workbench**, muestra la LCD del firmware
+  emulado seleccionado (URBAN-1 u otro) y genera su audio.
+- **No es una duplicación de pantalla**: Workbench no captura la
+  LCD que está dibujando el FM-1 físico.
+- **Una sola instalación física inicial**: cambiar entre firmwares
+  sintetizadores en la APK no implica reflashear el controlador.
+- **No hay flasheo remoto**: la pestaña de actualización de firmwares
+  de Workbench solo gestiona firmwares emulados, no el del hardware.
+  El firmware Workbench Remote físico es experimental y debe flashearse
+  manualmente con precauciones y vía de rescate.
+
+Si se usa exclusivamente el panel táctil y el sonido del móvil,
+Workbench Remote **no es necesario**.
+
 ## Objetivo
 
 El FM-1 físico ejecuta su firmware controlador (por ejemplo, **CTL-1**), y
@@ -19,9 +45,11 @@ El botón **▲ → MIDI** abre conexión USB o búsqueda BLE, **Modo de mapeo**
 
 ## Perfiles disponibles
 
-1. **Automático**: CTL-1 si el nombre del dispositivo contiene
+1. **Automático**: empieza con compatibilidad CTL-1 limitada si el nombre del dispositivo contiene
    `FM-1`, `CTL-1` o `M-VAVE`; cualquier otro dispositivo usa MIDI
-   convencional. Se puede cambiar manualmente y el ajuste persiste.
+   convencional. Cuando el firmware físico transmite el saludo
+   **CC102 valor 42 en el canal 16**, conmuta automáticamente al
+   mapeo completo Workbench Remote. El ajuste se conserva.
 2. **Solo instrumento MIDI**: pasa notas/CC/program changes/reloj MIDI al
    puerto del firmware emulado sin intervenir en su panel.
 3. **CTL-1 instalado**: transforma los mensajes que **sí emite** el CTL-1
