@@ -136,6 +136,41 @@ static UrbanFxPlan urban_fx_plan(const UrbanSong *s) {
         f.lead_accent=(uint8_t)(14u+ls*3u);
         f.lead_resonance=(uint8_t)(14u+ls*2u);
     }
+    /* Lo-fi is not just a lowpass flag: use HYP's actual Rhodes/piano
+     * attack, small wow/flutter-rate LFO, low pad detune, muted drums,
+     * and quiet pink/brown noise without a club sidechain pump. Every
+     * flavor differs but remains recognizably mellow. */
+    if(pg==3u && ps==3u) {
+        f.pad_lfo_rate=2u;
+        f.pad_lfo_depth=(uint8_t)(urban_lofi_mood(s)==1u?12u:9u);
+        f.pad_detune=6u;
+        f.pad_attack=(uint8_t)(urban_lofi_mood(s)==3u?20u:12u);
+        f.pad_release=(uint8_t)(urban_lofi_mood(s)==3u?82u:71u);
+    }
+    if(bg==3u && bs==3u) {
+        f.bass_lfo_rate=1u;
+        f.bass_lfo_depth=6u;
+        f.bass_resonance=16u;
+    }
+    if(lg==3u && ls==3u) {
+        f.lead_env=14u;
+        f.lead_decay=67u;
+        f.lead_slide=4u;
+        f.lead_accent=12u;
+        f.lead_resonance=13u;
+    }
+    if(ng==3u && ns==3u) {
+        f.noise_tone=(uint8_t)(urban_lofi_mood(s)==1u?11u:17u);
+        f.noise_pump=20u;
+    }
+    if(g==3u && sub==3u) {
+        static const uint8_t rev[4]={22u,29u,21u,30u};
+        static const uint8_t echo[4]={10u,14u,18u,11u};
+        unsigned mood=urban_lofi_mood(s);
+        f.reverb=rev[mood]; f.echo=echo[mood];
+        f.reverb_size=58u;
+        f.echo_time=2u;
+    }
     if(lg==12u) {
         /* Trance lead engine is not one resonant legato patch for all.
          * Psy/Tech require short plucks, Progressive a softer offbeat,
@@ -157,12 +192,13 @@ static UrbanFxPlan urban_fx_plan(const UrbanSong *s) {
         /* Exact HYP Bristol Trip-hop kick envelope and clean gain;
          * only the Lo-fi Hip-hop substyle opts into saturation and
          * the longer decaying kick. P_DRIVE is KICK ONLY in HYP. */
-        f.kick_decay=(uint8_t)(dg==3u && ds==3u?64u:44u);
-        f.drive=(uint8_t)(dg==3u && ds==3u?42u:8u);
+        f.kick_decay=(uint8_t)(dg==3u && ds==3u?55u:44u);
+        f.drive=(uint8_t)(dg==3u && ds==3u?22u:8u);
+        if(dg==3u && ds==3u)f.snare_decay=29u;
     }
     if(hg==3u || hg==5u) {
-        f.hat_decay=(uint8_t)(18u+hs*4u);
-        f.perc_decay=(uint8_t)(24u+hs*3u);
+        f.hat_decay=(uint8_t)(hg==3u && hs==3u?20u:18u+hs*4u);
+        f.perc_decay=(uint8_t)(hg==3u && hs==3u?20u:24u+hs*3u);
     }
     return f;
 }

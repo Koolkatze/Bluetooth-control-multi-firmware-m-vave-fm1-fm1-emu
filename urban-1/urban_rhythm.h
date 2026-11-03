@@ -48,7 +48,7 @@ static UrbanGroove urban_groove(uint8_t genre,uint8_t subgenre) {
       /* Hip-hop: jazz break / G-Funk's 808 and lightly open hat / dusty lo-fi */
       {{0x04c9,0x1010,0x5555,0x0000,0x2000,0x0044, 6,25,4},
        {0x0889,0x1010,0x5555,0x1000,0x2000,0x0000, 7, 7,7},
-       {0x0109,0x1010,0x5555,0x0000,0x0000,0x0000, 2,22,4}},
+       {0x0109,0x1010,0x5455,0x0000,0x0000,0x0000, 1,27,4}},
       /* Trip-hop: Downtempo / Abstract / Dub */
       {{0x0109,0x1010,0x4444,0x1000,0x0000,0x0040, 6,24,4},
        {0x0a21,0x1010,0x2222,0x0000,0x0000,0x2222,19,18,5},
@@ -145,6 +145,33 @@ static void urban_drum_lanes(const UrbanSong *s,unsigned section,unsigned sectio
     UrbanGroove hg=urban_groove(h->genre,h->subgenre);
     out[0]=g.kick; out[1]=g.snare; out[2]=g.clap;
     out[3]=hg.hat; out[4]=hg.open; out[5]=hg.perc;
+    /* Lo-fi is a humanized, deliberately REPEATED four-bar pocket, not
+     * an EDM drop with busy 16ths. Rhythmic details vary predictably by
+     * take: study, rainy, jazz and sleep. Drum and hat track overrides
+     * remain independent, and bridge/intro masks are applied below. */
+    if(d->genre%URBAN_GENRES==3u && d->subgenre%4u==3u) {
+        static const uint16_t kicks[4][4]={
+            {0x0109u,0x0101u,0x0141u,0x0109u}, /* study: soft offbeat lift */
+            {0x0101u,0x0001u,0x0101u,0x0109u}, /* rainy: sparse */
+            {0x0149u,0x0109u,0x0141u,0x0109u}, /* jazz: pickup */
+            {0x0001u,0x0101u,0x0001u,0x0101u}  /* sleepy: almost half-time */
+        };
+        unsigned mood=urban_lofi_mood(s);
+        out[0]=kicks[mood][section_bar%4u];
+        out[1]=0x1010u; /* soft 2-and-4, never trap half-time */
+        out[2]=0u;      /* no sharp doubled clap */
+    }
+    if(h->genre%URBAN_GENRES==3u && h->subgenre%4u==3u) {
+        static const uint16_t hats[4][4]={
+            {0x5455u,0x5555u,0x5455u,0x5155u},
+            {0x4545u,0x4545u,0x4445u,0x4545u},
+            {0x5555u,0x5555u,0x5455u,0x5555u},
+            {0x1111u,0x1111u,0x1115u,0x1111u}
+        };
+        out[3]=hats[urban_lofi_mood(s)][section_bar%4u];
+        out[4]=0u; /* rounded closed hats, no bright open-hat wash */
+        out[5]=0u;
+    }
     /* NO universal random kick/snare mutation: that previously made
      * all drum subgenres converge on one generic syncopated rhythm. Only
      * explicitly authored bar-by-bar ghost notes and fill candidates

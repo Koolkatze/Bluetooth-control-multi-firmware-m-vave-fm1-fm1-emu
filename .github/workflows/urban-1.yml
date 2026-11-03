@@ -1,7 +1,7 @@
 name: URBAN-1 host synthesis smoke test
 on:
   push:
-    branches: [feature/urban-1, feature/urban-rec-full-instruments, fix/urban-rec-audition-octave, feature/urban-kitsune-splash, fix/urban-kitsune-no-crop-v014, fix/urban-splash-fullframe-v0414, feature/urban-splash-approved-square-v0416]
+    branches: [feature/urban-1, feature/urban-rec-full-instruments, fix/urban-rec-audition-octave, feature/urban-kitsune-splash, fix/urban-kitsune-no-crop-v014, fix/urban-splash-fullframe-v0414, feature/urban-splash-approved-square-v0416, feature/urban-lofi-hiphop-study-jazz-sleep-v0417]
     paths:
       - 'urban-1/**'
       - '.github/workflows/urban-1.yml'
@@ -39,6 +39,7 @@ jobs:
           hyp1/build/host/amb_host urban-1/tests/hyp1_sfx.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_pianist.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_jazz_instruments.amb hyp1/build/urban
+          hyp1/build/host/amb_host urban-1/tests/hyp1_lofi_hiphop.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_jazz_modulation.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_jazz_bass.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_ambient_chords.amb hyp1/build/urban

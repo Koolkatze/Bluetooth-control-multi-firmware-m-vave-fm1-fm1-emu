@@ -62,15 +62,26 @@ static UrbanChordScore urban_chord_score(const UrbanSong *s,
     /* Genuine jazz/piano comping: one voiced seventh/ninth held
      * through most of the bar; only an occasional intentional answer.
      * Never treat a pianist as a 16th-note pad retrigger loop. */
-    unsigned pianist=(genre==3u && sub==1u) ||
+    unsigned lofi=(genre==3u && sub==3u);
+    unsigned pianist=(genre==3u && sub==1u) || lofi ||
                      (genre==5u && sub==1u) ||
                      (genre==13u && sub==2u) ||
                      (genre==2u && sub==1u);
     if(pianist) {
-        out.onsets=(uint16_t)((bar%4u==3u &&
-                (section==URBAN_HOOK||section==URBAN_VERSE_B))?
-                0x0101u:0x0001u);
-        out.gate=bar%4u==3u?8u:15u;
+        if(lofi) {
+            /* Main jazz chord is an unhurried held electric-piano take,
+             * with ONE delicate response only at the phrase end in
+             * the jazz-flavoured variant. Never retrigger every 16th. */
+            unsigned reply=urban_lofi_mood(s)==2u && bar%4u==3u &&
+                     (section==URBAN_HOOK||section==URBAN_VERSE_B);
+            out.onsets=(uint16_t)(reply?0x0081u:0x0001u);
+            out.gate=(uint8_t)(reply?7u:15u);
+        } else {
+            out.onsets=(uint16_t)((bar%4u==3u &&
+                    (section==URBAN_HOOK||section==URBAN_VERSE_B))?
+                    0x0101u:0x0001u);
+            out.gate=bar%4u==3u?8u:15u;
+        }
     }
     /* Track 4 may be independently overridden: its rhythm and voicing
      * follow its own subgenre, while the song's shared harmonic roots
@@ -136,7 +147,14 @@ static UrbanChordExpression urban_chord_expression(const UrbanSong *s,
        (g==13u && sub==1u))return x;
     uint32_t v=urban_mix_seed(t->seq[section%URBAN_SEQUENCES].seed ^
                           ((bar+1u)*0x85ebca6bu));
-    if((g==3u && sub==1u)||(g==5u && sub==1u)||
+    if(g==3u && sub==3u) {
+        /* Tiny stagger of Rhodes/piano notes gives the otherwise
+         * electronic keyboard a human touch, but sleep stays block. */
+        if(urban_lofi_mood(s)!=3u) {
+            x.touch=(uint8_t)(v&1u?URBAN_CH_TOUCH_UP:URBAN_CH_TOUCH_DOWN);
+            x.spacing_ms=(uint8_t)(10u+(v%10u));
+        }
+    } else if((g==3u && sub==1u)||(g==5u && sub==1u)||
        (g==13u && sub==2u)||(g==2u && sub==1u)) {
         x.touch=(uint8_t)(v&1u?URBAN_CH_TOUCH_UP:URBAN_CH_TOUCH_DOWN);
         x.spacing_ms=(uint8_t)(14u+(v>>4u)%11u);

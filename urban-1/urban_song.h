@@ -47,6 +47,18 @@ typedef struct {
 static const uint8_t urban_genre_bpm[URBAN_GENRES] = {
     142, 135, 128, 94, 82, 90, 92, 96, 174, 140, 132, 180, 138, 170
 };
+/* Lo-fi Hip-hop is a distinct slow pocket inside Hip-hop, not the
+ * 94 BPM Boom-Bap/G-Funk clock. An explicit tempo edited by the player
+ * is still preserved when regenerating songs. */
+static uint8_t urban_style_tempo(unsigned genre,unsigned sub) {
+    return (uint8_t)((genre%URBAN_GENRES==3u && sub%4u==3u)?
+                     80u:urban_genre_bpm[genre%URBAN_GENRES]);
+}
+/* Four arrangement colours, varied on SAVE, all *original* performances:
+ * study/Rhodes, rainy piano, jazz/Rhodes-flute and sleepy minimal. */
+static unsigned urban_lofi_mood(const UrbanSong *s) {
+    return (unsigned)(s->melodic_variant&3u);
+}
 static const uint8_t urban_genre_scale[URBAN_GENRES] = {
     0,1,0,2,0,0,1,0,0,1,0,1,2,2
 };
@@ -77,7 +89,7 @@ static const uint8_t urban_genre_mode_options[URBAN_GENRES][4]={
   /* Trap */ {  0,  1, 85,  3},
   /* Goth Trap */ {  1, 35,  0, 85},
   /* Sad Trap */ {  0,  4,  2, 85},
-  /* Hip-hop */ { 85,  2,  5,101},
+  /* Hip-hop */ { 85,  2,  5,  2}, /* Lo-fi primary: Dorian 7-note jazz palette */
   /* Trip-hop */ {  0,  2,  9,  1},
   /* Underground */ {101,  2,  8,  5},
   /* Horrorcore */ {  1, 28, 35, 70},
@@ -93,7 +105,7 @@ static const uint8_t urban_style_scale_alternatives[URBAN_GENRES][4][2]={
   /* 0 */ {{85,101},{49,35},{0,90},{8,35}},
   /* 1 */ {{49,28},{110,9},{2,3},{90,88}},
   /* 2 */ {{85,3},{84,107},{8,101},{101,90}},
-  /* 3 */ {{0,101},{114,8},{94,100},{85,2}},
+  /* 3 */ {{0,101},{114,8},{94,100},{0,4}}, /* Lo-fi alt: minor / major warmth */
   /* 4 */ {{3,85},{8,106},{102,111},{6,85}},
   /* 5 */ {{85,0},{114,101},{20,77},{100,85}},
   /* 6 */ {{49,35},{70,3},{110,9},{77,49}},
@@ -118,7 +130,7 @@ static const uint8_t urban_chord_degrees[URBAN_GENRES][4][4]={
  /* Emo / piano / lo-fi / guitar */
  {{0,5,2,6},{0,3,5,2},{0,3,5,6},{0,5,3,6}},
  /* Boom-bap / jazz / G-funk / lo-fi */
- {{0,3,0,3},{0,3,2,4},{0,0,3,0},{0,5,3,6}},
+ {{0,3,0,3},{0,3,2,4},{0,0,3,0},{0,3,5,4}}, /* i-IV-vi-VII mellow jazz loop */
  /* Bristol / downtempo / abstract / dub */
  {{0,6,3,5},{0,3,5,2},{0,1,6,5},{0,3,6,0}},
  /* Dusty / jazz underground / experimental / break */

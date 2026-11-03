@@ -1,6 +1,15 @@
 # URBAN-1 — experimental generative groovebox for M-VAVE FM-1
 
-**v0.4.16 — Approved square Kitsune + motorcyclist splash (latest artwork):**
+**v0.4.17 — Lo-fi Hip-hop reworked, inspired by the musical language of 24/7 study/jazz/sleep radios:**
+
+- **Hip-hop → Lo-fi Hip-hop** now defaults to **80 BPM** instead of the family's 94 BPM (only when the tempo has not been customised). Changing to another Hip-hop subgenre restores 94 BPM; changing back restores 80 BPM. Custom K1 BPM edits persist across subgenre changes.
+- Four ORIGINAL, seeded moods on **SAVE / Generate**: **Study/Rhodes**, **Rainy/Piano**, **Jazz/Rhodes + occasional soft flute/vibraphone**, and **Sleep/minimal**. These are internal composition variants of the SAME Lo-fi Hip-hop subgenre, not additional UI categories. No Lofi Girl audio, samples or melodies are copied or embedded.
+- The existing **real modelled five-voice jazz DSP** now renders Lo-fi Rhodes/acoustic piano on the chord track, with Dorian/natural minor/major 7-note scales, 7th/9th voicings, humanized 10–19 ms chord rolls and slow four-bar held chords. The original generic HYP PAD synthetic loop is no longer the main harmonic layer.
+- **Drums:** 2/4 snare, soft 4-bar kick pattern, fewer closed-hat hits, no harsh doubled claps or open-hat wash; sample-synchronized HYP swing varies from gentle to loose by mood. **Bass:** soft low root with rare fifth replies, no 808 slide or octave leaps, 1–2 attacks per bar. **Lead:** quiet short call-and-response only when suitable, with no lead in Sleep.
+- **Audio processing:** actual HYP attack/release, subtle wow/flutter via PAD LFO, muted high-end, lower kick saturation (drive 22), modest tape-echo/reverb, pink/brown procedural noise and restrained four-bar transitions instead of abrupt EDM-style DROP loudness. Other Hip-hop subgenres (Boom Bap, Jazz Rap, G-Funk) and the remaining 13 genres retain their own settings.
+- Native C score/mix checks across 64 Lo-fi mood/take combinations, physical HYP DSP host PCM/LCD tests and cross-compiled FM-1 firmware OTA validation remain required before relying on the release. These tests check musical constraints and generated DSP activity, **not perceptual identity with a particular copyrighted recording**.
+
+**v0.4.16 — Approved square Kitsune + motorcyclist splash:**
 
 - Replaces the widescreen/letterboxed splash with **the exact latest 1254 × 1254 pixel-art image approved by the user** (orange nine-tailed kitsune, motorcyclist, Neo-Tokyo, URBAN-1/PRESS PLAY lettering). The approved square composition is shown **full bleed on the FM-1 240 × 240 LCD** with no additional crop or bars. The image is downsampled to screen-native 240 × 240 and represented in 64 RGB565 palette colours. Every pixel of the LCD comes from that original image; no new artwork, UI text overlays or alternate compositions are generated.
 - The unchanged **180 ms digital-glitch entrance and exit** use small horizontal tears and neon scanlines only during transition frames; the resting cover is completely still. PLAY dismisses the cover and starts the arrangement after the exit, while other keys dismiss without playback.

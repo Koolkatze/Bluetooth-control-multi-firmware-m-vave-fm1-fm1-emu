@@ -78,8 +78,8 @@ static void hiphop(unsigned genre,unsigned sub,unsigned seed) {
         assert((cs.onsets&0x0001u)!=0u);
         UrbanMixPlan mx=urban_mix_plan(&s,URBAN_HOOK,bar);
         assert(mx.snare>mx.clap);
-        assert(mx.kick==(genre==3u && sub==3u?74u:70u));
-        assert(mx.drive==(genre==3u && sub==3u?42u:8u));
+        assert(mx.kick==(genre==3u && sub==3u?69u:70u));
+        assert(mx.drive==(genre==3u && sub==3u?22u:8u));
         if(genre==3u && sub==0u)assert(mx.clap==0u);
         /* The drum-track override must work when the song and the
          * other tracks use a completely different global genre. */
@@ -108,7 +108,7 @@ static void hiphop(unsigned genre,unsigned sub,unsigned seed) {
     if(genre==3u && sub==3u) {
         assert(fx.kick_decay>trip_fx.kick_decay);
         assert(fx.drive>trip_fx.drive);
-        assert(urban_mix_plan(&s,URBAN_HOOK,0u).kick>trip_mix.kick);
+        assert(urban_mix_plan(&s,URBAN_HOOK,0u).kick<trip_mix.kick);
     } else {
         assert(fx.kick_decay==trip_fx.kick_decay);
         assert(fx.drive<trip_fx.drive);
@@ -128,6 +128,6 @@ int main(void) {
       for(unsigned sub=0u;sub<4u;sub++)
         for(unsigned take=0u;take<16u;take++)
             hiphop(g,sub,0x1001u+g*1000u+sub*71u+take*31u);
-    puts("URBAN-1: 128 takes, genuine Trip-hop kicks, isolated lo-fi drive and Boom Bap zero-clap in 8 sections PASS");
+    puts("URBAN-1: 128 takes, genuine Trip-hop kicks, isolated softer lo-fi kick/drive and Boom Bap zero-clap in 8 sections PASS");
     return 0;
 }

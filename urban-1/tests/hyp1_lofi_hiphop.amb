@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# REAL HYP audio+UI integration for Hip-hop -> Lo-fi Hip-hop.
+# Other Hip-hop variants retain 94 BPM; the 80 BPM lo-fi pocket and
+# modelled jazz/Rhodes DSP begin sounding WITHOUT pressing SAVE.
+expect playing 0
+expect urbanedittempo 142
+spin K2 3
+expect urbanedittempo 94
+spin K3 3
+expect urbansub 3
+expect urbanedittempo 80
+expect urbanscale 2
+# The DSP applies the queued instrument program on its first audio block,
+# so do not check the audio-owned mode before transport starts.
+expect urbanfxreverb >0
+tap PLAY
+wait 5500
+expect playing 1
+expect urbanjazzchord >0
+expect urbanjazznotes >0
+expect urbanjazzframes >1000
+shot lofi-rhodes-soft-pockets.png
+tap PLAY
+expect playing 0
+# Leaving subgenre restores original Hip-hop BPM if the player did not
+# edit tempo. Re-entering Lo-fi restores the 80 BPM default.
+spin K3 -1
+expect urbansub 2
+expect urbanedittempo 94
+spin K3 1
+expect urbansub 3
+expect urbanedittempo 80
+# Explicitly edited tempo must NEVER be overwritten by subgenre browse.
+spin K1 5
+expect urbanedittempo 85
+spin K3 -1
+expect urbanedittempo 85
+spin K3 1
+expect urbanedittempo 85

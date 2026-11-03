@@ -320,7 +320,12 @@ static void urban_port_sound_profile(void) {
     unsigned drum_genre=s->tracks[0].genre%URBAN_GENRES;
     UrbanGroove swing_groove=urban_groove((uint8_t)drum_genre,
                                          s->tracks[0].subgenre);
-    urban_port_set(P_SWING,(drum_genre==3u||drum_genre==5u)?swing_groove.swing:0);
+    unsigned swing=(drum_genre==3u||drum_genre==5u)?swing_groove.swing:0u;
+    if(drum_genre==3u && s->tracks[0].subgenre%4u==3u) {
+        static const uint8_t pocket[4]={27u,31u,29u,18u};
+        swing=pocket[urban_lofi_mood(s)];
+    }
+    urban_port_set(P_SWING,(int)swing);
     /* 56 named FX palettes: HYP has SHARED wet echo/reverb but
      * independent lead/filter envelopes, bass/pad LFO and 6 drum decays. */
     UrbanFxPlan fx=urban_fx_plan(s);
@@ -845,6 +850,15 @@ static void urban_port_song_subgenre(int delta) {
     UrbanSong *s=&p->rt.ui.song;
     int v=((int)s->subgenre+delta)%4;
     if(v<0)v+=4;
+    /* Change into/out of the 80 BPM lo-fi pocket without overriding
+     * a user-defined tempo. The 94 BPM generic hip-hop preset is
+     * otherwise too fast for the cosy study/sleep sound. */
+    unsigned previous_sub=s->subgenre%4u;
+    uint8_t previous_tempo=urban_style_tempo(s->genre,previous_sub);
+    if(s->genre%URBAN_GENRES==3u && s->tempo==previous_tempo) {
+        s->tempo=urban_style_tempo(s->genre,(unsigned)v);
+        urban_port_set(P_TEMPO,s->tempo);
+    }
     s->subgenre=(uint8_t)v;
     s->harmony_variant=0u; /* direct selection presents primary style scale */
     s->scale_manual=0u; /* new substyle loads its authored scale palette */
@@ -1293,7 +1307,7 @@ static void urban_port_input(void) {
             p->rt.ui.genre=(uint8_t)v;
             s->harmony_variant=0u;
             urban_song_set_genre(s,(uint8_t)v);
-            s->tempo=urban_genre_bpm[v];
+            s->tempo=urban_style_tempo((unsigned)v,s->subgenre);
             urban_port_set(P_TEMPO,s->tempo);
             for(unsigned i=0;i<URBAN_TRACKS;i++)
                 if(!p->overridden[i] && !s->tracks[i].locked)

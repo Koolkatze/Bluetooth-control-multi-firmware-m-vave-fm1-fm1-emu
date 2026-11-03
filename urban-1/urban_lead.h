@@ -111,7 +111,7 @@ static const uint8_t urban_lead_chance[URBAN_GENRES][4]={
     {25,45,12,35},   /* Trap: often leaves room for vocals / 808 */
     {20,35,18,12},   /* Goth: sparse dark distant motifs */
     {35,20,12,30},   /* Sad: pluck/piano chord main layer */
-    {8,62,72,6},     /* Jazz Rap: flute/mallet call and response */
+    {8,62,72,28},    /* Lo-fi: foreground accents are sparse; jazzy mood stronger */
     {12,15,22,12},   /* Trip-hop: atmosphere and bass dominate */
     {8,58,12,22},    /* Jazz Underground: instrumental replies */
     {25,32,20,25},   /* Horrorcore */
@@ -128,6 +128,12 @@ static uint8_t urban_lead_presence(const UrbanSong *s) {
     unsigned g=t->genre%URBAN_GENRES,sub=t->subgenre%4u;
     uint32_t selection=urban_mix_seed(s->seed ^
         t->seq[URBAN_HOOK].seed ^ 0x529dc91bu);
+    if(g==3u && sub==3u) {
+        /* Different original instrumental takes from the SAME subgenre:
+         * study / rainy / jazz / sleepy. Sleep has no separate solo. */
+        static const uint8_t chance[4]={26u,18u,78u,0u};
+        return (uint8_t)(selection%100u<chance[urban_lofi_mood(s)]);
+    }
     return (uint8_t)(selection%100u<urban_lead_chance[g][sub]);
 }
 static uint8_t urban_lead_active(const UrbanSong *s,unsigned section,
@@ -220,6 +226,17 @@ static UrbanNote urban_lead_score(const UrbanSong *s,unsigned section,
            (int)urban_trance_contour[t->subgenre%4u][contour_pos]:
            (int)urban_lead_degrees[g][contour_pos] +
            (int)urban_substyle_lead_steps[t->subgenre%4u][contour_pos];
+    if(g==3u && t->subgenre%4u==3u) {
+        /* Quiet descending/gentle replies, NEVER the generic ascending
+         * EDM arpeggio; jazz mood uses small flute/vibraphone phrases. */
+        static const int8_t phrases[4][8]={
+            {0,1,0,-1,0,-1,0,0},
+            {0,-1,-2,-1,0,-1,-2,0},
+            {0,2,1,0,2,1,0,-1},
+            {0,0,0,0,0,0,0,0}
+        };
+        relative=phrases[urban_lofi_mood(s)][contour_pos];
+    }
     if(g==12u) {
         /* Four-bar development without wandering off the eighth-note
          * grid: the melodic_variant changes a stable hook resolution,
@@ -248,6 +265,10 @@ static UrbanNote urban_lead_score(const UrbanSong *s,unsigned section,
         input.velocity=(uint8_t)((sub>=2u?74u:80u)+(r%5u));
         while(input.note>88u)input.note-=12u;
         while(input.note<60u)input.note+=12u;
+    }
+    if(g==3u && t->subgenre%4u==3u) {
+        input.gate=(uint8_t)(urban_lofi_mood(s)==2u?6u:9u);
+        input.velocity=(uint8_t)(61u+(r%9u));
     }
     if(input.gate>12u)input.gate=12u;
     return input;
