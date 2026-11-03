@@ -289,6 +289,7 @@ def main() -> None:
     # Expose the actual URBAN-1 song transport to host regression scripts.
     replace_once(root / "host/amb_host.c",
         '    else if (!strcmp(what, "sixteenths"))',
+        '    else if (!strcmp(what, "urbansplash")) got = urban_port.splash_phase;\n'
         '    else if (!strcmp(what, "urbanrecscreen")) got = urban_port.rec_screen;\n'
         '    else if (!strcmp(what, "urbanrecstate")) got = urban_port.recorder.state;\n'
         '    else if (!strcmp(what, "urbanrecbars")) got = urban_port.recorder.bars;\n'
