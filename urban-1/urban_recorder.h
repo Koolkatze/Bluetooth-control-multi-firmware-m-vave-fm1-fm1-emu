@@ -11,12 +11,13 @@
 #include <stdint.h>
 #define UR_REC_MAX_EVENTS 512u
 #define UR_REC_TICKS_BAR 32u
-/* 16 bass + 16 lead + 16 pad + 2 modelled bass + 5 modelled lead +
- * 5 modelled pad programs. These are existing, audible HYP/Jazz DSPs. */
-#define UR_REC_PROGRAM_COUNT 60u
+/* The real, installed sound catalog: 48 HYP melodic presets, 12
+ * acoustic models, 8 kit presets (6 playable lanes each), and 10
+ * procedural Sound FX. No external firmware/sample bank is implied. */
+#define UR_REC_PROGRAM_COUNT 78u
 typedef struct {
-    uint8_t track; /* URBAN logical track: 2 Bass / 3 Lead / 4 Chords */
-    uint8_t patch; /* existing HYP program, 0..15; unused in Jazz mode */
+    uint8_t track; /* 0 Drums, 2 Bass, 3 Lead, 4 Chords, 6 Sound FX */
+    uint8_t patch; /* HYP patch/kit index, or procedural SFX type */
     uint8_t jazz;  /* 0 native, 1..5 modelled lead/pad, 1..2 bass */
 } UrbanRecInstrument;
 static UrbanRecInstrument urban_rec_instrument(unsigned program) {
@@ -28,10 +29,11 @@ static UrbanRecInstrument urban_rec_instrument(unsigned program) {
     else if(index<48u) {out.track=4u;out.patch=(uint8_t)(index-32u);}
     else if(index<50u) {out.track=2u;out.jazz=(uint8_t)(index-47u);}
     else if(index<55u) {out.track=3u;out.jazz=(uint8_t)(index-49u);}
-    else {out.track=4u;out.jazz=(uint8_t)(index-54u);}
+    else if(index<60u) {out.track=4u;out.jazz=(uint8_t)(index-54u);}
+    else if(index<68u) {out.track=0u;out.patch=(uint8_t)(index-60u);}
+    else {out.track=6u;out.patch=(uint8_t)(index-68u);}
     return out;
 }
-
 enum {UR_REC_OFF,UR_REC_ARM,UR_REC_RECORD,UR_REC_EDIT};
 enum {UR_REC_NOTE_OFF,UR_REC_NOTE_ON,UR_REC_PARAM};
 typedef struct {
