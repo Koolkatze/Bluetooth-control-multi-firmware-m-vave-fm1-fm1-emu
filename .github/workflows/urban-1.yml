@@ -1,7 +1,7 @@
 name: URBAN-1 host synthesis smoke test
 on:
   push:
-    branches: [feature/urban-1, feature/urban-rec-full-instruments, fix/urban-rec-audition-octave, feature/urban-kitsune-splash, fix/urban-kitsune-no-crop-v014]
+    branches: [feature/urban-1, feature/urban-rec-full-instruments, fix/urban-rec-audition-octave, feature/urban-kitsune-splash, fix/urban-kitsune-no-crop-v014, fix/urban-splash-fullframe-v0414]
     paths:
       - 'urban-1/**'
       - '.github/workflows/urban-1.yml'
@@ -84,8 +84,8 @@ jobs:
           assert a.getpixel((0,52)) != a.getpixel((0,0)), 'Full artwork top edge not shown'
           assert a.getpixel((120,187)) != a.getpixel((0,239)), 'Full artwork bottom edge not shown'
           colors = a.crop((0,52,240,188)).getcolors(240*136)
-          assert colors is not None and len(colors)>10, 'Art lost its 16 color palette'
-          print('Kitsune image colors, steady-state and two UI transitions pass:',orange)
+          assert colors is not None and len(colors)>=32, 'Full-frame Kitsune palette unexpectedly lost'
+          print('Full-frame 64-color Kitsune, letterbox and transitions pass:',orange)
           PY
           python3 - <<'PY'
           import wave
