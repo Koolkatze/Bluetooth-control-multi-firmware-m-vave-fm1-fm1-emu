@@ -32,7 +32,7 @@ static const UrbanBassGrammar urban_bass_profiles[URBAN_GENRES][4]={
  /* Hip-hop: deeper, steadier bass notes with no incidental octave kicks.
   * Boom-bap low fifth, jazz approach, G-Funk syncopation, lo-fi sustain. */
  {{0x0489,7,0,83,0,0},{0x0489,8,0,83,0,2},
-  {0x0889,8,0,90,12,3},{0x0109,12,0,75,0,4}},
+  {0x0889,8,0,90,12,3},{0x0101,12,0,72,0,4}},
  /* Trip-hop: Bristol / Downtempo / Abstract / Dub */
  {{0x0441,8,0,79,0,4},{0x0109,11,0,74,0,4},
   {0x0a21,4,0,88,9,2},{0x0441,12,0,81,22,4}},
@@ -73,7 +73,7 @@ static const uint16_t urban_bass_fourbar[URBAN_GENRES][4][4]={
   /* 0 */ {{0x0429u,0x0489u,0x1429u,0x04a9u},{0x0a81u,0x0a09u,0x2a81u,0x0ac1u},{0x0101u,0x0001u,0x0101u,0x0001u},{0x1429u,0x34a9u,0x14a9u,0x1c29u}},
   /* 1 */ {{0x0821u,0x0809u,0x0a21u,0x0829u},{0x0921u,0x0a21u,0x2921u,0x0929u},{0x1111u,0x0101u,0x1111u,0x1011u},{0x0101u,0x0001u,0x0101u,0x0801u}},
   /* 2 */ {{0x0109u,0x0009u,0x0101u,0x0109u},{0x0101u,0x1101u,0x0101u,0x0001u},{0x0809u,0x0409u,0x0801u,0x0c09u},{0x0009u,0x0109u,0x0001u,0x0809u}},
-  /* 3 */ {{0x0489u,0x0409u,0x0489u,0x04c9u},{0x1111u,0x1111u,0x1111u,0x9111u},{0x0889u,0x28c9u,0x0ac9u,0x18c9u},{0x0109u,0x0009u,0x0109u,0x0101u}},
+  /* 3 */ {{0x0489u,0x0409u,0x0489u,0x04c9u},{0x1111u,0x1111u,0x1111u,0x9111u},{0x0889u,0x28c9u,0x0ac9u,0x18c9u},{0x0101u,0x0001u,0x0101u,0x0001u}},
   /* 4 */ {{0x0441u,0x0401u,0x0441u,0x0641u},{0x0109u,0x0009u,0x0101u,0x0809u},{0x0a21u,0x2a21u,0x0a89u,0x8a21u},{0x0441u,0x0401u,0x0c41u,0x0449u}},
   /* 5 */ {{0x0489u,0x0409u,0x0489u,0x0c89u},{0x1111u,0x1111u,0x1111u,0x5111u},{0x0809u,0x0801u,0x0a09u,0x0809u},{0x048bu,0x24c9u,0x0c8bu,0x04cbu}},
   /* 6 */ {{0x0481u,0x0401u,0x0489u,0x0c81u},{0x0101u,0x0001u,0x0101u,0x0401u},{0x0889u,0x0ac9u,0x2889u,0x0c89u},{0x0a81u,0x0801u,0x0a89u,0x0a01u}},
@@ -230,6 +230,22 @@ static UrbanBassStep urban_bass_bar_score(const UrbanSong *s,
     const UrbanTrack *t=&s->tracks[2];
     unsigned sub=t->subgenre%4u;
     uint16_t mask=urban_bass_bar_mask(t,section,bar);
+    const unsigned lofi=(t->genre%URBAN_GENRES==3u && sub==3u);
+    if(lofi) {
+        /* Low, short root/fifth bass in 4 cosy flavours. Extra beat-3
+         * attacks are selected as a proper 4-bar motif, not random
+         * 16th-note flurries or slide-heavy trap bass. */
+        static const uint16_t bass[4][4]={
+            {0x0101u,0x0001u,0x0101u,0x0101u},
+            {0x0001u,0x0101u,0x0001u,0x0101u},
+            {0x0101u,0x0101u,0x0101u,0x0081u},
+            {0x0001u,0x0001u,0x0101u,0x0001u}
+        };
+        mask=bass[urban_lofi_mood(s)][bar%4u];
+        if(section==URBAN_INTRO || section==URBAN_OUTRO ||
+           section==URBAN_BRIDGE || section==URBAN_BREAK)
+            mask&=0x0001u;
+    }
     if(!(mask&(1u<<(step%16u)))) {
         n.velocity=0u;n.glide=0u;return n;
     }
@@ -276,6 +292,19 @@ static UrbanBassStep urban_bass_bar_score(const UrbanSong *s,
     unsigned gate=g.gate+(v%3u);
     n.gate=(uint8_t)(gate>16u?16u:gate);
     n.glide=(uint8_t)(g.slide && step>=7u && (v%100u)<g.slide);
+    if(lofi) {
+        /* Mostly tonic, a soft fifth only on a selected phrase reply.
+         * Actual chord roots are applied by urban_runtime_tick(). */
+        unsigned mood=urban_lofi_mood(s);
+        unsigned reply=(bar==2u && step>=8u && mood==2u) ||
+                       (bar==3u && step>=8u && mood==0u);
+        unsigned interval=reply?urban_scale_pc(s->scale,
+                        urban_scale_root_degree(s->scale,4u)):0u;
+        n.note=(uint8_t)(36u+s->key%12u+interval);
+        n.velocity=(uint8_t)(62u+(v%9u)+(step==0u?6u:0u));
+        n.gate=(uint8_t)(mood==3u?13u:10u+(v%3u));
+        n.glide=0u;
+    }
     return n;
 }
 #endif
