@@ -39,7 +39,7 @@ function storage() {
       return revision;
     } };
 }
-async function page(disk = storage(), initialSearch = '', selected = '', manualBootTimeout = false, nativeAndroid = false) {
+async function page(disk = storage(), initialSearch = '', selected = '', manualBootTimeout = false, nativeAndroid = false, installedVersions = {}) {
   let bootTimer;
   const elements = new Map();
   const document = { documentElement: new Element(),
@@ -82,14 +82,17 @@ async function page(disk = storage(), initialSearch = '', selected = '', manualB
     setTimeout(fn, ms) { if (manualBootTimeout && ms === 30000) { bootTimer = fn; return 'boot-timer'; } return setTimeout(fn, ms); },
     clearTimeout(id) { if (id !== 'boot-timer') clearTimeout(id); },
     document, location, window: nativeAndroid ? { FM1Android: {
-      ready() {}, installedFirmwareUpdates() { return "{}"; },
+      ready() {}, installedFirmwareUpdates() { return JSON.stringify(installedVersions); },
       updateFirmwares(device, selected) { firmwareUpdateCalls.push({ device, selected }); return true; },
     }, innerWidth: 1000, innerHeight: 520, addEventListener() {} } : undefined,
     history: { replaceState(_a, _b, url) { location.search = url; } },
     localStorage: { getItem: key => local.get(key), setItem: (key, value) => local.set(key, value) },
     ResizeObserver: class { observe() {} }, scrollY: 0, Option: Element, navigator: {},
-    fetch: async url => ({ json: async () => url === 'smk37/firmwares.json' ? { firmwares: [] } : cat,
-      arrayBuffer: async () => new ArrayBuffer(0) }),
+    fetch: async url => ({ ok: true,
+      json: async () => url === 'smk37/firmwares.json' ? { firmwares: [] } : cat,
+      arrayBuffer: async () => String(url).startsWith('/updates/')
+        ? new Uint8Array(1024).fill(77).buffer : new ArrayBuffer(0) }),
+    appFromPackage(bytes) { return bytes; },
     WebAssembly: { instantiate: async () => ({ instance: { exports: { panel_board() {}, panel_width: () => 100, panel_height: () => 100 } } }) },
     requestAnimationFrame() {}, addEventListener() {}, AudioContext, AudioWorkletNode,
     matchMedia: () => ({ matches: false }), confirm: () => true,
@@ -343,4 +346,30 @@ test('Firmware tab buttons invoke only selected or all native firmware updates',
     { device: 'fm1', selected: 'a' }, { device: 'fm1', selected: '' }
   ]);
   await p.native.fm1FirmwareUpdateProgress({ kind: 'finished' });
+});
+
+test('Android selected firmware update installs, displays version, and reboots the active emulator', async () => {
+  const p = await page(storage(), '?screen=0&fit=1', '', false, true);
+  await p.api.startAudio();
+  await p.api.boot();
+  const before = p.audio.messages.filter(m => m.type === 'boot').length;
+  await p.elements.get('update-selected-firmware').listeners.click();
+  await p.native.fm1FirmwareUpdateProgress({ kind: 'updated', id: 'a', version: '1.2' });
+  assert.equal(p.api.fw.version, '1.2');
+  assert.equal(p.audio.messages.filter(m => m.type === 'boot').length, before + 1,
+    'the selected, running firmware must restart automatically after a successful update');
+  assert.match(p.elements.get('firmware-update-status').textContent, /1.2 instalada y ejecutándose/);
+  await p.native.fm1FirmwareUpdateProgress({ kind: 'summary', message: 'Comprobados: 1 · Actualizados: 1' });
+  assert.match(p.elements.get('firmware-update-status').textContent, /instalada y ejecutándose/);
+  await p.native.fm1FirmwareUpdateProgress({ kind: 'finished' });
+  assert.equal(p.elements.get('update-selected-firmware').disabled, false);
+});
+
+test('native persisted updated firmware restores the accurate version instead of the APK bundled label', async () => {
+  const p = await page(storage(), '', '', false, true, { a: { version: '1.8', url: 'https://github.com/test' } });
+  assert.equal(p.api.fw.version, '1.8', 'version must be restored at app startup');
+  await p.api.startAudio();
+  await p.api.boot();
+  const boot = p.audio.messages.find(m => m.type === 'boot');
+  assert.equal(new Uint8Array(boot.package).length, 1024, 'the persistent update must win over bundled firmware');
 });

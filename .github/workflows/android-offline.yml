@@ -66,52 +66,37 @@ jobs:
           rustup target add wasm32-unknown-unknown
           web/build.sh _offline_web
 
-      # URBAN-1 must be a real FM-1 .fwsc built from the same source as its
-      # device firmware. Bundle it locally: Android never fetches a remote
-      # firmware or an expiring CI artifact to boot it.
-      - name: Checkout pinned HYP-1 synthesis/firmware source for URBAN-1
-        uses: actions/checkout@v4
-        with:
-          repository: RustyPawz/fm1-HYP1
-          ref: 57c456db61826331d356458c9c1a136517da7cbf
-          path: hyp1
+      # Download the *already cross-compiled, OTA-tested and published* 
+      # firmware from this repository, with its release SHA-256. Android
+      # packaging must not depend on Gitee/JieLi SDK availability.
+      - name: Verify pinned URBAN-1 v0.4.16 firmware from public release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p hyp1/build
+          gh release download urban1-firmware-v0.4.16 --repo "$GH_REPO" \
+            --pattern '*.fwsc' --pattern 'SHA256SUMS-URBAN1-v0.4.16.txt' \
+            --dir hyp1/build
+          (cd hyp1/build && sha256sum -c SHA256SUMS-URBAN1-v0.4.16.txt)
+          cp hyp1/build/URBAN-1-v0.4.16-FX-EDIT-MASTER-TRACKS.fwsc hyp1/build/amb-0.4.16.fwsc
+          node --input-type=module - <<'JS'
+          import {readFileSync} from 'node:fs';
+          import {appFromPackage} from './web/fwsc.js';
+          const bytes=new Uint8Array(readFileSync('hyp1/build/amb-0.4.16.fwsc'));
+          const app=appFromPackage(bytes);
+          if(bytes.length<1024 || app.length<512)throw Error('Invalid packaged URBAN-1 FM-1 firmware');
+          console.log('Validated URBAN-1 v0.4.16 firmware:',bytes.length,'bytes');
+          JS
 
-      - name: Install HYP-1 firmware build prerequisites
+      - name: Install panel screenshot prerequisite
         run: python3 -m pip install Pillow
-
-      - name: Restore JieLi toolchain and AC79 SDK
-        id: urban-jieli
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.jieli
-            ~/fw-AC79_AIoT_SDK
-          key: urban1-jieli-ac79-v1.2.1
-
-      - name: Fetch device compiler when not cached
-        if: steps.urban-jieli.outputs.cache-hit != 'true'
-        run: |
-          try() { for i in 1 2 3; do "$@" && return 0; echo "retry $i"; sleep $((i * 15)); done; return 1; }
-          [ -x ~/.jieli/toolchain/pi32v2/bin/clang ] || (cd hyp1 && try tools/get_toolchain.sh)
-          fetch_sdk() {
-            rm -rf ~/fw-AC79_AIoT_SDK
-            git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
-              https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git ~/fw-AC79_AIoT_SDK
-          }
-          [ -f ~/fw-AC79_AIoT_SDK/cpu/wl82/tools/uboot.boot ] || try fetch_sdk
-
-      - name: Build and verify actual URBAN-1 FM-1 firmware
-        run: |
-          make -C urban-1 test
-          python3 urban-1/tools/apply_hyp1.py --hyp-root hyp1
-          (cd hyp1 && ./build.sh --release 0.4.10)
-          test -s hyp1/build/amb-0.4.10.fwsc
-          (cd hyp1 && cc -o build/ota_test tests/ota_test.c && build/ota_test build/amb-0.4.10.fwsc)
 
       - name: Bundle open-source firmwares, URBAN-1 and all web assets
         env:
-          URBAN1_FWSC: hyp1/build/amb-0.4.10.fwsc
-          URBAN1_VERSION: 0.4.10
+          URBAN1_FWSC: hyp1/build/amb-0.4.16.fwsc
+          URBAN1_VERSION: 0.4.16
         run: node tools/package_offline_android.mjs _offline_web android/app/src/main/assets/site
 
       - name: Validate true native synthesizer libraries and package files
@@ -182,7 +167,18 @@ jobs:
           Dedicated standalone app: com.koolkatze.fm1offline.urban1, installable
           alongside the original FM-1 Mobile application.
 
-          **New rotary gesture:** FM-1 numeric knobs use a 300-degree circular
+          **v0.2.9 updater repair:** When Update Selected or Update All installs a new .fwsc,
+          the currently selected firmware is automatically reloaded, with the actual version
+          shown in the Firmware tab. Missing or corrupted installed files can be downloaded
+          again even if installed.json contains the same version; version display is
+          hydrated from verified Android-private packages and cannot silently fall back
+          to an older stored snapshot. HTTPS catalog fetch bypasses stale CDN caches.
+
+          The APK already includes URBAN-1 v0.4.16 with the square orange Kitsune + rider
+          cover and its two glitch transitions, so it works even without internet.
+          The v0.4.11 lettering within the approved cover is PIXEL ART, not runtime version.
+
+          **Previous rotary gesture:** FM-1 numeric knobs use a 300-degree circular
           touch gesture from 7 o'clock (0%) through noon (50%) to 5 o'clock
           (100%). They have hard end stops and no wrap through the bottom.
           All original FM-1 encoder detents stay relative inside the firmware;
@@ -191,7 +187,7 @@ jobs:
 
           Bundled URBAN-1 firmware includes the new continuously adjustable
           0..100 Low Pass / High Pass FX, recorder, ENV/LFO, tape start-stop
-          and independent jazz modulation from v0.4.10.
+          and independent jazz modulation through URBAN-1 v0.4.16.
 
           Note: This is a test-signed APK. Installing over a prior test build
           may require uninstalling that build if Android signing keys differ.
