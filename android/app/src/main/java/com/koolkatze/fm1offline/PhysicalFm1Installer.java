@@ -1,6 +1,8 @@
 package com.koolkatze.fm1offline;
 
 import android.app.AlertDialog;
+import android.content.Context;
+import android.hardware.usb.UsbManager;
 import android.media.midi.MidiDevice;
 import android.media.midi.MidiDeviceInfo;
 import android.media.midi.MidiInputPort;
@@ -22,6 +24,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -33,7 +37,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * EXPLICIT physical FM-1 firmware installer via USB MIDI, never BLE:
- *    selected .fwsc -> checksum / FM-1 identity -> choose USB device ->
+ *    selected .fwsc -> checksum / auto-detect FM-1 over USB MIDI ->
  *    probe current model -> user risk confirmation -> M-UPGRADE check ->
  *    loader re-enumeration -> block writing -> reboot identity verification.
  *
@@ -46,6 +50,8 @@ import java.util.concurrent.TimeUnit;
 final class PhysicalFm1Installer {
     private static final String TAG = "PhysicalFm1Installer";
     private static final int CHUNK_LIMIT = 48 * 1024;
+    private static final long DISCOVERY_TIMEOUT_MS = 90_000L;
+    private static final long REPROBE_INTERVAL_MS = 4_000L;
     private static final byte[] SUCCESS = new byte[]{'s','u','c','c','e','s','s',0};
 
     private final MainActivity activity;
@@ -65,6 +71,8 @@ final class PhysicalFm1Installer {
     private volatile boolean occupied;
     private volatile boolean writing;
     private volatile boolean closed;
+    private volatile int discoveryGeneration;
+    private AlertDialog discoveryDialog;
 
     PhysicalFm1Installer(MainActivity activity, MidiManager midi, WebView web) {
         this.activity = activity;
@@ -147,7 +155,7 @@ final class PhysicalFm1Installer {
             }
             writing = true; // no second transfer while picker, confirmation, or write is active
         }
-        ui.post(() -> showUsbDevicePicker(pkg));
+        ui.post(() -> detectPhysicalFm1(pkg));
         return true;
     }
 
@@ -192,59 +200,150 @@ final class PhysicalFm1Installer {
         }
     }
 
-    private void showUsbDevicePicker(Fm1OtaProtocol.Package pkg) {
+    /**
+     * Detect a USB-MIDI FM-1 already connected or connected after the install
+     * button is pressed. Never use the name alone as proof that the device is
+     * an FM-1: the device must answer the non-destructive SysEx identity
+     * handshake. A user must still approve the risk dialog after discovery.
+     */
+    private void detectPhysicalFm1(Fm1OtaProtocol.Package pkg) {
         if (closed) { cleanupUpload(); return; }
         if (midi == null) {
-            notifyPage("error", "Android no ofrece MIDI USB en este dispositivo", -1);
+            notifyPage("error", "Este Android no ofrece el servicio MIDI USB.", -1);
             cleanupUpload();
             return;
         }
-        List<MidiDeviceInfo> devices = usbDevices();
-        if (devices.isEmpty()) {
-            new AlertDialog.Builder(activity)
-                    .setTitle("No hay un FM-1 USB MIDI")
-                    .setMessage("Conecta el M-VAVE FM-1 con un cable USB de datos "
-                            + "en modo USB MIDI. La instalación física NO admite BLE. "
-                            + "Este procedimiento no instala nada en el teléfono: "
-                            + "escribe firmware en el FM-1 físico.")
-                    .setPositiveButton("Cerrar", (d, w) -> cancel())
-                    .setOnCancelListener(d -> cancel())
-                    .show();
-            return;
-        }
-        String[] labels = new String[devices.size()];
-        for (int i = 0; i < devices.size(); ++i) {
-            MidiDeviceInfo info = devices.get(i);
-            String name = info.getProperties().getString(MidiDeviceInfo.PROPERTY_NAME, "USB MIDI");
-            labels[i] = name + " · USB (" + info.getInputPortCount()
-                    + " entrada / " + info.getOutputPortCount() + " salida)";
-        }
-        new AlertDialog.Builder(activity)
-                .setTitle("Instalar en el FM-1 físico · " + pkg.product)
-                .setMessage("Selecciona el puerto USB del FM-1. Se verificará "
-                        + "la identidad del dispositivo antes de solicitar tu autorización. "
-                        + "No se puede instalar firmware por Bluetooth.")
-                .setItems(labels, (dialog, which) -> {
-                    activity.releaseMidiForPhysicalInstall();
-                    MidiDeviceInfo chosen = devices.get(which);
-                    notifyPage("preflight", "Comprobando FM-1 USB conectado…", 0);
-                    worker.execute(() -> preflight(chosen, pkg));
-                })
-                .setNegativeButton("Cancelar", (d, w) -> cancel())
-                .setOnCancelListener(d -> cancel())
-                .show();
+        // Release Workbench's existing MIDI performance stream to the FM-1,
+        // otherwise the USB host might not grant exclusive input/output ports.
+        activity.releaseMidiForPhysicalInstall();
+        final int generation = ++discoveryGeneration;
+        AlertDialog dialog = new AlertDialog.Builder(activity)
+                .setTitle("Detectando FM-1 por USB automáticamente")
+                .setMessage("Si el M-VAVE FM-1 ya está conectado, Workbench "
+                        + "buscará su puerto MIDI y comprobará su identidad. "
+                        + "Si aún no lo está, conecta ahora un cable USB de datos.\\n\\n"
+                        + "No hace falta seleccionar manualmente un dispositivo. "
+                        + "No se instalará nada sin tu confirmación posterior. "
+                        + "Para salir de la búsqueda pulsa Cancelar.")
+                .setNegativeButton("Cancelar", (d, which) -> cancelDiscovery(generation))
+                .create();
+        dialog.setOnCancelListener(d -> cancelDiscovery(generation));
+        discoveryDialog = dialog;
+        dialog.show();
+        notifyPage("searching", "Buscando FM-1 USB-MIDI, conectado o recién enchufado…", 0);
+        worker.execute(() -> searchUntilConnected(pkg, generation));
     }
 
-    private void preflight(MidiDeviceInfo selected, Fm1OtaProtocol.Package pkg) {
-        try (Link link = Link.open(midi, selected, ui)) {
-            Fm1OtaProtocol.Identity identity = handshake(link, 2);
-            if (identity == null)
-                throw new IOException("El dispositivo USB no respondió como un FM-1. No se modificó nada.");
-            validateTarget(identity, pkg);
-            ui.post(() -> confirmInstall(selected, identity, pkg));
-        } catch (Exception error) {
-            notifyPage("error", "No se instaló: " + error.getMessage(), -1);
-            cleanupUpload();
+    private void dismissDiscoveryDialog() {
+        if (discoveryDialog != null) {
+            AlertDialog dialog = discoveryDialog;
+            discoveryDialog = null;
+            if (dialog.isShowing()) dialog.dismiss();
+        }
+    }
+
+    private void cancelDiscovery(int generation) {
+        if (generation != discoveryGeneration) return;
+        ++discoveryGeneration;
+        dismissDiscoveryDialog();
+        notifyPage("cancelled", "Búsqueda USB cancelada: no se ha escrito ningún firmware.", -1);
+        cleanupUpload();
+    }
+
+    private void searchUntilConnected(Fm1OtaProtocol.Package pkg, int generation) {
+        final long startedAt = System.currentTimeMillis();
+        final Map<Integer, Long> probeTimes = new HashMap<>();
+        boolean foundAnotherUsbDevice = false;
+        boolean reportedNotMidi = false;
+        try {
+            while (!closed && discoveryGeneration == generation
+                    && System.currentTimeMillis() - startedAt < DISCOVERY_TIMEOUT_MS) {
+                List<MidiDeviceInfo> devices = usbDevices();
+                if (devices.isEmpty()) {
+                    // Android may see a USB data device without exposing any
+                    // MIDI ports. Explain this rather than showing a useless
+                    // manual picker or claiming the controller was detected.
+                    UsbManager usb = (UsbManager)activity.getSystemService(Context.USB_SERVICE);
+                    boolean usbAttached = usb != null && !usb.getDeviceList().isEmpty();
+                    if (usbAttached && !reportedNotMidi) {
+                        notifyPage("searching", "Se detecta un USB, pero aún no aparece "
+                                + "un dispositivo MIDI bidireccional. Revisa cable OTG "
+                                + "y permisos USB del FM-1; conexión USB-MIDI del teléfono "
+                                + "no equivale a USB-MIDI del controlador.", 0);
+                        reportedNotMidi = true;
+                    }
+                } else {
+                    MidiDeviceInfo selected = null;
+                    Fm1OtaProtocol.Identity selectedIdentity = null;
+                    int matched = 0;
+                    long now = System.currentTimeMillis();
+                    for (MidiDeviceInfo info : devices) {
+                        if (closed || generation != discoveryGeneration) return;
+                        long last = probeTimes.containsKey(info.getId())
+                                ? probeTimes.get(info.getId()) : 0;
+                        if (now - last < REPROBE_INTERVAL_MS) continue;
+                        probeTimes.put(info.getId(), now);
+                        // The handshake is read-only. Device names are a
+                        // discovery hint, not a trust or compatibility check.
+                        try (Link link = Link.open(midi, info, ui)) {
+                            Fm1OtaProtocol.Identity id = handshake(link, 2);
+                            if (id == null) continue;
+                            if (!"FM-1".equals(id.model)) continue;
+                            if (selected == null) {
+                                selected = info;
+                                selectedIdentity = id;
+                            }
+                            matched++;
+                        } catch (Exception error) {
+                            Log.d(TAG, "USB-MIDI identity probing failed", error);
+                        }
+                    }
+                    if (matched > 1) {
+                        notifyPage("searching", "Se detectaron varios FM-1. "
+                                + "Desconecta todos salvo el que quieras actualizar.", 0);
+                    } else if (matched == 1) {
+                        final MidiDeviceInfo verifiedDevice = selected;
+                        final Fm1OtaProtocol.Identity verifiedIdentity = selectedIdentity;
+                        ui.post(() -> {
+                            if (closed || discoveryGeneration != generation) return;
+                            dismissDiscoveryDialog();
+                            try {
+                                validateTarget(verifiedIdentity, pkg);
+                                notifyPage("detected", "FM-1 detectado por USB: "
+                                        + verifiedIdentity.text + ". Esperando confirmación.", 0);
+                                confirmInstall(verifiedDevice, verifiedIdentity, pkg);
+                            } catch (IOException error) {
+                                notifyPage("error", "Firmware no compatible: "
+                                        + error.getMessage(), -1);
+                                cleanupUpload();
+                            }
+                        });
+                        return;
+                    } else if (!foundAnotherUsbDevice) {
+                        foundAnotherUsbDevice = true;
+                        notifyPage("searching", "Buscando respuesta del FM-1 por USB-MIDI. "
+                                + "No se instalará nada hasta reconocer su identidad.", 0);
+                    }
+                }
+                Thread.sleep(700L);
+            }
+            ui.post(() -> {
+                if (closed || discoveryGeneration != generation) return;
+                dismissDiscoveryDialog();
+                notifyPage("error", "No se detectó un M-VAVE FM-1 con MIDI USB "
+                        + "bidireccional. Comprueba cable USB de datos/OTG, "
+                        + "permisos y que el firmware físico exponga USB MIDI. "
+                        + "No se ha escrito nada.", -1);
+                cleanupUpload();
+            });
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            ui.post(() -> {
+                if (closed || discoveryGeneration != generation) return;
+                dismissDiscoveryDialog();
+                notifyPage("cancelled", "Búsqueda USB interrumpida; no se escribió firmware.", -1);
+                cleanupUpload();
+            });
         }
     }
 
