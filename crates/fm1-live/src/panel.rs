@@ -297,12 +297,14 @@ pub fn draw(buf: &mut [u32], base: &[u32], st: &State) {
             buf[o + W + 1] = c;
         }
     }
-    // knobs: encoders turn 18 degrees a click; the pot sweeps 270 degrees
+    // FM-1 touchscreen: 100 numeric detents span the fixed 300-degree
+    // arc from 7:00 through 12:00 to 5:00. SMK-37 keeps its old panel.
     for (i, (_, _, cx, cy, r)) in ENCS.iter().enumerate() {
         let glow = (st.turning[i] as f32 / 10.0).min(1.0);
-        knob(buf, *cx, *cy, *r, (st.enc_clicks[i] as f32 * 18.0).to_radians(), glow);
+        knob(buf, *cx, *cy, *r,
+             (-150.0 + 3.0 * st.enc_clicks[i].clamp(0,100) as f32).to_radians(),glow);
     }
-    let pa = (-135.0 + 270.0 * st.pot as f32 / 1023.0).to_radians();
+    let pa = (-150.0 + 300.0 * st.pot as f32 / 1023.0).to_radians();
     knob(buf, POT.0, POT.1, POT.2, pa, (st.turning[7] as f32 / 10.0).min(1.0));
     // buttons: pressed sinks, LED tints the cap
     for (name, id, x, y, w, h) in buttons() {
