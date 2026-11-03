@@ -1,13 +1,50 @@
 # FM-1 Mobile Companion — multifirmware, pantalla ampliada y síntesis desde el móvil
 
 
+## Requisito para usar el móvil como pantalla y el FM-1 como controlador
+
+**Instalación obligatoria para controlar TODO el panel físico:** si quieres
+usar **el teléfono como pantalla principal y sintetizador** (firmware emulado
+seleccionable en Workbench) y el **M-VAVE FM-1 real como superficie de control
+completa**, debes instalar **Workbench Remote** en el **FM-1 físico**, además
+de instalar la APK Workbench en el teléfono. Son dos softwares distintos:
+la APK no instala ni flashea el firmware físico.
+
+| Uso | ¿Se requiere Workbench Remote en el FM-1 real? |
+| --- | --- |
+| Workbench solo en el móvil, con panel táctil y audio emulado | **No** |
+| FM-1 con CTL-1 estándar como teclado MIDI y controladores limitados | **No**, pero SELECT, ALGORITHM y muchos botones **no funcionarán como el panel virtual** |
+| **Móvil = pantalla y síntesis; FM-1 = controlador 1:1** de botones, knobs y teclas | **Sí**, es necesario un firmware físico compatible con Workbench Remote |
+| Duplicar o capturar la LCD del FM-1 físico en el móvil | **No está implementado**; el móvil muestra la LCD del **firmware emulado** |
+
+**Puesta en marcha del modo completo:** instala la APK Workbench en Android;
+instala voluntariamente una compilación de **Workbench Remote** en el
+**FM-1 físico** (versión BLE+USB o solo USB); conecta el FM-1 desde
+**Workbench → ▲ → MIDI → USB MIDI o Buscar MIDI Bluetooth (BLE)**; selecciona
+**Modo de mapeo → Automático** (detecta el saludo del firmware remoto) o
+**Workbench Remote**; inicia en el móvil el firmware de sintetizador que
+quieras. A partir de ahí, el panel físico controla los **14 botones, 7
+encoders, MASTER y 27 teclas** del emulador; la pantalla del teléfono
+representa el firmware virtual y el audio se genera en Android. Cambiar
+el sintetizador emulado no requiere volver a flashear el FM-1.
+
+**Atención:** Workbench Remote para el FM-1 físico es **experimental**;
+la compilación automática no demuestra compatibilidad real con el
+dispositivo. Flashear puede inutilizarlo y debe hacerse solo con un
+procedimiento de recuperación disponible. El firmware CTL-1 original
+**no se convierte** en Workbench Remote al elegir esa opción en la APK.
+Los paquetes de firmware físico y la APK son archivos distintos.
+
+[Mapa completo y detalles técnicos](docs/midi-mapping.md) ·
+[Compilación experimental del firmware físico](.github/workflows/ctl1-workbench-remote.yml)
+
 ## 🎹 Prueba el FM-1 directamente en tu navegador
 
 ### **[▶ Abrir FM-1 Online — GitHub Pages](https://koolkatze.github.io/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/?screen=1&fit=1)**
 
 **Sin instalar nada:** elige un firmware compatible, pulsa **Start** y utiliza la LCD ampliada desde tu navegador. Esta edición online necesita conexión para cargar los archivos y algunos firmwares.
 
-### **[⬇ Descargar FM-1 Workbench para Android — última revisión del controlador](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/v0.2.10)**
+### **[⬇ Descargar FM-1 Workbench para Android — última revisión del controlador](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/actions/workflows/android-offline.yml)**
 
 **v0.2.10 — correcciones de control físico:** la APK reconoce automáticamente
 el protocolo Workbench Remote por USB/BLE mediante CC102=42 en el canal 16,
@@ -33,7 +70,7 @@ firmware del móvil (incluido URBAN-1) sigue seleccionándose sin flasheos.
 Versión **0.2.6 (motor nativo experimental)**: APK con el nuevo icono FM-1, emulador y paquetes compatibles integrados. Tras instalarlo, los firmwares incluidos funcionan sin conexión. La integración con el FM-1 físico por MIDI sigue en fase de pruebas. Versión **v0.2.6**: corrige la falta de muestras PCM detectada en **AMB-1** y otros firmwares del motor Rust/AAudio: el hilo de síntesis genera 128 muestras por ciclo, mantiene una reserva de 1.024 muestras, prepara audio antes de iniciar AAudio y tiene prioridad sobre el dibujo. El informe ahora distingue **muestras perdidas por segundo**, velocidad de CPU emulada, PCM producido y nivel de la cola. **Experimental:** el banco de pruebas Linux pasó sin pérdidas, pero todavía no hay medición equivalente en un Android real. Utiliza USB-C o cable, no altavoz Bluetooth, para interpretar en directo.
 
 
-**Objetivo del proyecto:** convertir un teléfono Android en la **pantalla principal y el motor de síntesis** del M-VAVE FM-1, para tocar y alternar entre firmwares compatibles **sin tener que flashear el FM-1 físico cada vez que se cambia de sintetizador**. El teléfono puede funcionar también de forma independiente. En el modo combinado, el FM-1 físico lleva un **firmware controlador MIDI como CTL-1**, que muestra su propia interfaz en la pantalla integrada: esa pantalla queda como **pantalla secundaria de control**, mientras el móvil muestra la pantalla del sintetizador emulado y genera el sonido. **No buscamos capturar ni duplicar la LCD física.**
+**Objetivo del proyecto:** utilizar un teléfono Android como **pantalla principal y motor de síntesis de un FM-1 emulado**, mientras el **FM-1 físico se utiliza como controlador**. Para el manejo 1:1 de todos los botones y encoders físicos es **necesario instalar Workbench Remote en el FM-1 real**; con CTL-1 estándar solo hay funciones MIDI parciales. El móvil puede funcionar también sin el hardware. Los cambios de firmware sintetizador se realizan dentro de la APK, **sin reflashear el FM-1 físico cada vez**. **No se captura ni duplica la LCD real**: el teléfono muestra la pantalla del firmware virtual seleccionado.
 
 **[Abrir el proyecto web](https://koolkatze.github.io/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/?screen=1&fit=1)** · [Código fuente](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu) · [Adaptación de la LCD](docs/screen-adaptation.md)
 
