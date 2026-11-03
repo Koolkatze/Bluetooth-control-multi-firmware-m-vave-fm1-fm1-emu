@@ -53,6 +53,14 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Test FM-1 MIDI controller-to-panel mapping (no Android emulator required)
+        run: |
+          mkdir -p .midi-tests
+          javac -d .midi-tests \
+            android/app/src/main/java/com/koolkatze/fm1offline/MidiPanelMapper.java \
+            tests/MidiPanelMapperTest.java
+          java -cp .midi-tests com.koolkatze.fm1offline.MidiPanelMapperTest
+
       - name: Use preinstalled Android SDK (avoid sdkmanager tools compatibility issue)
         run: |
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
@@ -142,6 +150,18 @@ jobs:
 
           This Android APK includes offline FM-1 firmware emulation, native
           Rust/AAudio synthesis and MIDI USB/BLE support.
+
+          In v0.2.9, the MIDI button includes a mapping profile for the
+          CTL-1 currently installed in a physical M-VAVE FM-1, with MIDI
+          notes, its four banked knobs, program changes, transport, sustain
+          and an optional MASTER CC11 mapped to actual panel controls.
+          The same USB/BLE dispatcher supports Workbench Remote v1 for
+          all 14 buttons, 7 encoders, MASTER and 27 keys; this complete
+          mode requires firmware on the physical FM-1 implementing that
+          MIDI protocol. Standard CTL-1 does not emit every button event.
+          Held keys are released safely on disconnect, and Java tests
+          check running status, realtime MIDI, note routes and mapping.
+          See docs/midi-mapping.md for the exact control table.
 
           In v0.2.8, Workbench (com.koolkatze.fm1offline) remains ONE
           standalone application with URBAN-1 inside its firmware catalog,
