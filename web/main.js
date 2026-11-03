@@ -36,6 +36,29 @@ const stored = (k) => { try { return localStorage.getItem(k); } catch { return n
 const store = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
 
 const catalog = await (await fetch("firmwares.json", { cache: "no-store" })).json();
+// Merge the LAST successfully fetched FW Hub feed from Android private
+// storage before the selector/cards are constructed. The entire catalogue
+// survives restarting Workbench; new firmware packages stay separate from
+// the static APK's offline resources until verified and installed.
+try {
+  const saved = JSON.parse(nativeWindow.FM1Android?.installedFirmwareCatalog?.(
+    DEVICE === "smk37" ? "smk37" : "fm1") || '{"entries":[]}');
+  const known = new Set(catalog.firmwares.map((f) => f.id));
+  for (const e of (Array.isArray(saved.entries) ? saved.entries : [])) {
+    if (!e || !/^[a-zA-Z0-9_-]{1,90}$/.test(e.id || "") || known.has(e.id)) continue;
+    const url = String(e.repo || "");
+    catalog.firmwares.push({
+      id: e.id, name: String(e.name || e.id).slice(0,120),
+      version: String(e.version || "").slice(0,80),
+      author: String(e.author || "community").slice(0,120),
+      license: String(e.license || "see author").slice(0,80),
+      about: String(e.about || "").slice(0,1000),
+      repo: /^https:\/\//.test(url) ? url.slice(0,512) : "https://thefirmwarehub.com/",
+      hub: e.hub || "", byo: !!e.byo, remoteOnly: true,
+    });
+    known.add(e.id);
+  }
+} catch { /* Corrupt or absent native metadata must never prevent boot. */ }
 const byId = new Map(catalog.firmwares.map((f) => [f.id, f]));
 // the FM-1 Firmware Hub's ids too, where they differ (its cards link here with ?fw=<its id>)
 for (const f of catalog.firmwares) if (f.hub && !byId.has(f.hub)) byId.set(f.hub, f);
