@@ -1,6 +1,11 @@
 # URBAN-1 — experimental generative groovebox for M-VAVE FM-1
 
-**v0.4.13 — pixel-art nine-tailed Kitsune boot cover with glitch:**
+**v0.4.14 — original full-frame Kitsune artwork, NO CROP:**
+
+- The same approved **1672×941 Neo-Tokyo pixel-art image**, fully visible on the FM-1 LCD. It is aspect-fit into a **240×136** widescreen area within the existing **240×240** screen, leaving equal **52-pixel dark letterbox bars** at the top and bottom. The original text, fox, nine tails, motorcycle and city remain inside the complete frame. The 2× nearest-neighbor pixel conversion uses 120×68 source samples and 16 indexed colours. Nothing is cropped, stretched, redrawn or covered with new titles.
+- The **180 ms glitch-in**, stable image and **220 ms glitch-out** remain unchanged. PLAY starts the song after exit; other keys/buttons dismiss it without starting playback. No new Android APK or audio changes.
+
+**v0.4.13 — original pixel-art nine-tailed Kitsune boot cover with glitch:**
  
 - The original user-approved 1672×941 neo-Tokyo pixel-art illustration is cropped to showcase the orange nine-tailed fox and skyline on FM-1's **240×240 LCD**. It is encoded as a fixed 120×120, 16-color RGB565 palette image; 2× nearest-neighbor scaling avoids runtime PNG decoding or APK changes. The artwork source is in `urban-1/integrations/urban_splash_art.h`, and the bounded renderer is `urban_splash_engine.h`.
 - Each boot begins with a roughly **180 ms glitch-in** (horizontal digital tearing and thin neon interference lines), followed by an unmoving cover reading `URBAN-1 / PRESS PLAY`. A key or panel button initiates a roughly **220 ms glitch-out** into Song Mode. **PLAY** also starts playback after the transition; another input exits to the stopped Song page. The cover is redrawn only on changing transition steps, not at every 60 Hz UI frame.

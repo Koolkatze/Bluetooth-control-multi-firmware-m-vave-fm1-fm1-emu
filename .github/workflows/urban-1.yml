@@ -1,7 +1,7 @@
 name: URBAN-1 host synthesis smoke test
 on:
   push:
-    branches: [feature/urban-1, feature/urban-rec-full-instruments, fix/urban-rec-audition-octave, feature/urban-kitsune-splash]
+    branches: [feature/urban-1, feature/urban-rec-full-instruments, fix/urban-rec-audition-octave, feature/urban-kitsune-splash, fix/urban-kitsune-no-crop-v014]
     paths:
       - 'urban-1/**'
       - '.github/workflows/urban-1.yml'
@@ -73,6 +73,18 @@ jobs:
           assert ImageChops.difference(a,h).getbbox() is not None, 'Splash did not exit'
           orange=sum(1 for r,gg,bb in a.getdata() if r>120 and r>gg*1.25 and gg>25)
           assert orange>2500, f'Original orange Kitsune pixels missing: {orange}'
+          # The approved illustration must fit the full widescreen frame:
+          # 240 x 136 in the middle with 52px unpainted letterbox each end.
+          assert a.getpixel((0,0)) == a.getpixel((239,0)), 'Upper letterbox changed'
+          assert a.getpixel((0,239)) == a.getpixel((239,239)), 'Lower letterbox changed'
+          assert a.getpixel((0,0)) == a.getpixel((20,30)), 'Upper letterbox must remain clear'
+          assert a.getpixel((0,239)) == a.getpixel((100,210)), 'Lower letterbox must remain clear'
+          assert a.getpixel((0,51)) == a.getpixel((0,0)), 'Image overlaps upper letterbox'
+          assert a.getpixel((0,188)) == a.getpixel((0,239)), 'Image overlaps lower letterbox'
+          assert a.getpixel((0,52)) != a.getpixel((0,0)), 'Full artwork top edge not shown'
+          assert a.getpixel((120,187)) != a.getpixel((0,239)), 'Full artwork bottom edge not shown'
+          colors = a.crop((0,52,240,188)).getcolors(240*136)
+          assert colors is not None and len(colors)>10, 'Art lost its 16 color palette'
           print('Kitsune image colors, steady-state and two UI transitions pass:',orange)
           PY
           python3 - <<'PY'
