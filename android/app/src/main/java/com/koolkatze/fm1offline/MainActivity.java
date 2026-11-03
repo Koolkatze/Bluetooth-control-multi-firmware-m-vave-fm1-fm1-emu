@@ -102,10 +102,26 @@ public final class MainActivity extends Activity {
     private static final String MIDI_MODE_PREF = "workbench.midi.mode";
     private final MidiPanelMapper midiPanelMapper = new MidiPanelMapper();
     private final AtomicLong mappedPanelEvents = new AtomicLong();
+    private volatile String lastMappedPanelEvent = "ninguno";
+    private static final String[] MIDI_PANEL_BUTTONS = {
+            "OCT−", "OCT+", "FX", "SEL/SCL", "ENV", "LFO", "EDIT",
+            "GLO", "HOME", "SAVE", "ARP", "SEQ", "PLAY/STOP", "REC"
+    };
+    private static final String[] MIDI_PANEL_ENCODERS = {
+            "SELECT", "ALGORITHM", "KNOB1", "KNOB2",
+            "KNOB3", "KNOB4", "PRESETS"
+    };
     private final MidiPanelMapper.Sink midiSink = new MidiPanelMapper.Sink() {
         @Override public void midi(byte[] bytes) { deliverPerformanceMidi(bytes); }
         @Override public void panel(int kind, int id, int value) {
             mappedPanelEvents.incrementAndGet();
+            String control = kind == 0 && id >= 0 && id < MIDI_PANEL_BUTTONS.length
+                    ? MIDI_PANEL_BUTTONS[id]
+                    : kind == 0 && id >= 14 && id <= 40 ? "TECLA " + (id - 14)
+                    : kind == 1 && id >= 0 && id < MIDI_PANEL_ENCODERS.length
+                    ? MIDI_PANEL_ENCODERS[id] : kind == 2 ? "MASTER" : "desconocido";
+            lastMappedPanelEvent = control + (kind == 1 ? " giro " + value
+                    : kind == 2 ? " posición " + value : value != 0 ? " pulsado" : " liberado");
             final boolean directlyNative = nativeActive && NativeSynth.AVAILABLE;
             // Send controls to Rust immediately, independently of WebView drawing.
             if (directlyNative) NativeSynth.control(kind, id, value);
@@ -1015,6 +1031,7 @@ public final class MainActivity extends Activity {
                 + "\nBytes recibidos: " + midiReceivedBytes.get()
                 + "\nModo de mapeo: " + midiPanelMapper.getMode()
                 + "\nAcciones de panel: " + mappedPanelEvents.get()
+                + "\nÚltimo control del panel: " + lastMappedPanelEvent
                 + "\nÚltimo status: 0x" + Integer.toHexString(midiLastStatus).toUpperCase(java.util.Locale.ROOT)
                 + "\n\nCTL-1: GLO → Setup MIDI muestra USB/Bluetooth in/out."
                 + "\nEn Android utiliza MIDI → Buscar MIDI Bluetooth (BLE), NO el emparejamiento de Ajustes."
