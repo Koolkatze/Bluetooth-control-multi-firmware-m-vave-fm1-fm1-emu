@@ -530,10 +530,7 @@ static void urban_port_rec_timeline(void) {
                     (int)(int8_t)e->value-urban_port_editor_value(e->parameter));
             }
         } else if(e->kind==UR_REC_NOTE_ON||e->kind==UR_REC_NOTE_OFF) {
-            int voice=urban_hyp_voice(r->track);
-            if(voice>=0)
-                en_note(voice,urban_hyp_key((unsigned)voice,e->note),
-                        e->kind==UR_REC_NOTE_ON);
+            urban_port_rec_note(r,e->note,e->value,e->kind==UR_REC_NOTE_ON);
         }
     }
 }
