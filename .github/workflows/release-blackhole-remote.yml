@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: blackhole-remote-v0.1.0-beta.1-release
+  group: blackhole-remote-v0.1.0-beta.2-release
   cancel-in-progress: false
 
 jobs:
@@ -21,11 +21,11 @@ jobs:
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
-      TAG: blackhole-remote-v0.1.0-beta.1
-      BUILD_RUN: "41725945640"
-      SOURCE_SHA: e0e58e5b769a032458958073562be0d1aefa073a
-      SHA_BLE: f418723f2227864c9ea424e4bdd7770a737668827c1eb11f78ac3a9c4dda13aa
-      SHA_USB: a1af04cdffc1a32ad2bedf79b9f24d9abecf449d22809af20ea012192807cd61
+      TAG: blackhole-remote-v0.1.0-beta.2
+      BUILD_RUN: "41733647184"
+      SOURCE_SHA: 75e79d9dd59989697b01ad8b33493f9303670521
+      SHA_BLE: 6b526f88829bf2aceb7b47d23b9a0e1aa7191defd1b19a1dd8225cb0ee683189
+      SHA_USB: 514046a083b7f254c3c62744a9e0e77207f0f4f5e246bfd4c1bab5211b4f8590
     steps:
       - name: Check the exact successful pinned firmware build
         run: |
@@ -49,9 +49,9 @@ jobs:
           printf '%s  %s\n' "$SHA_BLE" "staging/build/physical-fm1-remote/Blackhole-Remote-BLE-EXPERIMENTAL.fwsc" | sha256sum -c -
           printf '%s  %s\n' "$SHA_USB" "staging/build/physical-fm1-remote/Blackhole-Remote-USB-EXPERIMENTAL.fwsc" | sha256sum -c -
           cp staging/build/physical-fm1-remote/Blackhole-Remote-BLE-EXPERIMENTAL.fwsc \
-            dist/Blackhole-Remote-HD-v0.1.0-beta.1-Bluetooth-USB.fwsc
+            dist/Blackhole-Remote-HD-v0.1.0-beta.2-Bluetooth-USB.fwsc
           cp staging/build/physical-fm1-remote/Blackhole-Remote-USB-EXPERIMENTAL.fwsc \
-            dist/Blackhole-Remote-HD-v0.1.0-beta.1-USB-Only.fwsc
+            dist/Blackhole-Remote-HD-v0.1.0-beta.2-USB-Only.fwsc
           (cd dist && sha256sum *.fwsc > SHA256SUMS.txt)
           cat dist/SHA256SUMS.txt
 
@@ -64,18 +64,22 @@ jobs:
           Standalone **physical M-VAVE FM-1 controller firmware**, not an Android APK.
 
           **Downloads**
-          - **Bluetooth + USB:** `Blackhole-Remote-HD-v0.1.0-beta.1-Bluetooth-USB.fwsc`
-          - **USB only:** `Blackhole-Remote-HD-v0.1.0-beta.1-USB-Only.fwsc`
+          - **Bluetooth + USB:** `Blackhole-Remote-HD-v0.1.0-beta.2-Bluetooth-USB.fwsc`
+          - **USB only:** `Blackhole-Remote-HD-v0.1.0-beta.2-USB-Only.fwsc`
           - `SHA256SUMS.txt` contains SHA-256 hashes for both firmwares.
 
           **Features**
-          - 240 × 240 square LCD with higher-detail, 64-colour black-hole pixel-art splash (240 × 144 bitmap + text band), plus a small black-hole preview in the status interface.
-          - Real 27-key piano on screen that responds to physical key presses; the matching hardware keys illuminate.
-          - Estimated battery percentage, USB-MIDI connection and Bluetooth-MIDI link status.
+          - Square 240 × 240 LCD, with the high-resolution 64-colour black-hole pixel art.
+          - **Glitch entrance** at boot, followed by an **indefinite wait for a real key/button press**, then **glitch exit** into the MIDI controller.
+          - **Corrected RGB565 byte order** for direct LCD bitmap pixels; fixes the strong green colour cast.
+          - **Large black-hole image as the active controller background**, without a firmware-title overlay.
+          - Battery (estimated %), USB MIDI and Bluetooth MIDI information on **40%-transparent dark panels** (60% dark tint).
+          - Fully **opaque piano** that reacts to all 27 actual key presses, together with the corresponding physical key LEDs.
+          - MIDI USB/BLE output remains active even while waiting at the intro.
           - All 14 panel buttons, 7 encoders and MASTER use the Workbench Remote v1 MIDI mapping (compatible with Android FM-1 Workbench).
 
           **Validation**
-          Both physical firmware variants passed the JieLi AC79 build and automated tests in [this pinned GitHub Actions run](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/actions/runs/41725945640); both exact .fwsc files were checksum-verified before release.
+          Both physical firmware variants passed the JieLi AC79 build and automated tests in [this pinned GitHub Actions run](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/actions/runs/41733647184); both exact .fwsc files were checksum-verified before release.
 
           **WARNING — EXPERIMENTAL**
           This physical firmware has **not been validated on a real M-VAVE FM-1**. Flashing a defective or incompatible firmware could render the hardware unusable. Prepare a recovery method, stable USB power and a backup of the working firmware. The battery percentage is an ADC estimate, not a calibrated battery fuel gauge. Bluetooth is for MIDI control, not flashing.
@@ -89,7 +93,7 @@ jobs:
           else
             gh release create "$TAG" dist/*.fwsc dist/SHA256SUMS.txt \
               --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "Blackhole Remote HD — MIDI controller v0.1.0 beta 1" \
+              --title "Blackhole Remote HD — MIDI controller v0.1.0 beta 2" \
               --notes-file dist/RELEASE-NOTES.md --prerelease
           fi
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,assets \
@@ -98,7 +102,7 @@ jobs:
       - name: Preserve checked physical firmware release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Blackhole-Remote-HD-v0.1.0-beta.1
+          name: Blackhole-Remote-HD-v0.1.0-beta.2
           path: |
             dist/*.fwsc
             dist/SHA256SUMS.txt
