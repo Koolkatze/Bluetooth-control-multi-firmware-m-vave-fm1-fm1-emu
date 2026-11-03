@@ -78,6 +78,17 @@ int main(void) {
     assert(cat.program==77u&&cat.track==6u);
     urban_rec_set_program(&cat,78);
     assert(cat.program==77u);
+    /* Physical keyboard octave moves in semitones and saturates at +/-3,
+     * without transposing any MIDI note event already captured. */
+    assert(cat.octave==0&&urban_rec_key_note(&cat,7u)==60u);
+    urban_rec_shift_octave(&cat,1);
+    assert(cat.octave==1&&urban_rec_key_note(&cat,7u)==72u);
+    urban_rec_shift_octave(&cat,8);
+    assert(cat.octave==3&&urban_rec_key_note(&cat,7u)==96u);
+    urban_rec_shift_octave(&cat,-9);
+    assert(cat.octave== -3&&urban_rec_key_note(&cat,7u)==24u);
+    urban_rec_shift_octave(&cat,3);
+    assert(cat.octave==0&&urban_rec_key_note(&cat,7u)==60u);
     urban_rec_arm(&cat);
     urban_rec_start(&cat);
     assert(urban_rec_capture(&cat,UR_REC_NOTE_ON,60u,110u,0u,4u));
