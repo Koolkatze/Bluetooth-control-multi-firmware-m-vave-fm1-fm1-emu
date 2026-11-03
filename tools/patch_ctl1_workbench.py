@@ -109,6 +109,8 @@ static void wb_remote_input(void)
      * USB/BLE connects (even when it connects after firmware boot). */
     if ((int32_t)(now - next_hello_ms) >= 0) {
         wb_remote_packet(0xbfu, 102u, 42u);
+        say_as("WORKBENCH", "REMOTE", 0);
+        ui.msg_until = now + 3000u;
         next_hello_ms = now + 1500u;
         /* Resend held key/button STATE after reconnection. The receiver
          * suppresses duplicate state changes; no retriggered note-ons. */
@@ -122,6 +124,12 @@ static void wb_remote_input(void)
 
     held_keys = keys;
     held_buttons = buttons;
+    /* Keep physical key/button LEDs and idle timer responsive, but do NOT
+     * interpret the keys as local CTL-1 pages or transport actions. */
+    ui.keys = keys;
+    ui.btn = buttons;
+    if (changed_keys || changed_buttons)
+        ui.act_t = now;
     for (i = 0; i < NKEYS; ++i)
         if (changed_keys & (1u << i))
             wb_remote_note(i, (keys & (1u << i)) != 0, (int)proj.vel);
