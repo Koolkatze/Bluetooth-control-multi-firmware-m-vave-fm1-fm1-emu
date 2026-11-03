@@ -96,7 +96,8 @@ static void wb_remote_input(void)
     uint32_t changed_keys = keys ^ held_keys;
     uint32_t changed_buttons = buttons ^ held_buttons;
     uint32_t now = plat_ms();
-    int i, value, raw;
+    int i, value, raw, port;
+    uint32_t midi_packet;
     int32_t ticks;
 
     if (!initialized) {
@@ -134,6 +135,12 @@ static void wb_remote_input(void)
         ticks = plat_enc(i);
         if (ticks)
             wb_remote_encoder(i, ticks);
+    }
+    /* Keep RX queues drained without MIDI-thru loops back into Android.
+     * Workbench Remote v1 is a physical-controller OUTPUT protocol. */
+    while (plat_midi_in(&midi_packet, &port)) {
+        (void)midi_packet;
+        (void)port;
     }
     raw = (int)plat_master();
     master_smooth += ((int32_t)raw - master_smooth) / 4;
