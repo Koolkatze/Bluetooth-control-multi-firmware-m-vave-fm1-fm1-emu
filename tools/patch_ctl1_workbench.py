@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Optional CTL-1 source adapter for the M-VAVE FM-1 Workbench Remote v1.
+"""Blackhole Remote: MIDI controller — physical M-VAVE FM-1 firmware.
+
 
 Usage:
     python3 tools/patch_ctl1_workbench.py /path/to/fm1-ctl
@@ -109,8 +110,8 @@ static void wb_remote_input(void)
      * USB/BLE connects (even when it connects after firmware boot). */
     if ((int32_t)(now - next_hello_ms) >= 0) {
         wb_remote_packet(0xbfu, 102u, 42u);
-        say_as("WORKBENCH", "REMOTE", 0);
-        ui.msg_until = now + 3000u;
+        /* MIDI handshake only. Do not cover the keyboard/status with a
+         * splash-style message on every hello or Bluetooth reconnect. */
         next_hello_ms = now + 1500u;
         /* Resend held key/button STATE after reconnection. The receiver
          * suppresses duplicate state changes; no retriggered note-ons. */
@@ -205,7 +206,7 @@ def main() -> None:
         raise
     print(f"OK: patched {file}")
     print(f"Original saved as {backup}")
-    print("No firmware was compiled or flashed. See docs/midi-mapping.md before flashing.")
+    print("No firmware was flashed. This build is BLACKHOLE REMOTE: MIDI controller.")
 
 
 if __name__ == "__main__":
