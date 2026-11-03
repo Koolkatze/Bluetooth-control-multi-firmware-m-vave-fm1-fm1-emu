@@ -198,7 +198,11 @@ static void urban_port_compile_trance(void) {
     uint8_t solo=0u;
     for(unsigned i=0;i<URBAN_TRACKS;i++)solo|=s->tracks[i].solo;
     stage.enabled=(uint8_t)(lead->genre%URBAN_GENRES==12u &&
-        !lead->muted && (!solo || lead->solo));
+        !lead->muted && (!solo || lead->solo) &&
+        !((urban_port.recorder.state==UR_REC_ARM||
+           urban_port.recorder.state==UR_REC_RECORD||
+           urban_port.recorder.state==UR_REC_EDIT)&&
+          urban_port.recorder.track==3u));
     stage.song_mode=s->song_mode;
     stage.loop_queued=s->queued%URBAN_SEQUENCES;
     stage.length=s->arrangement_len;
@@ -496,7 +500,7 @@ static void urban_port_rec_note(const UrbanRecorder *r,unsigned note,
         en_note(voice,urban_hyp_key((unsigned)voice,(uint8_t)note),(int)on);
     } else if(on && ins.track==0u) {
         /* 27 keys repeat six real lanes: kick, snare, clap, CH/OH, perc. */
-        unsigned lane=(note+6u-53u)%6u;
+        unsigned lane=(note+192u-53u)%6u;
         en_urban_drum((int)lane,(int)(velocity?velocity:110u));
     } else if(on && ins.track==6u) {
         unsigned level=(unsigned)urban_port.sfx_level*velocity/110u;
