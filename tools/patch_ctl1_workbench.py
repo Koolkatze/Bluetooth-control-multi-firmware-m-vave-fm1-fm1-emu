@@ -146,22 +146,22 @@ static void wb_remote_input(void)
     }
 }
 """
-    swap(anchor, anchor + "\\n" + helpers)
+    swap(anchor, anchor + "\n" + helpers)
 
     # This is a DEDICATED controller mode. The original CTL-1 input loop
     # generates its own Start/Stop, sustain, CC, program changes and notes.
     # Running that loop simultaneously would double-trigger PLAY/REC/etc.
     # Wrap the original in #else for easy reversion in the source clone.
     swap(
-        "static void input(void)\\n{",
-        "static void input(void)\\n{\\n"
-        "#if WB_REMOTE_ONLY\\n"
-        "    wb_remote_input();\\n"
+        "static void input(void)\n{",
+        "static void input(void)\n{\n"
+        "#if WB_REMOTE_ONLY\n"
+        "    wb_remote_input();\n"
         "#else"
     )
     swap(
-        "}\\n\\n/* ------------------------------------------------------------- screen --- */",
-        "#endif\\n}\\n\\n/* ------------------------------------------------------------- screen --- */"
+        "}\n\n/* ------------------------------------------------------------- screen --- */",
+        "#endif\n}\n\n/* ------------------------------------------------------------- screen --- */"
     )
     return text
 
