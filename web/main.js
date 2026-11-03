@@ -302,7 +302,7 @@ if (DEVICE === "fm1") {
   const link = (href, text) => Object.assign(document.createElement("a"), { href, textContent: text });
   const list = document.getElementById("fwlist");
   addFirmwareCard = (f) => {
-    const linkOnly = !!f.byo && f.id !== "mvave";
+    const linkOnly = !!f.byo && !((DEVICE === "fm1" && f.id === "mvave") || (DEVICE === "smk37" && f.id === "stock"));
     const play = el("button", "", linkOnly ? "Solo ficha" : "Play");
     if (linkOnly) {
       play.disabled = true;
@@ -318,7 +318,7 @@ if (DEVICE === "fm1") {
       scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     });
     const links = el("div", "links");
-    if (f.byo && f.id === "mvave")
+    if (f.byo && !linkOnly)
       links.append(link(f.download, `download ${DEV.stock}`), link(f.repo, "notes ↗"));
     else if (linkOnly) {
       links.append(link(f.repo || hubCard(f), "autor / fuente ↗"));
@@ -466,7 +466,7 @@ function showFirmware() {
   for (const [id, card] of cards) {
     card.classList.toggle("on", id === fw.id);
     card.querySelector("button").textContent =
-      byId.get(id)?.byo && id !== "mvave" ? "Solo ficha" :
+      byId.get(id)?.byo && !((DEVICE === "fm1" && id === "mvave") || (DEVICE === "smk37" && id === "stock")) ? "Solo ficha" :
       id === fw.id ? "Selected" : "Play";
   }
   const b = document.createElement("b");
@@ -474,7 +474,7 @@ function showFirmware() {
   let parts;
   if (fw.id === "local") {
     parts = [b, "Opened from this computer; kept with its saved flash after Start."];
-  } else if (fw.byo && fw.id !== "mvave") {
+  } else if (fw.byo && !((DEVICE === "fm1" && fw.id === "mvave") || (DEVICE === "smk37" && fw.id === "stock"))) {
     const h = document.createElement("a");
     h.href = fw.hub ? hubCard(fw) : fw.repo;
     h.textContent = "Ver firmware en FW Hub / web del autor ↗";
