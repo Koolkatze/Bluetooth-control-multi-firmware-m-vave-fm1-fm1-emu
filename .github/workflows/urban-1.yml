@@ -1,7 +1,7 @@
 name: URBAN-1 host synthesis smoke test
 on:
   push:
-    branches: [feature/urban-1, feature/urban-rec-full-instruments]
+    branches: [feature/urban-1, feature/urban-rec-full-instruments, fix/urban-rec-audition-octave]
     paths:
       - 'urban-1/**'
       - '.github/workflows/urban-1.yml'
@@ -45,6 +45,7 @@ jobs:
           hyp1/build/host/amb_host urban-1/tests/hyp1_trance_clock.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_recorder.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_rec_instrument_catalog.amb hyp1/build/urban
+          hyp1/build/host/amb_host urban-1/tests/hyp1_rec_audition_octave.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_tape_transport.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_style_fx_reset.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_echo_wet.amb hyp1/build/urban
