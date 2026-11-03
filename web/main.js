@@ -7,6 +7,7 @@ import { fetchPackage, appFromPackage } from "./fwsc.js";
 import { ScreenAnalyzer, renderAdaptiveLCD } from "./screen-adapter.js";
 import { drawMobileLCD } from "./mobile-lcd.js?v=lcd-live-20261031";
 import { computeLCDSize } from "./lcd-fit.js";
+import { beginKnobGesture, moveKnobGesture } from "./knob-sweep.js";
 import { SaveStore, packageHash, changedSectors, packSectors, exportSave, importSave } from "./persistence.js";
 
 const CLOCKS = [60, 80, 100, 120, 160, 200, 240];
@@ -689,7 +690,11 @@ function setKey(id, on) {
   send({ type: "key", id, down: on });
 }
 function turn(i, clicks) {
-  encClicks[i] += clicks;
+  if (!clicks) return;
+  // The FM-1 touchscreen displays a finite 7:00..5:00 sweep;
+  // its actual hardware inputs remain RELATIVE detent encoders.
+  if (board === 0) encClicks[i] = Math.max(0, Math.min(100, encClicks[i] + clicks));
+  else encClicks[i] += clicks;
   turning[i] = 10;
   send({ type: "enc", enc: ui.panel_enc_id(i), clicks });
 }
@@ -726,6 +731,15 @@ const pointers = new Map();                // pointerId -> { grab, lastY, acc, h
 canvas.addEventListener("pointerdown", (e) => {
   const [x, y] = at(e);
   const p = { grab: ui.panel_hit(x, y), lastY: y, acc: 0, held: -1 };
+  if (board === 0 && p.grab >= 0 && p.grab <= 7) {
+    // Rotating on the dial uses a real 300-degree arc, not vertical
+    // scrolling or an endless 360-degree potentiometer.
+    p.gesture = beginKnobGesture(p.grab, x, y);
+    if (p.grab === 7) {
+      p.masterStart = pot;
+      p.masterPercentStart = p.gesture.percent;
+    }
+  }
   pointers.set(e.pointerId, p);
   canvas.setPointerCapture(e.pointerId);
   if (p.grab >= 100 && p.grab < 200) {
@@ -756,12 +770,17 @@ canvas.addEventListener("pointermove", (e) => {
     }
   } else if (board === 1 && p.grab >= 300) {
     slide(p, y);
-  } else if (p.grab >= 0 && p.grab < (board === 1 ? 8 : 7)) {
+  } else if (board === 0 && p.gesture && p.grab < 7) {
+    const clicks = moveKnobGesture(p.gesture, x, y);
+    if (clicks) turn(p.grab, clicks);
+  } else if (board === 0 && p.gesture && p.grab === 7) {
+    moveKnobGesture(p.gesture, x, y);
+    setPot(p.masterStart + (p.gesture.percent - p.masterPercentStart) * 1023 / 100);
+  } else if (p.grab >= 0 && p.grab < 8) {
+    // The SMK-37 uses conventional endless encoders.
     p.acc += p.lastY - y;
     while (p.acc >= 12) { p.acc -= 12; turn(p.grab, 1); }
     while (p.acc <= -12) { p.acc += 12; turn(p.grab, -1); }
-  } else if (board === 0 && p.grab === 7) {
-    setPot(pot + (p.lastY - y) * 4);
   }
   p.lastY = y;
 });
