@@ -972,19 +972,20 @@ public final class MainActivity extends Activity {
                 "Automático — detecta Workbench Remote por MIDI",
                 "Solo instrumento MIDI — notas, CC y reloj",
                 "CTL-1 original — compatibilidad limitada",
-                "Workbench Remote — requiere firmware en FM-1 físico"
+                "Workbench Remote — firmware físico obligatorio",
+                "ℹ Requisitos: móvil como pantalla + FM-1 controlador"
         };
         final String[] ids = { "auto", "midi", "ctl1", "remote" };
         String selected = getPreferences(MODE_PRIVATE).getString(MIDI_MODE_PREF, "auto");
         int checked = Arrays.asList(ids).indexOf(selected);
-        new AlertDialog.Builder(this).setTitle("M-VAVE FM-1 → Panel Workbench")
-                .setMessage("MÓVIL COMO PANTALLA + FM-1 COMO CONTROLADOR COMPLETO:\n"
-                        + "Es NECESARIO instalar Workbench Remote en el FM-1 físico. "
-                        + "La APK muestra y ejecuta el firmware de síntesis virtual "
-                        + "en el teléfono; NO captura la LCD física.\n\n"
-                        + "CTL-1 original solo permite MIDI parcial. "
-                        + "Seleccionar Remote en la app NO instala ese firmware en el FM-1.")
+        new AlertDialog.Builder(this)
+                .setTitle("MIDI · Control completo requiere Workbench Remote en FM-1")
                 .setSingleChoiceItems(names, Math.max(0, checked), (dialog, which) -> {
+                    if (which == names.length - 1) {
+                        dialog.dismiss();
+                        showMidiMappingTable();
+                        return;
+                    }
                     getPreferences(MODE_PRIVATE).edit().putString(MIDI_MODE_PREF, ids[which]).apply();
                     midiPanelMapper.releaseKeys(midiSink);
                     midiPanelMapper.setMode(modeForName(ids[which], midiRouteLabel),
