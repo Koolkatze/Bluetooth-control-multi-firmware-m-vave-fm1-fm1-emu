@@ -104,13 +104,14 @@ jobs:
         run: |
           make -C urban-1 test
           python3 urban-1/tools/apply_hyp1.py --hyp-root hyp1
-          (cd hyp1 && ./build.sh --release 0.1.0)
-          test -s hyp1/build/amb-0.1.0.fwsc
-          (cd hyp1 && cc -o build/ota_test tests/ota_test.c && build/ota_test build/amb-0.1.0.fwsc)
+          (cd hyp1 && ./build.sh --release 0.4.10)
+          test -s hyp1/build/amb-0.4.10.fwsc
+          (cd hyp1 && cc -o build/ota_test tests/ota_test.c && build/ota_test build/amb-0.4.10.fwsc)
 
       - name: Bundle open-source firmwares, URBAN-1 and all web assets
         env:
-          URBAN1_FWSC: hyp1/build/amb-0.1.0.fwsc
+          URBAN1_FWSC: hyp1/build/amb-0.4.10.fwsc
+          URBAN1_VERSION: 0.4.10
         run: node tools/package_offline_android.mjs _offline_web android/app/src/main/assets/site
 
       - name: Validate true native synthesizer libraries and package files
