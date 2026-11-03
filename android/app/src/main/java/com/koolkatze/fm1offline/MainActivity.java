@@ -953,9 +953,9 @@ public final class MainActivity extends Activity {
 
     private void showMidiModePicker() {
         final String[] names = {
-                "Automático — CTL-1 / FM-1 o MIDI normal",
+                "Automático — detecta Workbench Remote por MIDI",
                 "Solo instrumento MIDI — notas, CC y reloj",
-                "CTL-1 instalado — teclas y knobs del panel (parcial)",
+                "CTL-1 original — compatibilidad limitada",
                 "Workbench Remote — panel completo (requiere firmware compatible)"
         };
         final String[] ids = { "auto", "midi", "ctl1", "remote" };
@@ -965,7 +965,8 @@ public final class MainActivity extends Activity {
                 .setSingleChoiceItems(names, Math.max(0, checked), (dialog, which) -> {
                     getPreferences(MODE_PRIVATE).edit().putString(MIDI_MODE_PREF, ids[which]).apply();
                     midiPanelMapper.releaseKeys(midiSink);
-                    midiPanelMapper.setMode(modeForName(ids[which], midiRouteLabel));
+                    midiPanelMapper.setMode(modeForName(ids[which], midiRouteLabel),
+                            "auto".equals(ids[which]));
                     dialog.dismiss();
                     show("Modo MIDI: " + names[which]);
                 })
@@ -985,20 +986,25 @@ public final class MainActivity extends Activity {
 
     private void showMidiMappingTable() {
         new AlertDialog.Builder(this)
-                .setTitle("Controles físicos → Workbench")
-                .setMessage("CTL-1 instalado (página HOME / Play):\n"
-                        + "27 teclas F3–G5 → 27 teclas virtuales (octava original)\n"
-                        + "KNOB 1–4, bancos A–D → KNOB 1–4 del panel\n"
-                        + "PRESETS (Program Change) → PRESETS\n"
-                        + "PLAY (Start/Stop) → PLAY\n"
-                        + "ENV (CC64) → ENV; REC (CC123) → REC\n"
-                        + "MASTER: en CTL-1 asignar CC11 → MASTER\n\n"
-                        + "SELECT, ALGORITHM, OCT±, FX, SCL, LFO, EDIT, GLO, "
-                        + "HOME, SAVE, ARP y SEQ no emiten una pulsación MIDI "
-                        + "individual en CTL-1 original.\n\n"
-                        + "Para mapear los 14 botones, 7 encoders, MASTER y 27 teclas "
-                        + "1:1 hace falta el protocolo Workbench Remote "
-                        + "del firmware controlador. Véase docs/midi-mapping.md.")
+                .setTitle("M-VAVE FM-1 → Workbench")
+                .setMessage("Workbench Remote (firmware físico adaptado):\n"
+                        + "SELECT → SELECT (encoder 0)\n"
+                        + "PRESETS → PRESETS (encoder 6)\n"
+                        + "ALGORITHM → ALGORITHM (encoder 1)\n"
+                        + "KNOB 1–4 → KNOB 1–4\n"
+                        + "MASTER → MASTER\n"
+                        + "FX, SEL/SCL, ENV, LFO, EDIT, GLO, HOME, SAVE, ARP, "
+                        + "SEQ, PLAY/STOP y REC → botones virtuales de igual nombre\n"
+                        + "OCT− y OCT+ → botones de octava\n"
+                        + "27 teclas → 27 teclas virtuales\n\n"
+                        + "Se transmiten pulsación, liberación y giros relativos. "
+                        + "Las pulsaciones largas las interpreta el propio firmware emulado.\n\n"
+                        + "CTL-1 original: NO transmite todos esos eventos. "
+                        + "CC64 es sustain, CC123 es All Notes Off y Start/Stop es "
+                        + "transporte MIDI: NO son botones ENV/REC/PLAY.\n\n"
+                        + "Para el control íntegro instala voluntariamente un "
+                        + "firmware físico compatible con Workbench Remote. "
+                        + "La APK detecta su saludo MIDI automáticamente.")
                 .setPositiveButton("Cerrar", null).show();
     }
 
@@ -1043,8 +1049,10 @@ public final class MainActivity extends Activity {
         // an asynchronous BLE open callback which just succeeded.
         midiDevice = device;
         midiRouteLabel = name;
-        midiPanelMapper.setMode(modeForName(
-                getPreferences(MODE_PRIVATE).getString(MIDI_MODE_PREF, "auto"), name));
+        String mappingPreference =
+                getPreferences(MODE_PRIVATE).getString(MIDI_MODE_PREF, "auto");
+        midiPanelMapper.setMode(modeForName(mappingPreference, name),
+                "auto".equals(mappingPreference));
         final int generation = midiConnectionGeneration;
         int connected = 0;
         for (int i = 0; i < device.getInfo().getOutputPortCount(); i++) {
