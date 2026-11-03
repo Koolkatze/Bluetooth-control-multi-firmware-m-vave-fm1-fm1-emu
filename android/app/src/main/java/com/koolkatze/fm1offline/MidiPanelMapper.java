@@ -22,6 +22,11 @@ public final class MidiPanelMapper {
     }
 
     private Mode mode = Mode.MIDI_ONLY;
+    /** True only with the user's AUTO preference; explicit modes are never overridden. */
+    private boolean remoteAutoDetect = false;
+    // The patched physical controller announces this profile over channel 16.
+    private static final int REMOTE_HELLO_CC = 102;
+    private static final int REMOTE_HELLO_VALUE = 42;
     private int runningStatus = 0;
     private int status = 0;
     private int needed = 0;
@@ -36,8 +41,11 @@ public final class MidiPanelMapper {
 
     public synchronized Mode getMode() { return mode; }
 
-    public synchronized void setMode(Mode next) {
+    public synchronized void setMode(Mode next) { setMode(next, false); }
+
+    public synchronized void setMode(Mode next, boolean enableAutoRemote) {
         mode = next == null ? Mode.MIDI_ONLY : next;
+        remoteAutoDetect = enableAutoRemote;
         reset();
     }
 
@@ -74,8 +82,10 @@ public final class MidiPanelMapper {
         for (byte raw : bytes) {
             final int b = raw & 0xff;
             if (b >= 0xf8) {
-                if (mode == Mode.CTL1 && (b == 0xfa || b == 0xfc)) pulse(sink, 12);
-                else sink.midi(new byte[]{(byte)b});
+                // Clock and transport are *musical MIDI*, not button presses.
+                // A START/STOP packet must not toggle PLAY in two places.
+                if (mode != Mode.REMOTE || (b != 0xfa && b != 0xfb && b != 0xfc))
+                    sink.midi(new byte[]{(byte)b});
                 continue;
             }
             if (b == 0xf0) { inSysex = true; status = runningStatus = needed = have = 0; continue; }
@@ -118,17 +128,25 @@ public final class MidiPanelMapper {
         }
     }
 
-    private void pulse(Sink sink, int id) {
-        key(sink, id, 1);
-        key(sink, id, 0);
-    }
-
     private void route(byte[] message, Sink sink) {
         final int s = message[0] & 255;
         final int kind = s & 0xf0;
         final int channel = (s & 15) + 1;
         final int d1 = message.length > 1 ? message[1] & 127 : 0;
         final int d2 = message.length > 2 ? message[2] & 127 : 0;
+
+        // Fully automatic USB/BLE profile switching, based on an explicit
+        // Workbench Remote handshake (not guesses based on incoming CCs).
+        if (s == 0xbf && d1 == REMOTE_HELLO_CC && d2 == REMOTE_HELLO_VALUE) {
+            if (remoteAutoDetect && mode != Mode.REMOTE) {
+                releaseKeys(sink);
+                // Do not reset the parser's running status mid-stream.
+                Arrays.fill(previousCc, -1);
+                previousProgram = -1;
+                mode = Mode.REMOTE;
+            }
+            return; // never deliver the private handshake to emulated firmware
+        }
 
         if (mode == Mode.REMOTE && channel == 16) {
             if ((kind == 0x80 || kind == 0x90) && d1 >= 48 && d1 <= 74) {
@@ -160,7 +178,7 @@ public final class MidiPanelMapper {
                 key(sink, 14 + d1 - 53, (kind == 0x90 && d2 > 0) ? 1 : 0);
                 return;
             }
-            // CTL-1 Play page: A/B/C/D are four controller banks for KNOB1..4.
+            // CTL-1 Play page: A/B/C/D controller banks; defaults only.
             if (kind == 0xb0) {
                 final int knob = legacyKnob(d1);
                 if (knob >= 0) {
@@ -172,11 +190,13 @@ public final class MidiPanelMapper {
                     }
                     return;
                 }
-                if (d1 == 64) {
-                    key(sink, 4, d2 >= 64 ? 1 : 0); // CTL-1 ENV sustain
+                // CC64 = sustain and CC123 = all notes off, NOT ENV/REC.
+                // Their use as virtual page buttons caused destructive and
+                // confusing control actions; keep both as musical MIDI.
+                if (d1 == 64 || d1 == 123) {
+                    sink.midi(message);
                     return;
                 }
-                if (d1 == 123) { pulse(sink, 13); return; } // CTL-1 REC panic
                 if (d1 == 11) {
                     sink.panel(2, 0, (d2 * 1023 + 63) / 127); // optional MASTER CC11
                     return;
