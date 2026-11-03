@@ -25,8 +25,8 @@ spin K2 100
 expect urbanfilterhp 100
 wait 150
 expect urbanfilterdsp 25700
-spin K1 -1000
-spin K2 -1000
+spin K1 -100
+spin K2 -100
 expect urbanfilterlp 0
 expect urbanfilterhp 0
 wait 150
