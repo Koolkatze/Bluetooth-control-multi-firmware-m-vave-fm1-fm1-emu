@@ -71,6 +71,12 @@ async function prepareCatalog(spec) {
       return;
     }
     if (!permitted(f)) {
+      // Non-redistributable firmware must remain discoverable as a Hub
+      // information card, without shipping or fetching its binary.
+      delete f.package;
+      f.byo = true;
+      f.unavailable = "Licencia/fuente no verificadas: consulta la página del autor";
+      results[i] = f;
       logs.push({ device: spec.namespace, id: f.id, bundled: false, reason: "licence/source not verified for redistribution" });
       return;
     }
@@ -94,8 +100,15 @@ async function prepareCatalog(spec) {
       logs.push({ device: spec.namespace, id, bundled: true, bytes: got.bytes.length, originalUrl: got.url, source: f.repo, license: f.license });
       console.log(`[offline] ${spec.namespace} ${id}: ${got.bytes.length} bytes`);
     } catch (error) {
+      // The updater can retry this exact firmware directly from the
+      // official Hub HTTPS feed. Keep its card in Workbench even if it
+      // timed out or was temporarily missing when the APK was built.
+      delete f.package;
+      f.remoteOnly = true;
+      f.unavailable = "No incluido offline: usa Actualizar seleccionado";
+      results[i] = f;
       logs.push({ device: spec.namespace, id: f.id, bundled: false, reason: String(error?.message || error) });
-      console.warn(`[offline] ${spec.namespace} ${f.id}: excluded — ${error?.message || error}`);
+      console.warn(`[offline] ${spec.namespace} ${f.id}: catalogued for on-demand update — ${error?.message || error}`);
     }
   });
 

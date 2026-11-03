@@ -15,10 +15,8 @@ const OUT = new URL("../web/firmwares.json", import.meta.url);
 const OWN = new URL("../web/firmwares-own.json", import.meta.url);
 // our ids where the Hub's differ (the page takes either in ?fw=; see ourId for the rest)
 const OURS = { salt: "felucca-salt", floyd: "sloop-floyd", sloopbanks: "sloop-banks" };
-// listed on the Hub, not run here yet
-const SKIP = {
-  bubba: "boots to a black screen, no sound",
-};
+// Retain every listed Hub firmware. A no-package entry is link-only, not hidden.
+const SKIP = {};
 // first in the list (the page's default first), then by id
 const FIRST = ["mvave", "felucca", "felucca-salt"];
 
@@ -55,7 +53,9 @@ function ourId(h) {
 // a repository's licence (GitHub's SPDX id), for firmwares new to the list
 async function licence(repo) {
   try {
-    const r = await fetch(`https://api.github.com/repos/${repo}`, { headers: { "User-Agent": "fm1-emu hub_catalog" } });
+    const headers = { "User-Agent": "fm1-emu hub_catalog" };
+    if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+    const r = await fetch(`https://api.github.com/repos/${repo}`, { headers });
     const j = await r.json();
     const id = j.license?.spdx_id;
     return id && id !== "NOASSERTION" ? id : "see the repository";
@@ -67,20 +67,23 @@ async function licence(repo) {
 const firmwares = [];
 const listed = new Set();
 for (const h of hub.firmwares) {
-  if (!h.pkg) continue;
+  if (!h.id || !h.name) continue;
   const id = ourId(h);
   listed.add(id);
-  if (SKIP[h.id]) continue;
   const o = old.get(id) || {};
+  const packaged = typeof h.pkg === "string" && h.pkg.trim().length > 0;
+  /* Some Hub records are link-only, or their author's package is not
+   * mirrored. Show them without implying that our emulator can run them. */
   firmwares.push({
     id,
     name: h.name,
-    version: String(h.version),
-    author: o.author || h.author,
+    version: String(h.version ?? ""),
+    author: o.author || h.author || "community",
     license: o.license || (h.repo ? await licence(h.repo) : "see the repository"),
-    about: o.about || h.what,
-    repo: o.repo || (h.repo ? `https://github.com/${h.repo}` : h.site),
-    package: new URL(h.pkg, HUB).href,
+    about: o.about || h.what || "See the firmware's Hub listing for details.",
+    repo: o.repo || (h.repo ? `https://github.com/${h.repo}` : h.site || HUB),
+    ...(packaged ? { package: new URL(h.pkg, HUB).href } :
+      { byo: true, unavailable: "Link-only on Firmware Hub; no .fwsc available to emulate" }),
     ...(o.installer ? { installer: o.installer } : {}),
     hub: h.id,
   });
@@ -123,11 +126,11 @@ const json = `{\n  "note": ${JSON.stringify(note)},\n  "default": ${JSON.stringi
   firmwares.map(entry).join(",\n") + "\n  ]\n}\n";
 JSON.parse(json); // (still JSON)
 
-// what the last list had and this one doesn't (gone from the Hub, or its package; skipped): its
-// ?fw= links stop working
+// What vanished from both sources. No-package Hub listings remain present
+// as link-only cards instead of silently disappearing.
 const ids = new Set(firmwares.map((f) => f.id));
 for (const f of cur.firmwares) {
-  if (!ids.has(f.id)) console.log(`  dropped: ${f.id} (${SKIP[f.hub] ? `skipped: ${SKIP[f.hub]}` : "no longer on the Hub with a package"})`);
+  if (!ids.has(f.id)) console.log(`  dropped: ${f.id} (not in Hub/own lists)`);
 }
 
 if (process.argv.includes("--check")) {

@@ -16,6 +16,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -32,6 +34,7 @@ final class FirmwareUpdater {
     private static final String TAG = "FM1FirmwareUpdate";
     private static final String CATALOG_ROOT =
             "https://raw.githubusercontent.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/master/web/";
+    private static final String HUB_CATALOG = "https://thefirmwarehub.com/catalog.json";
     private static final int MAX_CATALOG = 1024 * 1024;
     private static final int MAX_PACKAGE = 15 * 1024 * 1024;
     private final Activity activity;
@@ -63,6 +66,17 @@ final class FirmwareUpdater {
     // Metadata is stored separately from the bundled firmware and from the
     // emulated firmware's flash settings, which are keyed by package SHA-256.
     private File metadata(String device) { return new File(folder(device), "installed.json"); }
+    private File savedCatalog(String device) { return new File(folder(device), "catalog-latest.json"); }
+    String catalogJson(String device) {
+        if (!validDevice(device)) return "{\"entries\":[]}";
+        try {
+            File f = savedCatalog(device);
+            if (f.isFile()) return new String(readFile(f, MAX_CATALOG), StandardCharsets.UTF_8);
+        } catch (Exception error) {
+            Log.w(TAG, "Saved firmware catalog invalid", error);
+        }
+        return "{\"entries\":[]}";
+    }
 
     private synchronized JSONObject installed(String device) {
         JSONObject empty = new JSONObject();
@@ -135,6 +149,97 @@ final class FirmwareUpdater {
         }
     }
 
+    /* The APK contains yesterday's catalog. Send fresh, strictly bounded
+     * catalogue metadata to the native WebView so new Hub entries become
+     * discoverable WITHOUT reinstalling the APK. The JS page never gains
+     * permission to download remote firmware itself; native Android validates
+     * package origins and writes downloaded .fwsc to private app storage. */
+    private void notifyCatalog(String device, JSONArray remote) throws Exception {
+        JSONArray safe = new JSONArray();
+        for (int i = 0; i < remote.length(); i++) {
+            JSONObject item = remote.optJSONObject(i);
+            if (item == null || !validId(item.optString("id"))) continue;
+            JSONObject view = new JSONObject();
+            for (String key : new String[] {"id","name","version","author",
+                    "license","about","repo","hub","installer","unavailable"}) {
+                if (item.has(key)) view.put(key, item.optString(key));
+            }
+            view.put("byo", item.optBoolean("byo") || item.optString("package").isEmpty());
+            safe.put(view);
+        }
+        JSONObject event = new JSONObject();
+        event.put("kind", "catalog");
+        event.put("device", device);
+        event.put("entries", safe);
+        // A catalog snapshot survives Workbench restarts, even when new Hub
+        // firmware IDs were not in the original offline APK bundle.
+        File dir = folder(device);
+        if (!dir.isDirectory() && !dir.mkdirs())
+            throw new IllegalStateException("Cannot save Hub catalog");
+        writeManifest(savedCatalog(device), event);
+        final String js = "window.fm1FirmwareUpdateProgress?.(" + event.toString() + ")";
+        activity.runOnUiThread(() -> {
+            if (!activity.isFinishing()) web.evaluateJavascript(js, null);
+        });
+    }
+
+    /* The Hub changes independently of our static repository catalog.
+     * Prefer the LIVE Hub feed on every explicit update, while retaining
+     * our custom URBAN-1 and other firmware entries from GitHub.
+     * Only trusted .fwsc links with a verified open-source licence can be
+     * downloaded; unknown licences remain visible as link-only records. */
+    private static JSONArray mergeHubCatalog(JSONArray curated, JSONArray hub) throws Exception {
+        java.util.LinkedHashMap<String, JSONObject> combined = new java.util.LinkedHashMap<>();
+        Map<String, String> canonical = new HashMap<>();
+        for (int i = 0; i < curated.length(); i++) {
+            JSONObject item = curated.optJSONObject(i);
+            if (item == null || !validId(item.optString("id"))) continue;
+            combined.put(item.optString("id"), new JSONObject(item.toString()));
+            if (validId(item.optString("hub")))
+                canonical.put(item.optString("hub"), item.optString("id"));
+        }
+        // A few historical aliases differ between Workbench and FW Hub.
+        canonical.put("salt", "felucca-salt");
+        canonical.put("floyd", "sloop-floyd");
+        canonical.put("sloopbanks", "sloop-banks");
+        for (int i = 0; i < hub.length(); i++) {
+            JSONObject h = hub.optJSONObject(i);
+            if (h == null || !validId(h.optString("id"))) continue;
+            String hubId = h.optString("id");
+            String id = canonical.containsKey(hubId) ? canonical.get(hubId) : hubId;
+            JSONObject item = combined.get(id);
+            if (item == null) item = new JSONObject();
+            item.put("id", id);
+            item.put("hub", hubId);
+            item.put("name", h.optString("name", item.optString("name", id)));
+            item.put("version", h.optString("version", item.optString("version", "")));
+            item.put("author", h.optString("author", item.optString("author", "community")));
+            if (!item.has("about")) item.put("about", h.optString("what", ""));
+            if (!item.has("repo")) {
+                String upstream = h.optString("repo", "");
+                String site = h.optString("site", "");
+                item.put("repo", upstream.isEmpty() ? (site.isEmpty() ?
+                    "https://thefirmwarehub.com/" : site) : "https://github.com/" + upstream);
+            }
+            String pkg = h.optString("pkg", "");
+            if (!pkg.isEmpty()) {
+                item.put("package", new URL(new URL("https://thefirmwarehub.com/"), pkg).toExternalForm());
+                item.remove("byo");
+                item.remove("unavailable");
+            } else {
+                item.remove("package");
+                item.put("byo", true);
+                item.put("unavailable", "FW Hub lists this entry without a downloadable .fwsc");
+            }
+            if (!item.has("license"))
+                item.put("license", h.optString("license", ""));
+            combined.put(id, item);
+        }
+        JSONArray out = new JSONArray();
+        for (JSONObject item : combined.values()) out.put(item);
+        return out;
+    }
+
     private void update(String device, String selected) throws Exception {
         JSONObject packaged = new JSONObject(new String(
                 readStream(activity.getAssets().open("site/" + catalogPath(device)), MAX_CATALOG),
@@ -144,36 +249,66 @@ final class FirmwareUpdater {
         JSONArray original = packaged.getJSONArray("firmwares");
         Map<String, JSONObject> remote = new HashMap<>();
         JSONArray newest = available.getJSONArray("firmwares");
+        if ("fm1".equals(device)) {
+            /* Repository snapshot can lag hundreds of Hub releases. This
+             * fetch discovers new IDs and up-to-date versions immediately. */
+            try {
+                JSONObject liveHub = new JSONObject(new String(
+                        download(HUB_CATALOG + "?nocache=" + System.currentTimeMillis(), MAX_CATALOG),
+                        StandardCharsets.UTF_8));
+                newest = mergeHubCatalog(newest, liveHub.getJSONArray("firmwares"));
+            } catch (Exception error) {
+                Log.w(TAG, "Live FW Hub unavailable; using curated GitHub snapshot", error);
+                notifyPage("warning", "", "",
+                    "FW Hub no respondió; se usa el catálogo de respaldo", 0, 0, 0);
+            }
+        }
         for (int i = 0; i < newest.length(); i++) {
             JSONObject f = newest.getJSONObject(i);
             String id = f.optString("id");
             if (validId(id)) remote.put(id, f);
         }
         Set<String> known = new HashSet<>();
-        for (int i = 0; i < original.length(); i++) known.add(original.getJSONObject(i).optString("id"));
-        if (!selected.isEmpty() && !known.contains(selected))
-            throw new IllegalArgumentException("El firmware seleccionado no pertenece al catálogo instalado");
-
-        JSONObject versions = installed(device);
-        int total = selected.isEmpty() ? original.length() : 1;
-        int changed = 0, checked = 0;
-        notifyPage("start", "", "", "Comprobando versiones en el catálogo oficial…", 0, 0, total);
+        List<JSONObject> all = new ArrayList<>();
         for (int i = 0; i < original.length(); i++) {
+            JSONObject item = original.getJSONObject(i);
+            String id = item.optString("id");
+            if (validId(id) && known.add(id)) all.add(item);
+        }
+        /* This was the root cause of missing Hub entries: the updater only
+         * looped over the APK's original fixed list, ignoring every new id
+         * from the up-to-date catalog on GitHub. */
+        for (int i = 0; i < newest.length(); i++) {
+            JSONObject item = newest.getJSONObject(i);
+            String id = item.optString("id");
+            if (validId(id) && known.add(id)) all.add(item);
+        }
+        if (!selected.isEmpty() && !known.contains(selected))
+            throw new IllegalArgumentException("Firmware no encontrado en el catálogo actualizado");
+        notifyCatalog(device, newest);
+        JSONObject versions = installed(device);
+        int total = selected.isEmpty() ? all.size() : 1;
+        int changed = 0, checked = 0;
+        notifyPage("start", "", "", "Comprobando versiones, incluidos firmwares nuevos de FW Hub…", 0, 0, total);
+        for (JSONObject current : all) {
             if (Thread.currentThread().isInterrupted()) return;
-            JSONObject current = original.getJSONObject(i);
             String id = current.optString("id");
             if (!selected.isEmpty() && !selected.equals(id)) continue;
             checked++;
             JSONObject candidate = remote.get(id);
             String label = current.optString("name", id);
-            if (candidate == null || !eligible(current) || !eligible(candidate)) {
+            if (candidate == null || !eligible(current) || !eligible(candidate)
+                    || candidate.optString("package").isEmpty()) {
                 notifyPage("skipped", id, "", label + ": sin actualización compatible", changed, checked, total);
                 continue;
             }
             String version = candidate.optString("version");
             JSONObject existing = versions.optJSONObject(id);
+            /* New remote-only firmware has never been bundled in the APK.
+             * Its own advertised version is NOT evidence of installation. */
             String previous = existing != null
-                    ? existing.optString("version") : current.optString("version");
+                    ? existing.optString("version")
+                    : (originalBundled(original, id) ? current.optString("version") : "");
             String address = candidate.optString("package");
             File installedPackage = new File(folder(device), id + ".fwsc");
             boolean savedFileOk = installedPackage.isFile()
@@ -220,15 +355,34 @@ final class FirmwareUpdater {
                 changed, checked, total);
     }
 
+    private static boolean originalBundled(JSONArray original, String id) {
+        for (int i = 0; i < original.length(); i++) {
+            JSONObject item = original.optJSONObject(i);
+            if (item != null && id.equals(item.optString("id")))
+                return !item.optBoolean("remoteOnly") &&
+                        item.optString("package").startsWith("offline-fw/");
+        }
+        return false;
+    }
+
     private static boolean eligible(JSONObject f) {
         String license = f.optString("license");
-        return !f.optBoolean("byo") && !f.optString("repo").isEmpty()
-                && license.matches("(?i)^(GPL|MIT|MPL|Apache|BSD|ISC|CC0|Unlicense)(?:$|[^A-Za-z].*)")
+        boolean openLicense = license.matches(
+                "(?i)^(GPL|MIT|MPL|Apache|BSD|ISC|CC0|Unlicense)(?:$|[^A-Za-z].*)")
                 && !license.toLowerCase(java.util.Locale.ROOT).contains("source is not published");
+        // New Hub packages are already mirrored and vetted by FW Hub;
+        // unlike APK redistribution this is an explicit user-requested
+        // download from its own public store, not a rehosted binary.
+        boolean hubMirror = validId(f.optString("hub"))
+                && f.optString("repo").startsWith("https://github.com/")
+                && f.optString("package").startsWith("https://thefirmwarehub.com/fw/")
+                && license.isEmpty();
+        return !f.optBoolean("byo") && !f.optString("repo").isEmpty()
+                && (openLicense || hubMirror);
     }
 
     private static void writeManifest(File file, JSONObject manifest) throws Exception {
-        File temp = new File(file.getParentFile(), "installed.json.tmp");
+        File temp = new File(file.getParentFile(), file.getName() + ".tmp");
         try (FileOutputStream out = new FileOutputStream(temp)) {
             out.write(manifest.toString().getBytes(StandardCharsets.UTF_8));
             out.getFD().sync();

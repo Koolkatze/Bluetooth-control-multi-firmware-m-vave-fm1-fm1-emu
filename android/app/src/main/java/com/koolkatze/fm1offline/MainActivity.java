@@ -8,7 +8,6 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
-import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
 import android.content.Intent;
@@ -67,6 +66,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Fully offline FM-1 emulator shell.
@@ -93,6 +93,12 @@ public final class MainActivity extends Activity {
     private MidiManager.DeviceCallback midiDeviceCallback;
     private volatile int midiConnectionGeneration = 0;
     private final List<MidiOutputPort> outputPorts = new ArrayList<>();
+    /* Counters refer to the actual MIDI bytes RECEIVED by Workbench,
+     * not just a Bluetooth pairing status. No allocations in note handler. */
+    private final AtomicLong midiReceived = new AtomicLong();
+    private final AtomicLong midiReceivedBytes = new AtomicLong();
+    private volatile int midiLastStatus = 0;
+    private volatile String midiRouteLabel = "Sin conexión";
     private BluetoothLeScanner scanner;
     private ScanCallback scannerCallback;
     private final Map<String, BluetoothDevice> nearbyMidi = new LinkedHashMap<>();
@@ -700,6 +706,10 @@ public final class MainActivity extends Activity {
         public String installedFirmwareUpdates(String device) {
             return firmwareUpdater == null ? "{}" : firmwareUpdater.installedJson(device);
         }
+        @JavascriptInterface
+        public String installedFirmwareCatalog(String device) {
+            return firmwareUpdater == null ? "{\"entries\":[]}" : firmwareUpdater.catalogJson(device);
+        }
 
         @JavascriptInterface
         public boolean updateFirmwares(String device, String selectedId) {
@@ -897,6 +907,8 @@ public final class MainActivity extends Activity {
         }
         int scanIndex = labels.size();
         labels.add("Buscar MIDI Bluetooth (BLE)");
+        int diagnosticIndex = labels.size();
+        labels.add("Diagnóstico: recepción MIDI y conexión");
         int disconnectIndex = labels.size();
         labels.add("Desconectar MIDI");
         labels.add("Audio externo: selecciona salida en Android");
@@ -905,6 +917,7 @@ public final class MainActivity extends Activity {
                 .setItems(labels.toArray(new String[0]), (dialog, item) -> {
                     if (item < devices.size()) openMidiDevice(devices.get(item));
                     else if (item == scanIndex) startBleScan();
+                    else if (item == diagnosticIndex) showMidiDiagnostics();
                     else if (item == disconnectIndex) closeMidi();
                     else show("Empareja el altavoz Bluetooth o conecta un DAC USB-C desde Android.");
                 })
@@ -912,20 +925,43 @@ public final class MainActivity extends Activity {
                 .show();
     }
 
+    private void showMidiDiagnostics() {
+        String text = "Ruta: " + midiRouteLabel
+                + "\nEstado: " + (midiDevice == null ? "sin sesión MIDI" : "sesión abierta")
+                + "\nMensajes MIDI recibidos: " + midiReceived.get()
+                + "\nBytes recibidos: " + midiReceivedBytes.get()
+                + "\nÚltimo status: 0x" + Integer.toHexString(midiLastStatus).toUpperCase(java.util.Locale.ROOT)
+                + "\n\nCTL-1: GLO → Setup MIDI muestra USB/Bluetooth in/out."
+                + "\nEn Android utiliza MIDI → Buscar MIDI Bluetooth (BLE), NO el emparejamiento de Ajustes."
+                + "\nSi los contadores del FM-1 suben y aquí no llegan mensajes, el enlace MIDI sigue sin funcionar.";
+        new AlertDialog.Builder(this).setTitle("Diagnóstico MIDI del Workbench")
+                .setMessage(text).setPositiveButton("Cerrar", null).show();
+    }
+
     private void openMidiDevice(MidiDeviceInfo info) {
         if (midiManager == null) return;
+        closeMidi(); // invalidate previous callbacks BEFORE opening a new port
+        final int request = midiConnectionGeneration;
+        midiRouteLabel = "Abriendo dispositivo USB/MIDI #" + info.getId();
         midiManager.openDevice(info, device -> {
+            if (request != midiConnectionGeneration) {
+                if (device != null) try { device.close(); } catch (IOException ignored) {}
+                return; // outdated response from a previous connection
+            }
             if (device == null) {
+                midiRouteLabel = "Error abriendo USB/MIDI #" + info.getId();
                 show("No se pudo abrir el dispositivo MIDI");
                 return;
             }
-            connectMidi(device);
+            connectMidi(device, "USB/MIDI #" + info.getId());
         }, ui);
     }
 
-    private void connectMidi(MidiDevice device) {
-        closeMidi();
+    private void connectMidi(MidiDevice device, String name) {
+        // Caller has closed the previous session. Closing here would invalidate
+        // an asynchronous BLE open callback which just succeeded.
         midiDevice = device;
+        midiRouteLabel = name;
         final int generation = midiConnectionGeneration;
         int connected = 0;
         for (int i = 0; i < device.getInfo().getOutputPortCount(); i++) {
@@ -938,6 +974,9 @@ public final class MainActivity extends Activity {
                             count < 1 || count > 4096 || offset < 0 ||
                             offset > bytes.length || count > bytes.length - offset) return;
                     byte[] copy = Arrays.copyOfRange(bytes, offset, offset + count);
+                    midiReceived.incrementAndGet();
+                    midiReceivedBytes.addAndGet(count);
+                    midiLastStatus = copy[0] & 255;
                     if (nativeActive && NativeSynth.AVAILABLE) {
                         // Native MIDI should never queue behind JavaScript/UI painting.
                         deliverMidi(copy);
@@ -954,7 +993,8 @@ public final class MainActivity extends Activity {
             show("El dispositivo no expone salidas MIDI");
         } else {
             midiButton.setText("MIDI ✓");
-            show("MIDI conectado: " + connected + " puerto(s)");
+            show("MIDI listo en " + name + ": " + connected +
+                 " puerto(s). Toca una tecla y consulta Diagnóstico MIDI para comprobar recepción.");
         }
     }
 
@@ -998,6 +1038,7 @@ public final class MainActivity extends Activity {
             try { midiDevice.close(); } catch (IOException ignored) {}
             midiDevice = null;
         }
+        midiRouteLabel = "Sin conexión";
         if (midiButton != null) midiButton.setText("MIDI");
     }
 
@@ -1024,7 +1065,21 @@ public final class MainActivity extends Activity {
                 if (device == null) return;
                 try {
                     String key = device.getAddress();
-                    ui.post(() -> nearbyMidi.put(key, device));
+                    String label = null;
+                    try { label = device.getName(); } catch (SecurityException ignored) {}
+                    if ((label == null || label.isEmpty()) && result.getScanRecord() != null)
+                        label = result.getScanRecord().getDeviceName();
+                    /* The FM-1 BLE stack can advertise the MIDI service in a
+                     * scan-response frame instead of its main advertisement.
+                     * A strict service-UUID ScanFilter dropped such devices
+                     * before Android could open their GATT MIDI service. */
+                    boolean midiService = result.getScanRecord() != null &&
+                            result.getScanRecord().getServiceUuids() != null &&
+                            result.getScanRecord().getServiceUuids().contains(new ParcelUuid(BLE_MIDI_UUID));
+                    boolean fm1 = label != null && (
+                            label.equalsIgnoreCase("FM-1") ||
+                            label.toLowerCase(java.util.Locale.ROOT).contains("midi"));
+                    if (midiService || fm1) ui.post(() -> nearbyMidi.put(key, device));
                 } catch (SecurityException ignored) {}
             }
 
@@ -1037,11 +1092,12 @@ public final class MainActivity extends Activity {
             }
         };
         try {
-            ScanFilter midiFilter = new ScanFilter.Builder()
-                    .setServiceUuid(new ParcelUuid(BLE_MIDI_UUID)).build();
             ScanSettings options = new ScanSettings.Builder()
                     .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build();
-            scanner.startScan(Collections.singletonList(midiFilter), options, scannerCallback);
+            // Do not require the 128-bit MIDI UUID in the initial advertisement.
+            // Filter candidates in onScanResult instead; CTL-1/Felucca may
+            // expose the service only after the scan response or GATT discovery.
+            scanner.startScan(null, options, scannerCallback);
             show("Buscando controladores Bluetooth MIDI…");
             ui.postDelayed(this::showBleResults, 9000);
         } catch (SecurityException | IllegalStateException ex) {
@@ -1064,7 +1120,7 @@ public final class MainActivity extends Activity {
         stopBleScan();
         List<BluetoothDevice> choices = new ArrayList<>(nearbyMidi.values());
         if (choices.isEmpty()) {
-            show("No se encontró ningún dispositivo Bluetooth MIDI. Enciende CTL-1 BLE MIDI.");
+            show("FM-1 no encontrado: CTL-1 GLO → Setup Bluetooth (tercera página) → activar con KNOB 4. Conecta desde esta app, no desde Ajustes Bluetooth.");
             return;
         }
         List<String> labels = new ArrayList<>();
@@ -1079,9 +1135,20 @@ public final class MainActivity extends Activity {
                 .setItems(labels.toArray(new String[0]), (dialog, which) -> {
                     if (!canUseBluetooth()) return;
                     BluetoothDevice chosen = choices.get(which);
+                    closeMidi(); // release stale connection before re-opening GATT
+                    final int request = midiConnectionGeneration;
+                    midiRouteLabel = "Conectando BLE MIDI…";
                     midiManager.openBluetoothDevice(chosen, device -> {
-                        if (device == null) show("No se pudo conectar por Bluetooth MIDI");
-                        else connectMidi(device);
+                        if (request != midiConnectionGeneration) {
+                            if (device != null) try { device.close(); } catch (IOException ignored) {}
+                            return;
+                        }
+                        if (device == null) {
+                            midiRouteLabel = "Falló BLE MIDI";
+                            show("No se pudo abrir BLE MIDI. Comprueba GLO → Setup Bluetooth y reinicia CTL-1.");
+                        } else {
+                            connectMidi(device, "Bluetooth MIDI • " + chosen.getAddress());
+                        }
                     }, ui);
                 })
                 .setNegativeButton("Cancelar", null)
