@@ -230,6 +230,7 @@ def blackhole_extensions(root: Path) -> dict[Path, str]:
         ],
         root / "app" / "fm1.toml": [
             ('name = "CTL"', 'name = "blackhole"'),
+            ('id_prefix = "FM-1_6"', 'id_prefix = "FM-1_9"'),
             ('usb_manufacturer = "CTL-1"', 'usb_manufacturer = "Blackhole Remote"'),
             ('usb_product = "CTL-1 FM-1"', 'usb_product = "Blackhole MIDI FM-1"'),
             ('tagline = "A MIDI controller for the FM-1"',
