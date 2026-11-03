@@ -183,6 +183,17 @@ jobs:
           This Android APK includes offline FM-1 firmware emulation, native
           Rust/AAudio synthesis and MIDI USB/BLE support.
 
+          In v0.2.13, the physical FM-1 firmware installer detects
+          USB-MIDI automatically: both controllers already connected
+          and a newly plugged USB device are scanned. No device picker
+          appears. Workbench verifies the physical identity through
+          read-only SysEx before showing the custom firmware risk
+          confirmation. Search can be cancelled without flashing.
+          Unrecognized/ambiguous devices never trigger a write; if
+          Android detects USB but no MIDI interface, the user sees a
+          cable/OTG/MIDI permissions diagnostic. Actual device flashing
+          remains experimental and must be confirmed by the user.
+
           In v0.2.12, Firmware adds "Instalar firmware seleccionado en FM-1",
           separate from updating emulator packages. Every selected FM-1
           compatible .fwsc can be staged, including custom imports.
