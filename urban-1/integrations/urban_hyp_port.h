@@ -767,7 +767,6 @@ static void urban_port_init(uint32_t seed) {
      * existing audio/transport tests remain unchanged; dedicated host
      * regression URBAN_SPLASH_TEST runs the same production UI path. */
 #if !defined(EN_HOST) || defined(URBAN_SPLASH_TEST)
-    urban_splash_prepare();
     p->splash_phase=1u;
     p->splash_transition_ms=plat_ms();
 #endif
