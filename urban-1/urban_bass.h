@@ -231,21 +231,9 @@ static UrbanBassStep urban_bass_bar_score(const UrbanSong *s,
     unsigned sub=t->subgenre%4u;
     uint16_t mask=urban_bass_bar_mask(t,section,bar);
     const unsigned lofi=(t->genre%URBAN_GENRES==3u && sub==3u);
-    if(lofi) {
-        /* Low, short root/fifth bass in 4 cosy flavours. Extra beat-3
-         * attacks are selected as a proper 4-bar motif, not random
-         * 16th-note flurries or slide-heavy trap bass. */
-        static const uint16_t bass[4][4]={
-            {0x0101u,0x0001u,0x0101u,0x0101u},
-            {0x0001u,0x0101u,0x0001u,0x0101u},
-            {0x0101u,0x0101u,0x0101u,0x0081u},
-            {0x0001u,0x0001u,0x0101u,0x0001u}
-        };
-        mask=bass[urban_lofi_mood(s)][bar%4u];
-        if(section==URBAN_INTRO || section==URBAN_OUTRO ||
-           section==URBAN_BRIDGE || section==URBAN_BREAK)
-            mask&=0x0001u;
-    }
+    /* Keep the same four-bar authored mask used by the track sequencer
+     * and native tests. Flavor variations affect live articulation and
+     * underlying drum/keys arrangements, not phantom bass trigger grids. */
     if(!(mask&(1u<<(step%16u)))) {
         n.velocity=0u;n.glide=0u;return n;
     }
