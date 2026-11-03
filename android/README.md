@@ -169,9 +169,17 @@ nunca por Bluetooth: se exige un cable de datos **USB-MIDI**.
 **«Actualizar seleccionado» y «Actualizar todos» solo actualizan la
 biblioteca del emulador**, no escriben en el hardware.
 
+La detección USB es **automática**: tras pulsar instalar, Workbench
+consulta los dispositivos MIDI USB ya conectados y espera conexiones
+nuevas durante un período limitado. Solo acepta la respuesta de
+identidad de un FM-1 real. Se puede cancelar la búsqueda sin escribir
+firmware. Si Android reconoce USB pero no lo expone como dispositivo
+MIDI con entrada y salida, indica qué comprobar (cable USB de datos,
+OTG, permisos USB y firmware físico).
+
 El flujo comprueba el SHA-256 del archivo, identidad del paquete
 **FM-1**, cargador Felucca compatible y respuesta del dispositivo USB.
-Elige el FM-1 conectado; la app te enseña el firmware elegido y el
+Workbench detecta el FM-1 automáticamente; la app te enseña el firmware elegido y el
 firmware físico detectado, y pregunta: **«¿Seguro que quieres instalar
 firmware personalizado? ... bajo tu propia responsabilidad.»**
 **Cancelar** no inicia la escritura. Confirmar comienza la transferencia
