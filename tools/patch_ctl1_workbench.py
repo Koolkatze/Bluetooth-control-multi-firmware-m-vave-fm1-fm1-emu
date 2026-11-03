@@ -187,7 +187,10 @@ static void wb_remote_input(void)
         "#if WB_REMOTE_ONLY\n"
         "    input();\n"
         "    dev_scan();\n"
-        "    bh_remote_frame();\n"
+        "    if ((int32_t)(plat_ms() - bh_boot_splash_until) >= 0)\n"
+        "        bh_remote_frame();\n"
+        "    else\n"
+        "        bh_remote_leds();\n"
         "    ui.frame++;\n"
         "#else\n"
         "    input();"
@@ -207,7 +210,9 @@ static void wb_remote_input(void)
     )
     swap(
         "    lcd_fill(0, 0, 240, 240, K_BG);",
-        "    lcd_fill(0, 0, 240, 240, BH_BG);"
+        "    lcd_fill(0, 0, 240, 240, BH_BG);\n"
+        "    bh_boot_splash_until = plat_ms() + 1600u;\n"
+        "    bh_remote_splash();"
     )
     return text
 
