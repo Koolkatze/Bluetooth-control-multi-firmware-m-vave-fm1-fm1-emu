@@ -95,6 +95,39 @@ int main(void) {
     urban_rec_stop(&cat);
     urban_rec_overdub(&cat);
     assert(cat.count==1u&&cat.track==6u);
+    /* PAUSE must be non-destructive: no recorder reset is triggered.
+     * SONG/TRACK SAVE or genre/subgenre change explicitly resets the
+     * entire saved take, including program, quant, events and cursors. */
+    uint16_t saved_count=cat.count;
+    unsigned saved_program=cat.program;
+    urban_rec_stop(&cat); /* PAUSE finalizes overdub but keeps its notes */
+    assert(cat.state==UR_REC_EDIT);
+    assert(cat.count==saved_count&&cat.program==saved_program);
+    urban_rec_reset(&cat);
+    assert(cat.state==UR_REC_OFF&&cat.count==0u&&cat.position==0u);
+    assert(cat.pass==0u&&!cat.overdub&&!cat.play_cursor&&!cat.edit_cursor);
+    assert(cat.program==32u&&cat.track==4u&&cat.bars==4u&&cat.quant==3u);
+    assert(cat.octave==0&&cat.mod_page==0u);
+    uint16_t reset_found[4]={0};
+    assert(urban_rec_events_at(&cat,0u,reset_found,4u)==0u);
+    /* Native REC pitches (bass, lead, chords) are a separate bounded
+     * active set. A PAUSE must drain every sounding pitch, even when
+     * its corresponding loop NOTE_OFF was never scheduled. */
+    UrbanRecVoices voices;
+    urban_rec_voices_clear(&voices);
+    assert(urban_rec_voices_count(&voices)==0u);
+    urban_rec_voice_set(&voices,0u,60u,1);
+    urban_rec_voice_set(&voices,0u,60u,1);
+    urban_rec_voice_set(&voices,1u,127u,1);
+    urban_rec_voice_set(&voices,2u,24u,1);
+    assert(urban_rec_voices_count(&voices)==3u);
+    assert(urban_rec_voice_active(&voices,0u,60u));
+    assert(urban_rec_voice_active(&voices,1u,127u));
+    assert(!urban_rec_voice_active(&voices,3u,60u));
+    urban_rec_voice_set(&voices,0u,60u,0);
+    assert(urban_rec_voices_count(&voices)==2u);
+    urban_rec_voices_clear(&voices);
+    assert(urban_rec_voices_count(&voices)==0u);
     puts("URBAN-1 recorder: looping 32nd grid, quant OFF/4/8/16/32, poly events, overdub, automation and bounded events PASS");
     return 0;
 }
