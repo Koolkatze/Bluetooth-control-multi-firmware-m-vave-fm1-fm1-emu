@@ -123,10 +123,10 @@ async function prepareCatalog(spec) {
     const firmware = {
       id: "urban1",
       name: "URBAN-1",
-      version: "0.1.0 experimental",
+      version: process.env.URBAN1_VERSION || "0.4.10",
       author: "Glitch AR / URBAN-1 contributors (HYP-1-based)",
       license: "GPL-3.0",
-      about: "Experimental generative urban-music firmware. Song and Tracks pages; eight song sections, genre-aware drums and bass. Current HYP-1 DSP integration has fewer simultaneous sound engines than the eight logical tracks. Audio/performance on Android depends on the emulator.",
+      about: "URBAN-1 v0.4.10 generative firmware: recorder, overdub, ENV/LFO, tape transport, Jazz DSP, numerical master LP/HP 0..100. Experimental; additional logical tracks do not all have separate HYP synths.",
       repo: "https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/tree/feature/urban-1/urban-1",
       package: "offline-fw/urban1.fwsc"
     };
