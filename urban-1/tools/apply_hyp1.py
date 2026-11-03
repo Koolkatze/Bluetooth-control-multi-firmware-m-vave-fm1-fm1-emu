@@ -64,6 +64,8 @@ def main() -> None:
                     root / "firmware/src/app/urban_tape_transport.h")
     shutil.copyfile(HERE / "integrations/urban_lead_lfo_engine.h",
                     root / "firmware/src/app/urban_lead_lfo_engine.h")
+    shutil.copyfile(HERE / "integrations/urban_filter_engine.h",
+                    root / "firmware/src/app/urban_filter_engine.h")
     # HYP-1's Break kit applies random ghost kicks/snares and 32nd-roll
     # retriggers *after* reading the six authored pattern lanes. These
     # unscored hits sound like glitches in URBAN-1, where all fills and
@@ -139,6 +141,24 @@ def main() -> None:
         '        echoes(urban_echo_bus_input(mixl[j],mixr[j],esend[j],eg,throw_amt),'
         ' &el, &er, &xl, &xr);\n'
         '        urban_echo_tap_meter(el,er,eg,throw_amt);')
+    # Master filter knobs: unlike HYP's original ON/OFF LP/HP shortcuts,
+    # numerical 0..100 sends now smoothly change the actual cutoffs.
+    # The original keyboard LP/HP performance buttons remain optional
+    # full-depth overrides and revert to the knob level on release.
+    replace_once(dsp,
+        'static void fx_control(uint32_t n)',
+        '#include "../app/urban_filter_engine.h"\n'
+        'static void fx_control(uint32_t n)')
+    replace_once(dsp,
+        '    lp_amt = fm_clampf(lp_amt + (m >> FX_LP & 1u ? dt * 2.0f : -dt * 6.0f), 0.0f, 1.0f);   /* in 0.5 s, out in 0.17 */\n'
+        '    hp_amt = fm_clampf(hp_amt + (m >> FX_HP & 1u ? dt * 2.0f : -dt * 6.0f), 0.0f, 1.0f);',
+        '    { uint32_t requested = urban_filter_requested;\n'
+        '      urban_filter_applied=requested;\n'
+        '      lp_amt=urban_filter_slew(lp_amt,urban_filter_target(requested&255u,'
+        ' (m >> FX_LP)&1u),dt);\n'
+        '      hp_amt=urban_filter_slew(hp_amt,urban_filter_target((requested>>8u)&255u,'
+        ' (m >> FX_HP)&1u),dt);\n'
+        '      urban_filter_processed_frames+=n; }')
     # New monophonic procedural SFX audio voice: 10 modelled transients.
     # The engine lives inside HYP's DSP mix; no stolen drum/lead lanes.
     # Include after the mixer buffers and sine oscillator have been defined.
@@ -266,6 +286,10 @@ def main() -> None:
         '    else if (!strcmp(what, "urbanview")) got = urban_port.editor.view;\n'
         '    else if (!strcmp(what, "urbantarget")) got = urban_port.editor.target;\n'
         '    else if (!strcmp(what, "urbanbank")) got = urban_port.editor.bank;\n'
+        '    else if (!strcmp(what, "urbanfilterlp")) got = urban_port.lp_filter;\n'
+        '    else if (!strcmp(what, "urbanfilterhp")) got = urban_port.hp_filter;\n'
+        '    else if (!strcmp(what, "urbanfilterdsp")) got = urban_filter_applied;\n'
+        '    else if (!strcmp(what, "urbanfilterframes")) got = urban_filter_processed_frames;\n'
         '    else if (!strcmp(what, "urbanleadlfoframes")) got = urban_lead_lfo_frames;\n'
         '    else if (!strcmp(what, "urbantapestartframes")) got = urban_tape_start_frames;\n'
         '    else if (!strcmp(what, "urbantapestarts")) got = urban_tape_start_completed;\n'
