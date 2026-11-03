@@ -1,7 +1,7 @@
 name: URBAN-1 host synthesis smoke test
 on:
   push:
-    branches: [feature/urban-1]
+    branches: [feature/urban-1, feature/urban-rec-full-instruments]
     paths:
       - 'urban-1/**'
       - '.github/workflows/urban-1.yml'
