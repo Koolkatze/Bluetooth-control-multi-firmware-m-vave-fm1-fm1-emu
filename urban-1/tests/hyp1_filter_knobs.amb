@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Master Low Pass & High Pass are genuine 0..100 numerical controls
+# and reach the DSP's continuous cutoff independently (not FX flags).
+expect urbanfilterlp 0
+expect urbanfilterhp 0
+expect urbanfilterdsp 0
+tap FX
+expect urbanview 1
+spin PRESET 2
+expect urbanbank 2
+spin K1 55
+expect urbanfilterlp 55
+spin K2 40
+expect urbanfilterhp 40
+expect urbanfxmask 0
+tap PLAY
+wait 900
+expect urbanfilterframes >1000
+# Combined atomic DSP filter request: 55 + (40 << 8).
+expect urbanfilterdsp 10295
+shot fx-numeric-lp-hp.png
+spin K1 100
+expect urbanfilterlp 100
+spin K2 100
+expect urbanfilterhp 100
+wait 150
+expect urbanfilterdsp 25700
+spin K1 -1000
+spin K2 -1000
+expect urbanfilterlp 0
+expect urbanfilterhp 0
+wait 150
+expect urbanfilterdsp 0
+tap PLAY
+expect playing 0
