@@ -11,6 +11,27 @@
 #include <stdint.h>
 #define UR_REC_MAX_EVENTS 512u
 #define UR_REC_TICKS_BAR 32u
+/* 16 bass + 16 lead + 16 pad + 2 modelled bass + 5 modelled lead +
+ * 5 modelled pad programs. These are existing, audible HYP/Jazz DSPs. */
+#define UR_REC_PROGRAM_COUNT 60u
+typedef struct {
+    uint8_t track; /* URBAN logical track: 2 Bass / 3 Lead / 4 Chords */
+    uint8_t patch; /* existing HYP program, 0..15; unused in Jazz mode */
+    uint8_t jazz;  /* 0 native, 1..5 modelled lead/pad, 1..2 bass */
+} UrbanRecInstrument;
+static UrbanRecInstrument urban_rec_instrument(unsigned program) {
+    unsigned index=program%UR_REC_PROGRAM_COUNT;
+    UrbanRecInstrument out;
+    out.jazz=0u;out.patch=0u;
+    if(index<16u) {out.track=2u;out.patch=(uint8_t)index;}
+    else if(index<32u) {out.track=3u;out.patch=(uint8_t)(index-16u);}
+    else if(index<48u) {out.track=4u;out.patch=(uint8_t)(index-32u);}
+    else if(index<50u) {out.track=2u;out.jazz=(uint8_t)(index-47u);}
+    else if(index<55u) {out.track=3u;out.jazz=(uint8_t)(index-49u);}
+    else {out.track=4u;out.jazz=(uint8_t)(index-54u);}
+    return out;
+}
+
 enum {UR_REC_OFF,UR_REC_ARM,UR_REC_RECORD,UR_REC_EDIT};
 enum {UR_REC_NOTE_OFF,UR_REC_NOTE_ON,UR_REC_PARAM};
 typedef struct {
@@ -21,13 +42,15 @@ typedef struct {
     UrbanRecEvent event[UR_REC_MAX_EVENTS];
     uint16_t count,position,pass,play_cursor,edit_cursor;
     uint8_t state,track,bars,quant,overdub,mod_page;
+    uint8_t program; /* catalog selection; keeps synthesis and MIDI routing in sync */
     uint8_t held[27];
     uint8_t edit_note,edit_velocity;
 } UrbanRecorder;
 static void urban_rec_init(UrbanRecorder *r) {
     for(unsigned i=0;i<sizeof(*r);i++)((uint8_t *)r)[i]=0u;
     r->state=UR_REC_OFF;
-    r->track=4u; /* poly chord / keyboard */
+    r->program=32u; /* Rhodes, first polyphonic HYP pad instrument */
+    r->track=urban_rec_instrument(r->program).track;
     r->bars=4u;r->quant=3u; /* quant=3 is 1/16 */
     r->edit_note=60u;r->edit_velocity=110u;
 }
@@ -63,6 +86,13 @@ static void urban_rec_overdub(UrbanRecorder *r) {
 static void urban_rec_stop(UrbanRecorder *r) {
     r->state=UR_REC_EDIT;
     for(unsigned i=0u;i<27u;i++)r->held[i]=0u;
+}
+static void urban_rec_set_program(UrbanRecorder *r,int delta) {
+    int index=(int)r->program+delta%(int)UR_REC_PROGRAM_COUNT;
+    if(index<0)index+=(int)UR_REC_PROGRAM_COUNT;
+    if(index>=(int)UR_REC_PROGRAM_COUNT)index-=(int)UR_REC_PROGRAM_COUNT;
+    r->program=(uint8_t)index;
+    r->track=urban_rec_instrument(r->program).track;
 }
 static void urban_rec_set_bars(UrbanRecorder *r,int delta) {
     static const uint8_t lengths[4]={1u,2u,4u,8u};
