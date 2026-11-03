@@ -30,6 +30,22 @@ jobs:
       - name: Checkout emulator source
         uses: actions/checkout@v4
 
+      - name: Fetch current FW Hub catalogue for Workbench
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Import every current FW Hub firmware for Workbench
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node tools/hub_catalog.mjs
+          node --check tools/hub_catalog.mjs
+          node --check tools/package_offline_android.mjs
+          node --check tools/check_offline_android.mjs
+          node --input-type=module --check < web/main.js
+          node -e 'const c=require("./web/firmwares.json");const u=c.firmwares.find(x=>x.id==="urban1");if(!u||!u.package||!u.package.includes("urban1-firmware-v")) process.exit(1);console.log("Current Hub entries:",c.firmwares.length,"URBAN:",u.version)'
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -71,6 +87,15 @@ jobs:
           test -s android/app/src/main/jniLibs/arm64-v8a/libfm1_android.so
           test -s android/app/src/main/jniLibs/x86_64/libfm1_android.so
           node tools/check_offline_android.mjs android/app/src/main/assets/site
+          node - <<'NODE'
+          const c = require("./android/app/src/main/assets/site/firmwares.json");
+          const u = c.firmwares.find(f => f.id === "urban1");
+          if (!u || !u.package?.startsWith("offline-fw/"))
+            throw Error("URBAN-1 must be packaged as a real offline .fwsc in Workbench");
+          if (c.firmwares.length < 97)
+            throw Error("Workbench must retain all existing FM-1 Hub entries");
+          console.log("Workbench entries:", c.firmwares.length, "including URBAN-1", u.version);
+          NODE
 
       - name: Validate local package references and offline manifest
         run: node tools/check_offline_android.mjs android/app/src/main/assets/site
@@ -108,14 +133,28 @@ jobs:
           clean_version="${version%-native}"
           tag="v${clean_version}"
           mkdir -p dist
-          apk="M-VAVE-FM1-Firmware-bundle-${tag}.apk"
+          apk="FM-1-Workbench-${tag}.apk"
           cp android/app/build/outputs/apk/debug/app-debug.apk "dist/$apk"
           sha256sum "dist/$apk"
           cat > dist/notes.md <<EOF
-          # M-VAVE FM1: Firmware bundle — ${tag} (experimental)
+          # FM-1 Workbench — ${tag} (experimental)
 
           This Android APK includes offline FM-1 firmware emulation, native
           Rust/AAudio synthesis and MIDI USB/BLE support.
+
+          In v0.2.8, Workbench (com.koolkatze.fm1offline) remains ONE
+          standalone application with URBAN-1 inside its firmware catalog,
+          not a separate URBAN-1 APK. BLE MIDI now discovers FM-1 adverts
+          even when the MIDI UUID is absent from the first advertising frame
+          and connects with stale session protection. MIDI Diagnostics
+          shows the actual count of inbound MIDI messages/bytes and route.
+
+          The firmware tab imports the live FM-1 Firmware Hub catalog.
+          Previously missing Hub entries are discoverable, including
+          link-only cards that cannot be mirrored legally. Native Update
+          All can download new open-source firmware IDs; the catalog
+          persists across Workbench restarts. URBAN-1 is verified as
+          an installed offline .fwsc in the APK before publishing.
 
           In v0.2.7, fixes a firmware-update persistence issue:
           the original APK's bundled catalog could display URBAN-1 v0.3.4
@@ -159,7 +198,7 @@ jobs:
             gh release upload "$tag" "dist/$apk" --repo "$GITHUB_REPOSITORY" --clobber
           else
             gh release create "$tag" "dist/$apk" --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" --title "M-VAVE FM1: Firmware bundle — $tag" \
+              --target "$GITHUB_SHA" --title "FM-1 Workbench — $tag" \
               --notes-file dist/notes.md --prerelease
           fi
 
