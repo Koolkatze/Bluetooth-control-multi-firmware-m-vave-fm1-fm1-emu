@@ -358,7 +358,12 @@ const physicalInstallRow = document.getElementById("physical-firmware-install-ro
 const physicalInstallStatus = document.getElementById("physical-firmware-install-status");
 const physicalInstallSupported = DEVICE === "fm1" &&
   typeof nativeWindow.FM1Android?.preparePhysicalFirmware === "function";
-if (physicalInstallRow) physicalInstallRow.hidden = !physicalInstallSupported;
+if (physicalInstallRow) {
+  physicalInstallRow.hidden = !physicalInstallSupported;
+  // An author .row {display:flex} rule must not override the HTML hidden
+  // attribute on the browser-only page.
+  physicalInstallRow.style.display = physicalInstallSupported ? "" : "none";
+}
 const updateDevice = DEVICE === "smk37" ? "smk37" : "fm1";
 let updatingFirmwares = false;
 let preparingPhysicalFirmware = false;
@@ -394,7 +399,7 @@ function updateButtonsState() {
   if (installSelectedPhysicalBtn) {
     installSelectedPhysicalBtn.disabled = !physicalInstallSupported || updatingFirmwares || physicalFirmwareBusy;
   }
-  if (fwSel) fwSel.disabled = preparingPhysicalFirmware;
+  if (fwSel) fwSel.disabled = physicalFirmwareBusy;
 }
 async function loadInstalledUpdate(f) {
   const entry = installedUpdates[f.id];
@@ -685,8 +690,9 @@ async function installSelectedPhysicalFirmware() {
     const bytes = loaded.bytes instanceof Uint8Array ? loaded.bytes : new Uint8Array(loaded.bytes);
     if (bytes.byteLength < 1024 || bytes.byteLength > 15 * 1024 * 1024)
       throw new Error("El firmware seleccionado tiene un tamaño no admitido (1 KB a 15 MB).");
-    if (appFromPackage(bytes).length < 512)
-      throw new Error("El paquete .fwsc seleccionado no contiene un firmware ejecutable válido.");
+    // Do not reject a valid FM-1 physical package merely because the
+    // browser emulator cannot execute its custom firmware variant.
+    // Native Android checks product markers, loader, SHA and USB identity.
     physicalInstallStatus.textContent = "Calculando SHA-256 antes de instalar…";
     const sha256 = await packageHash(bytes);
     const android = nativeWindow.FM1Android;
