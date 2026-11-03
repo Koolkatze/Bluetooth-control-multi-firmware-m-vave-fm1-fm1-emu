@@ -1,5 +1,11 @@
 # URBAN-1 — experimental generative groovebox for M-VAVE FM-1
 
+**v0.4.13 — pixel-art nine-tailed Kitsune boot cover with glitch:**
+ 
+- The original user-approved 1672×941 neo-Tokyo pixel-art illustration is cropped to showcase the orange nine-tailed fox and skyline on FM-1's **240×240 LCD**. It is encoded as a fixed 120×120, 16-color RGB565 palette image; 2× nearest-neighbor scaling avoids runtime PNG decoding or APK changes. The artwork source is in `urban-1/integrations/urban_splash_art.h`, and the bounded renderer is `urban_splash_engine.h`.
+- Each boot begins with a roughly **180 ms glitch-in** (horizontal digital tearing and thin neon interference lines), followed by an unmoving cover reading `URBAN-1 / PRESS PLAY`. A key or panel button initiates a roughly **220 ms glitch-out** into Song Mode. **PLAY** also starts playback after the transition; another input exits to the stopped Song page. The cover is redrawn only on changing transition steps, not at every 60 Hz UI frame.
+- The cover and glitch live inside the **firmware screen**, not the Android app's launcher/splash activity. Other firmware startup or Android app exits are not intercepted. Host regressions check actual LCD pixels, still-frame stability and PLAY/HOME transitions; device testing remains experimental.
+ 
 **v0.4.12 — 78 REC/Piano-roll instruments, working keyboard audition and OCT+/-:**
 
 - **OCT+ / OCT−** on the physical FM-1 panel transpose all 27 REC keys over **-3 to +3 octaves**. The LCD displays `OCT +0`, `OCT +1`, etc. The MIDI recorder saves actual transposed note numbers; previously recorded notes are never retuned by subsequent octave changes. Live lead/synth/acoustic model and Sound FX audition now works even with STOPPED song transport, independently of silent arrangement sections. A recorded loop stays audible after leaving REC.
