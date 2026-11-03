@@ -162,7 +162,7 @@ static void wb_remote_input(void)
     }
 }
 """
-    swap(anchor, anchor + "\n" + helpers)
+    swap(anchor, anchor + "\n" + helpers + '\n#include "blackhole_remote_display.inc"\n')
 
     # This is a DEDICATED controller mode. The original CTL-1 input loop
     # generates its own Start/Stop, sustain, CC, program changes and notes.
@@ -179,7 +179,139 @@ static void wb_remote_input(void)
         "}\n\n/* ------------------------------------------------------------- screen --- */",
         "#endif\n}\n\n/* ------------------------------------------------------------- screen --- */"
     )
+    # The remote screen is wholly separate from CTL-1's six pages and
+    # redraws on physical key presses / connection / ADC changes.
+    swap(
+        "void ui_frame(void)\n{\n    input();",
+        "void ui_frame(void)\n{\n"
+        "#if WB_REMOTE_ONLY\n"
+        "    input();\n"
+        "    dev_scan();\n"
+        "    bh_remote_frame();\n"
+        "    ui.frame++;\n"
+        "#else\n"
+        "    input();"
+    )
+    swap(
+        "    ui.frame++;\n}\n\n/* the Bluetooth page scans",
+        "    ui.frame++;\n"
+        "#endif\n"
+        "}\n\n/* the Bluetooth page scans"
+    )
+    swap(
+        "    ui.touched = -1;\n    ui.master_sent = -1;",
+        "    ui.touched = -1;\n"
+        "    bh_top_signature = 0xffffffffu;\n"
+        "    bh_key_signature = 0xffffffffu;\n"
+        "    ui.master_sent = -1;"
+    )
     return text
+
+
+
+def blackhole_extensions(root: Path) -> dict[Path, str]:
+    """Validate all upstream base/CTL-1 revisions before mutating them.
+
+    One Workbench MIDI profile is kept (CC102=42, channel 16), so Android
+    remains compatible. The new name, splash, 240x240 screen and calibrated
+    percentage estimate live exclusively in the physical firmware build.
+    """
+    edits: dict[Path, list[tuple[str, str]]] = {
+        root / "app" / "app.h": [
+            ('#define APP_NAME "CTL-1"', '#define APP_NAME "BLACKHOLE REMOTE"'),
+            ('#define APP_TAGLINE "A MIDI controller for the FM-1"',
+             '#define APP_TAGLINE "MIDI controller"'),
+            ('#define APP_BLE_AT_BOOT (!proj.ble_off)',
+             '#define APP_BLE_AT_BOOT 1 /* Blackhole Remote advertises at every boot */'),
+        ],
+        root / "app" / "fm1.toml": [
+            ('name = "CTL"', 'name = "blackhole"'),
+            ('usb_manufacturer = "CTL-1"', 'usb_manufacturer = "Blackhole Remote"'),
+            ('usb_product = "CTL-1 FM-1"', 'usb_product = "Blackhole MIDI FM-1"'),
+            ('tagline = "A MIDI controller for the FM-1"',
+             'tagline = "Blackhole Remote: MIDI controller"'),
+            ('repo = "https://github.com/charlesvestal/fm1-ctl"',
+             'repo = "https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu"'),
+        ],
+        root / "app" / "app.c": [
+            (
+                'void app_splash(void)                    /* ui.c\'s paper and ink */\n'
+                '{\n'
+                '    lcd_fill(0, 0, 240, 240, RGB(251, 248, 241));\n'
+                '    cv_begin(240, 64, RGB(251, 248, 241));\n'
+                '    {\n'
+                '        int32_t w = text_w(&FONT_L, APP_NAME);\n'
+                '        cv_text((240 - w) / 2, 0, &FONT_L, APP_NAME, RGB(30, 43, 90));\n'
+                '        cv_rect((240 - w) / 2, 37, w, 2, RGB(229, 72, 46));\n'
+                '        w = text_w(&FONT_S, APP_TAGLINE);\n'
+                '        cv_text((240 - w) / 2, 44, &FONT_S, APP_TAGLINE, RGB(122, 128, 152));\n'
+                '    }\n'
+                '    cv_blit(0, 92);\n'
+                '}',
+                'void app_splash(void)\n'
+                '{\n'
+                '    bh_remote_splash(); /* native 240x240 pixel-art black hole */\n'
+                '}',
+            ),
+        ],
+        root / "base" / "include" / "plat.h": [
+            (
+                'int plat_battery(void);',
+                'int plat_battery(void);\n'
+                '/* Approximate percentage from battery ADC, not a fuel gauge.\n'
+                ' * -1 before the first reading. On USB power, still reads ADC. */\n'
+                'int plat_battery_percent(void);\n'
+                '/* 1 iff a USB host has configured the device USB MIDI link. */\n'
+                'int plat_usb_midi_connected(void);',
+            ),
+        ],
+        root / "base" / "device" / "plat_fm1.c": [
+            (
+                '/* LEDs: the picture is built off-line',
+                '/* Blackhole Remote battery readout. The stock bar thresholds\n'
+                ' * are 531 / 561 / 591 ADC counts; the wider 516..615 range\n'
+                ' * is a deliberately approximate linear 0..100 scale.\n'
+                ' * Do not mistake it for a calibrated coulomb counter. */\n'
+                'int plat_battery_percent(void)\n'
+                '{\n'
+                '    int32_t raw = batt_raw;\n'
+                '    if (raw <= 0) return -1;\n'
+                '    return (int)clamp((raw - 516) * 100 / 99, 0, 100);\n'
+                '}\n'
+                'int plat_usb_midi_connected(void)\n'
+                '{\n'
+                '    return usb.config && !usb.suspended;\n'
+                '}\n\n'
+                '/* LEDs: the picture is built off-line',
+            ),
+        ],
+        root / "base" / "host" / "plat_host.c": [
+            (
+                'int plat_battery(void) { return 3; }',
+                'int plat_battery(void) { return 3; }\n'
+                'int plat_battery_percent(void) { return 100; }\n'
+                'int plat_usb_midi_connected(void) { return 0; }',
+            ),
+        ],
+    }
+    changes = {}
+    for file, replacements in edits.items():
+        source = file.read_text(encoding="utf-8")
+        for before, after in replacements:
+            if source.count(before) != 1:
+                raise ValueError(
+                    f"Blackhole Remote unsupported upstream in {file}: "
+                    f"expected one anchor {before[:90]!r}; found {source.count(before)}"
+                )
+            source = source.replace(before, after, 1)
+        changes[file] = source
+    graphics = Path(__file__).with_name("blackhole_remote_display.inc")
+    if not graphics.is_file():
+        raise ValueError(f"Missing square Blackhole Remote renderer: {graphics}")
+    changes[root / "app" / "blackhole_remote_display.inc"] = graphics.read_text(encoding="utf-8")
+    if "bh_remote_keyboard" not in changes[root / "app" / "blackhole_remote_display.inc"]:
+        raise ValueError("The responsive 27-key renderer was not provided")
+    return changes
 
 
 def main() -> None:
@@ -191,22 +323,28 @@ def main() -> None:
     if not file.is_file():
         parser.error(f"Missing upstream CTL-1 source {file}")
     original = file.read_text(encoding="utf-8")
-    modified = apply(original)  # fully validate in memory BEFORE any write
+    modified = apply(original)
+    changes = blackhole_extensions(args.ctl1_dir.expanduser().resolve())
+    changes[file] = modified
     if args.dry_run:
-        print("OK: CTL-1 source accepts Workbench Remote v1 patch; no files changed")
+        print("OK: pinned CTL-1 and fm1-base accept Blackhole Remote 240x240 patch")
+        print("OK: battery ADC percentage, USB/BLE link, 27 lit keys, MIDI mapping")
         return
-    backup = file.with_suffix(".workbench-backup.orig")
-    if backup.exists():
-        parser.error(f"Backup already exists; refusing to overwrite: {backup}")
-    backup.write_text(original, encoding="utf-8")
-    try:
-        file.write_text(modified, encoding="utf-8")
-    except Exception:
-        file.write_text(original, encoding="utf-8")
-        raise
-    print(f"OK: patched {file}")
-    print(f"Original saved as {backup}")
-    print("No firmware was flashed. This build is BLACKHOLE REMOTE: MIDI controller.")
+    # Preflight every source and backup before writing any file.
+    for source in changes:
+        if source.exists() and source.with_suffix(source.suffix + ".blackhole.orig").exists():
+            parser.error(f"Backup already exists for {source}")
+    for source, updated in changes.items():
+        if source.exists():
+            source.with_suffix(source.suffix + ".blackhole.orig").write_text(
+                source.read_text(encoding="utf-8"), encoding="utf-8")
+        source.write_text(updated, encoding="utf-8")
+    print("OK: Blackhole Remote MIDI controller source patched:")
+    for source in changes:
+        print(f"  {source}")
+    print("Blackhole display: 240x240 splash + live 27-key responsive keyboard")
+    print("MIDI: original Workbench Remote v1 protocol preserved on USB/BLE")
+    print("No firmware was flashed; use a safe recovery method before testing.")
 
 
 if __name__ == "__main__":
