@@ -40,101 +40,128 @@ def apply(text: str) -> str:
     helpers = r"""
 /* FM1-WORKBENCH-REMOTE-V1 */
 /*
- * Dedicated MIDI channel 16: physical switches and encoders retain their
- * electrical identity even if the on-device CTL-1 page changes.
- * Midi messages to USB/BLE, not to the local GM synth.
- * See Workbench docs/midi-mapping.md.
+ * Dedicated USB/BLE MIDI channel 16. Every hardware button and encoder is
+ * identified by physical position, regardless of the local CTL-1 page.
+ * Musical MIDI channels 1..15 are not hijacked.
+ *
+ * Remote-only operation is intentional. Without it, CTL-1 also executes
+ * page/transport/keyboard actions and sends duplicate MIDI while the same
+ * switch is supposed to operate the virtual firmware in Workbench.
  */
+#define WB_REMOTE_ONLY 1
+
 static void wb_remote_packet(uint32_t st, uint32_t d1, uint32_t d2)
 {
     send(pkt3(st, d1, d2), TO_USB | TO_BLE | TO_NOSYNTH);
 }
-static void wb_remote_note(int key, int on, int velocity)
+static void wb_remote_note(int key, int on, int vel)
 {
-    /* key 0..26 is chromatic F3..G5 on the original hardware */
     if (key >= 0 && key < NKEYS)
-        wb_remote_packet(on ? 0x9fu : 0x8fu, 48u + (uint32_t)key,
-                         on ? (uint32_t)(velocity > 0 ? velocity : 100) : 0u);
+        wb_remote_packet(on ? 0x9fu : 0x8fu, (uint32_t)(key + 48),
+                         on ? (uint32_t)vel : 0u);
 }
 static void wb_remote_button(int button, int on)
 {
-    /* plat.h: FX..REC ids 0..11, OCT-/OCT+ ids 12/13.
-     * Workbench panel: OCT-/OCT+ ids 0/1, FX..REC ids 2..13.
-     */
+    /* plat.h: FX..REC IDs 0..11, OCT-/OCT+ IDs 12/13.
+     * FM-1 emulator: OCT-/OCT+ 0/1, FX..REC 2..13. */
     if (button >= 0 && button < NB)
-        wb_remote_packet(0xbfu, 80u + (uint32_t)((button + 2) % NB),
+        wb_remote_packet(0xbfu, (uint32_t)(80 + ((button + 2) % NB)),
                          on ? 127u : 0u);
 }
-static void wb_remote_encoder(int role, int32_t clicks)
+static void wb_remote_encoder(int role, int32_t ticks)
 {
-    /* plat.h order: SELECT, ALGORITHM, PRESETS, KNOB1..4 */
-    static const uint8_t remote_cc[NE] = {94, 96, 95, 97, 98, 99, 100};
-    int32_t n = clicks > 24 ? 24 : clicks < -24 ? -24 : clicks;
-    if (role < 0 || role >= NE) return;
-    while (n) {
-        int32_t part = n > 0 ? (n > 6 ? 6 : n) : (n < -6 ? -6 : n);
-        wb_remote_packet(0xbfu, remote_cc[role],
-                         (uint32_t)(part > 0 ? part : 128 + part));
-        n -= part;
+    /* fm1-base role order: SELECT, ALGORITHM, PRESETS, KNOB1..4.
+     * MIDI CC order: SELECT, PRESETS, ALGORITHM, KNOB1..4. */
+    static const uint8_t cc_by_role[NE] = {94, 96, 95, 97, 98, 99, 100};
+    if (role < 0 || role >= NE)
+        return;
+    /* Losslessly split large encoder turns into MIDI relative messages.
+     * 1..6 = positive; 127..122 = negative. */
+    while (ticks) {
+        int32_t steps = ticks > 0 ? (ticks > 6 ? 6 : ticks) :
+                           (ticks < -6 ? -6 : ticks);
+        wb_remote_packet(0xbfu, cc_by_role[role],
+                         (uint32_t)(steps > 0 ? steps : 128 + steps));
+        ticks -= steps;
     }
 }
-static void wb_remote_master(int32_t raw)
+static void wb_remote_input(void)
 {
-    static int previous = -1;
-    int v = raw * 127 / 4000;  /* identical to CTL-1 master_pot ADC curve */
-    if (v < 0) v = 0;
-    if (v > 127) v = 127;
-    if (v != previous) {
-        previous = v;
-        wb_remote_packet(0xbfu, 101u, (uint32_t)v);
+    static uint32_t held_keys = 0u, held_buttons = 0u;
+    static int initialized = 0;
+    static int32_t master_smooth = 0;
+    static int master_previous = -1;
+    static uint32_t next_hello_ms = 0u;
+    uint32_t keys = plat_keys(), buttons = plat_buttons();
+    uint32_t changed_keys = keys ^ held_keys;
+    uint32_t changed_buttons = buttons ^ held_buttons;
+    uint32_t now = plat_ms();
+    int i, value, raw;
+    int32_t ticks;
+
+    if (!initialized) {
+        initialized = 1;
+        master_smooth = (int32_t)plat_master();
+    }
+
+    /* A periodic handshake makes Workbench AUTO detect this firmware after
+     * USB/BLE connects (even when it connects after firmware boot). */
+    if ((int32_t)(now - next_hello_ms) >= 0) {
+        wb_remote_packet(0xbfu, 102u, 42u);
+        next_hello_ms = now + 1500u;
+        /* Resend held key/button STATE after reconnection. The receiver
+         * suppresses duplicate state changes; no retriggered note-ons. */
+        for (i = 0; i < NKEYS; ++i)
+            if (keys & (1u << i))
+                wb_remote_note(i, 1, (int)proj.vel);
+        for (i = 0; i < NB; ++i)
+            if (buttons & (1u << i))
+                wb_remote_button(i, 1);
+    }
+
+    held_keys = keys;
+    held_buttons = buttons;
+    for (i = 0; i < NKEYS; ++i)
+        if (changed_keys & (1u << i))
+            wb_remote_note(i, (keys & (1u << i)) != 0, (int)proj.vel);
+    for (i = 0; i < NB; ++i)
+        if (changed_buttons & (1u << i))
+            wb_remote_button(i, (buttons & (1u << i)) != 0);
+
+    /* Read EVERY encoder, even SELECT / ALGORITHM and all four knobs.
+     * Emulated firmware decides whether a turn changes a page or value. */
+    for (i = 0; i < NE; ++i) {
+        ticks = plat_enc(i);
+        if (ticks)
+            wb_remote_encoder(i, ticks);
+    }
+    raw = (int)plat_master();
+    master_smooth += ((int32_t)raw - master_smooth) / 4;
+    value = (int)(master_smooth * 127 / 4000);
+    if (value < 0) value = 0;
+    if (value > 127) value = 127;
+    if (value != master_previous) {
+        master_previous = value;
+        wb_remote_packet(0xbfu, 101u, (uint32_t)value);
     }
 }
 """
-    swap(anchor, anchor + "\n" + helpers)
-    # Physical key events are transmitted as remote keys. To avoid a double
-    # note-on, physical key performance remains audible on CTL-1 locally but
-    # does not ALSO travel over USB/BLE. Sequencer/arp MIDI stays untouched.
+    swap(anchor, anchor + "\\n" + helpers)
+
+    # This is a DEDICATED controller mode. The original CTL-1 input loop
+    # generates its own Start/Stop, sustain, CC, program changes and notes.
+    # Running that loop simultaneously would double-trigger PLAY/REC/etc.
+    # Wrap the original in #else for easy reversion in the source clone.
     swap(
-        "            play(0x90u, q[i], vel);",
-        "            send(pkt3(0x90u | proj.chan, q[i], vel), TO_SYNTH);",
+        "static void input(void)\\n{",
+        "static void input(void)\\n{\\n"
+        "#if WB_REMOTE_ONLY\\n"
+        "    wb_remote_input();\\n"
+        "#else"
     )
     swap(
-        "            play(0x80u, ui.knotes[k][i], 0);",
-        "            send(pkt3(0x80u | proj.chan, ui.knotes[k][i], 0), TO_SYNTH);",
-    )
-    # Emit the physical matrix transition BEFORE UI-dependent handling,
-    # including sequencer step edit and touch-sensitive velocity.
-    swap(
-        "        if (ch >> i & 1u) {\n"
-        "            if (ui.view != V_SEQ && touch_live && touch_sensed(i))",
-        "        if (ch >> i & 1u) {\n"
-        "            wb_remote_note((int)i, (keys >> i & 1u) != 0, (int)proj.vel);\n"
-        "            if (ui.view != V_SEQ && touch_live && touch_sensed(i))",
-    )
-    swap(
-        "        if (ch >> i & 1u) {\n"
-        "            if (btn >> i & 1u)\n"
-        "                button_down((int)i);",
-        "        if (ch >> i & 1u) {\n"
-        "            wb_remote_button((int)i, (btn >> i & 1u) != 0);\n"
-        "            if (btn >> i & 1u)\n"
-        "                button_down((int)i);",
-    )
-    for role in ["EN_SELECT", "EN_ALGO", "EN_PRESET"]:
-        swap(
-            f"    if ((e = plat_enc({role})) != 0) {{",
-            f"    if ((e = plat_enc({role})) != 0) {{\n"
-            f"        wb_remote_encoder({role}, e);",
-        )
-    swap(
-        "        if ((e = plat_enc(EN_K1 + (int)i)) != 0) {",
-        "        if ((e = plat_enc(EN_K1 + (int)i)) != 0) {\n"
-        "            wb_remote_encoder(EN_K1 + (int)i, e);",
-    )
-    swap(
-        "    ui.master_raw += (raw - ui.master_raw) / 4;",
-        "    ui.master_raw += (raw - ui.master_raw) / 4;\n"
-        "    wb_remote_master(ui.master_raw);",
+        "}\\n\\n/* ------------------------------------------------------------- screen --- */",
+        "#endif\\n}\\n\\n/* ------------------------------------------------------------- screen --- */"
     )
     return text
 
