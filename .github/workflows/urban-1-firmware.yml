@@ -124,7 +124,7 @@ jobs:
           else
             gh release create "$tag" "$fw" hyp1/build/SHA256SUMS-URBAN1-v0.4.14.txt \
               --repo "$GH_REPO" --target "$GITHUB_SHA" \
-              --title "URBAN-1 v0.4.14 – Pixel-art Kitsune boot cover + glitch transitions" \
+              --title "URBAN-1 v0.4.14 – Full Kitsune artwork with no crop" \
               --notes "$notes" --prerelease
           fi
           gh release view "$tag" --repo "$GH_REPO" --json assets,url \
