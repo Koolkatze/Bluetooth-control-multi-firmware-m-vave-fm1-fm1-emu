@@ -1399,6 +1399,28 @@ static void urban_port_rec_upper(uint16_t orange,uint16_t dim) {
     note[16]=(char)('0'+current_bar%10u);
     urban_port_screen_text(131,&FONT_S,note,dim);
 }
+/* Names identify the installed synthesizer programs, not fake GM presets. */
+static const char *urban_port_rec_program_name(const UrbanRecorder *r) {
+    UrbanRecInstrument inst=urban_rec_instrument(r->program);
+    static const char *const acoustic[2]={"Upright Bass","Finger Bass"};
+    static const char *const jazz[5]={
+        "Acoustic Piano","Electric Rhodes","Breathy Flute",
+        "Vibraphone","Soft Bells"
+    };
+    if(inst.jazz) {
+        if(inst.track==2u)return acoustic[inst.jazz-1u];
+        return jazz[inst.jazz-1u];
+    }
+    if(inst.track==2u)return urban_bass_names[inst.patch];
+    if(inst.track==3u)return urban_lead_names[inst.patch];
+    return urban_pad_names[inst.patch];
+}
+static const char *urban_port_rec_program_family(const UrbanRecorder *r) {
+    UrbanRecInstrument inst=urban_rec_instrument(r->program);
+    if(inst.track==2u)return inst.jazz?"ACOUSTIC BASS":"BASS / DRONE";
+    if(inst.track==3u)return inst.jazz?"MODELLED LEAD":"SYNTH LEAD";
+    return inst.jazz?"MODELLED KEYS":"POLY KEYS / PAD";
+}
 static void urban_port_rec_lower(uint16_t orange,uint16_t dim) {
     const UrbanRecorder *r=&urban_port.recorder;
     const char *state="REC ARM";
@@ -1427,17 +1449,16 @@ static void urban_port_rec_lower(uint16_t orange,uint16_t dim) {
         }
     }
     if(r->state==UR_REC_ARM) {
-        const char *info="INST CHORDS  BARS 4";
-        if(r->track==2u)info="INST BASS  BARS 4";
-        else if(r->track==3u)info="INST LEAD  BARS 4";
-        /* Print value separately, no dynamic text allocation. */
-        urban_port_screen_text(17,&FONT_S,info,orange);
-        urban_port_screen_text(35,&FONT_S,"K1 INST   K2 BARS",C_WHITE);
-        const char *qname=r->quant==0u?"Q:OFF":
-             r->quant==1u?"Q:1/4":r->quant==2u?"Q:1/8":
-             r->quant==3u?"Q:1/16":"Q:1/32";
-        urban_port_screen_text(53,&FONT_S,qname,C_WHITE);
-        urban_port_screen_text(71,&FONT_S,"K4 GRID  REC START",dim);
+        urban_port_screen_text(15,&FONT_S,
+                               urban_port_rec_program_family(r),orange);
+        urban_port_screen_text(32,&FONT_S,
+                               urban_port_rec_program_name(r),C_WHITE);
+        urban_port_screen_text(50,&FONT_S,"K1 SOUND / K2 BARS",dim);
+        urban_port_screen_text(67,&FONT_S,"K3 QUANT / K4 GRID",dim);
+        const char *qname=r->quant==0u?"QUANT OFF":
+              r->quant==1u?"QUANT 1/4":r->quant==2u?"QUANT 1/8":
+              r->quant==3u?"QUANT 1/16":"QUANT 1/32";
+        urban_port_screen_text(84,&FONT_S,qname,orange);
     } else if(r->state==UR_REC_RECORD) {
         urban_port_screen_text(18,&FONT_S,"PLAY THE 27 KEYS",C_WHITE);
         urban_port_screen_text(38,&FONT_S,"SEL/ENV/LFO: MOD PAGE",C_WHITE);
