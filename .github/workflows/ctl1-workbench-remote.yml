@@ -60,8 +60,8 @@ jobs:
         grep -q '#define WB_REMOTE_ONLY 1' build/ctl1-upstream/app/ui.c
         grep -q '102u, 42u' build/ctl1-upstream/app/ui.c
         grep -q 'bh_remote_keyboard' build/ctl1-upstream/app/blackhole_remote_display.inc
-        grep -q 'bh_art_splash\\[34560\\]' build/ctl1-upstream/app/blackhole_bitmap.h
-        grep -q 'bh_art_widget\\[2816\\]' build/ctl1-upstream/app/blackhole_bitmap.h
+        grep -Fq 'bh_art_splash[34560]' build/ctl1-upstream/app/blackhole_bitmap.h
+        grep -Fq 'bh_art_widget[2816]' build/ctl1-upstream/app/blackhole_bitmap.h
         grep -q 'bh_boot_splash_until' build/ctl1-upstream/app/ui.c
         grep -q 'bh_remote_leds' build/ctl1-upstream/app/blackhole_remote_display.inc
         grep -q 'int plat_battery_percent(void)' build/ctl1-upstream/base/device/plat_fm1.c
