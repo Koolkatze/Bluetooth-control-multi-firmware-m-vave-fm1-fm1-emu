@@ -1,0 +1,105 @@
+name: Release Blackhole Remote HD (physical FM-1)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/release-blackhole-remote.yml"
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: blackhole-remote-v0.1.0-beta.1-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish verified physical firmware as standalone GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: blackhole-remote-v0.1.0-beta.1
+      BUILD_RUN: "41725945640"
+      SOURCE_SHA: e0e58e5b769a032458958073562be0d1aefa073a
+      SHA_BLE: f418723f2227864c9ea424e4bdd7770a737668827c1eb11f78ac3a9c4dda13aa
+      SHA_USB: a1af04cdffc1a32ad2bedf79b9f24d9abecf449d22809af20ea012192807cd61
+    steps:
+      - name: Check the exact successful pinned firmware build
+        run: |
+          set -euo pipefail
+          result="$(gh run view "$BUILD_RUN" --repo "$GITHUB_REPOSITORY" --json conclusion,headSha --jq '[.conclusion, .headSha] | join(" ")')"
+          test "$result" = "success $SOURCE_SHA" || {
+            echo "::error::Release source mismatch or unverified build: $result"; exit 1;
+          }
+
+      - name: Download physical firmware artifacts from GitHub Actions
+        run: |
+          set -euo pipefail
+          mkdir -p staging dist
+          gh run download "$BUILD_RUN" --repo "$GITHUB_REPOSITORY" --name packages --dir staging
+          test -s staging/build/physical-fm1-remote/Blackhole-Remote-BLE-EXPERIMENTAL.fwsc
+          test -s staging/build/physical-fm1-remote/Blackhole-Remote-USB-EXPERIMENTAL.fwsc
+
+      - name: Verify both binaries with pinned SHA-256 before publishing
+        run: |
+          set -euo pipefail
+          printf '%s  %s\n' "$SHA_BLE" "staging/build/physical-fm1-remote/Blackhole-Remote-BLE-EXPERIMENTAL.fwsc" | sha256sum -c -
+          printf '%s  %s\n' "$SHA_USB" "staging/build/physical-fm1-remote/Blackhole-Remote-USB-EXPERIMENTAL.fwsc" | sha256sum -c -
+          cp staging/build/physical-fm1-remote/Blackhole-Remote-BLE-EXPERIMENTAL.fwsc \
+            dist/Blackhole-Remote-HD-v0.1.0-beta.1-Bluetooth-USB.fwsc
+          cp staging/build/physical-fm1-remote/Blackhole-Remote-USB-EXPERIMENTAL.fwsc \
+            dist/Blackhole-Remote-HD-v0.1.0-beta.1-USB-Only.fwsc
+          (cd dist && sha256sum *.fwsc > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
+
+      - name: Create independent Blackhole Remote prerelease
+        run: |
+          set -euo pipefail
+          cat > dist/RELEASE-NOTES.md <<'NOTES'
+          ## Blackhole Remote HD — MIDI controller for M-VAVE FM-1
+
+          Standalone **physical M-VAVE FM-1 controller firmware**, not an Android APK.
+
+          **Downloads**
+          - **Bluetooth + USB:** `Blackhole-Remote-HD-v0.1.0-beta.1-Bluetooth-USB.fwsc`
+          - **USB only:** `Blackhole-Remote-HD-v0.1.0-beta.1-USB-Only.fwsc`
+          - `SHA256SUMS.txt` contains SHA-256 hashes for both firmwares.
+
+          **Features**
+          - 240 × 240 square LCD with higher-detail, 64-colour black-hole pixel-art splash (240 × 144 bitmap + text band), plus a small black-hole preview in the status interface.
+          - Real 27-key piano on screen that responds to physical key presses; the matching hardware keys illuminate.
+          - Estimated battery percentage, USB-MIDI connection and Bluetooth-MIDI link status.
+          - All 14 panel buttons, 7 encoders and MASTER use the Workbench Remote v1 MIDI mapping (compatible with Android FM-1 Workbench).
+
+          **Validation**
+          Both physical firmware variants passed the JieLi AC79 build and automated tests in [this pinned GitHub Actions run](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/actions/runs/41725945640); both exact .fwsc files were checksum-verified before release.
+
+          **WARNING — EXPERIMENTAL**
+          This physical firmware has **not been validated on a real M-VAVE FM-1**. Flashing a defective or incompatible firmware could render the hardware unusable. Prepare a recovery method, stable USB power and a backup of the working firmware. The battery percentage is an ADC estimate, not a calibrated battery fuel gauge. Bluetooth is for MIDI control, not flashing.
+
+          **Installation**
+          Install FM-1 Workbench Android, import the desired .fwsc under Firmware, select it, and use **«Instalar firmware seleccionado en FM-1»**. Workbench identifies the physical FM-1 over USB MIDI and requests confirmation before flashing.
+          NOTES
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.fwsc dist/SHA256SUMS.txt \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" dist/*.fwsc dist/SHA256SUMS.txt \
+              --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Blackhole Remote HD — MIDI controller v0.1.0 beta 1" \
+              --notes-file dist/RELEASE-NOTES.md --prerelease
+          fi
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,assets \
+            --jq '{url: .url, files: [.assets[].name]}'
+
+      - name: Preserve checked physical firmware release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Blackhole-Remote-HD-v0.1.0-beta.1
+          path: |
+            dist/*.fwsc
+            dist/SHA256SUMS.txt
+          retention-days: 90
