@@ -308,7 +308,7 @@ final class FirmwareUpdater {
              * Its own advertised version is NOT evidence of installation. */
             String previous = existing != null
                     ? existing.optString("version")
-                    : (originalHasId(original, id) ? current.optString("version") : "");
+                    : (originalBundled(original, id) ? current.optString("version") : "");
             String address = candidate.optString("package");
             File installedPackage = new File(folder(device), id + ".fwsc");
             boolean savedFileOk = installedPackage.isFile()
@@ -355,9 +355,13 @@ final class FirmwareUpdater {
                 changed, checked, total);
     }
 
-    private static boolean originalHasId(JSONArray original, String id) {
-        for (int i = 0; i < original.length(); i++)
-            if (id.equals(original.optJSONObject(i).optString("id"))) return true;
+    private static boolean originalBundled(JSONArray original, String id) {
+        for (int i = 0; i < original.length(); i++) {
+            JSONObject item = original.optJSONObject(i);
+            if (item != null && id.equals(item.optString("id")))
+                return !item.optBoolean("remoteOnly") &&
+                        item.optString("package").startsWith("offline-fw/");
+        }
         return false;
     }
 
