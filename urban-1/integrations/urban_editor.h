@@ -203,8 +203,6 @@ static int urban_editor_special_bit(int id) {
       case UC_GATE8: return FX_GATE8;
       case UC_CRUSH: return FX_CRUSH;
       case UC_THROW: return FX_THROW;
-      case UC_LOWPASS: return FX_LP;
-      case UC_HIGHPASS: return FX_HP;
       case UC_REVERSE: return FX_REV;
       case UC_FILL: return FX_FILL;
       case UC_STOP: return FX_STOP;
@@ -223,8 +221,8 @@ static const char *urban_editor_label(int id) {
       case UC_GATE8:return "GATE8";
       case UC_CRUSH:return "CRUSH";
       case UC_THROW:return "THROW";
-      case UC_LOWPASS:return "LOWPASS";
-      case UC_HIGHPASS:return "HIGHPASS";
+      case UC_LOWPASS:return "LOWPASS 0-100";
+      case UC_HIGHPASS:return "HIGHPASS 0-100";
       case UC_REVERSE:return "REVERSE";
       case UC_FILL:return "FILL";
       case UC_STOP:return "STOP";
