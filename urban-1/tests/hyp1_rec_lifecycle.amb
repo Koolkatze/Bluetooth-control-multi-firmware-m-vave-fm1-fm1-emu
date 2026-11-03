@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# REC must survive PAUSE but lose all recorded notes / automation when a
+# NEW song, track, genre or subgenre replaces the current musical material.
+# Actual HYP note-off paths must silence active REC voices on Pause.
+expect playing 0
+expect urbanrecstate 0
+expect urbanrecevents 0
+expect urbanrecvoices 0
+
+# Record an actual HELD polyphonic REC note, then pause before key-up.
+tap REC
+expect urbanrecstate 1
+tap REC
+expect urbanrecstate 2
+expect playing 1
+key 7 down
+expect urbanrecvoices >0
+expect urbanrecevents >0
+tap PLAY
+expect playing 0
+expect urbanrecvoices 0
+expect urbanrecstate 3
+expect urbanrecevents >0
+expect urbanrecclock 0
+wait 350
+expect urbanrecvoices 0
+expect urbanrecevents >0
+key 7 up
+tap HOME
+expect urbanrecscreen 0
+expect urbanrecevents >0
+
+# Play/pause alone never deletes the recorded take.
+tap PLAY
+expect playing 1
+expect urbanrecevents >0
+tap PLAY
+expect playing 0
+expect urbanrecvoices 0
+expect urbanrecevents >0
+
+# SONG SAVE generates a new composition: hard reset the old REC take.
+tap SAVE
+expect urbanrecstate 0
+expect urbanrecevents 0
+expect urbanrecvoices 0
+expect urbanrecdub 0
+expect urbanrecprogram 32
+expect urbanrecbars 4
+
+# Changing global subgenre also erases a fresh take.
+tap REC
+tap REC
+tapkey 7
+expect urbanrecevents >0
+tap HOME
+spin K3 1
+expect urbanrecstate 0
+expect urbanrecevents 0
+expect urbanrecvoices 0
+expect urbanrecscreen 0
+
+# Changing global genre resets REC too.
+tap REC
+tap REC
+tapkey 7
+expect urbanrecevents >0
+tap HOME
+spin K2 1
+expect urbanrecstate 0
+expect urbanrecevents 0
+
+# Regenerating just ONE track invalidates REC even if song remains.
+tap REC
+tap REC
+tapkey 7
+expect urbanrecevents >0
+tap HOME
+tap SEQ
+expect urbanpage 1
+tap SAVE
+expect urbanrecstate 0
+expect urbanrecevents 0
+expect urbanrecvoices 0
+
+# Per-track subgenre and genre changes must also invalidate REC.
+tap REC
+tap REC
+tapkey 7
+expect urbanrecevents >0
+tap HOME
+spin K3 1
+expect urbanrecstate 0
+expect urbanrecevents 0
+tap REC
+tap REC
+tapkey 7
+expect urbanrecevents >0
+tap HOME
+spin K2 1
+expect urbanrecstate 0
+expect urbanrecevents 0
+expect urbanrecvoices 0
