@@ -77,7 +77,14 @@ Los paquetes de firmware físico y la APK son archivos distintos.
 
 **Sin instalar nada:** elige un firmware compatible, pulsa **Start** y utiliza la LCD ampliada desde tu navegador. Esta edición online necesita conexión para cargar los archivos y algunos firmwares.
 
-### **[⬇ Descargar FM-1 Workbench para Android — última revisión del controlador](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/actions/workflows/android-offline.yml)**
+### **[⬇ Descargar FM-1 Workbench para Android — última revisión del controlador](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/v0.2.13)**
+
+**v0.2.13 — detección automática de FM-1 USB:** al pulsar
+«Instalar firmware seleccionado en FM-1», Workbench busca por sí mismo
+un FM-1 USB-MIDI ya conectado o recién enchufado, verifica su identidad
+y únicamente entonces muestra la confirmación de riesgos. Ya no hay
+selector manual del puerto USB. La instalación sigue siendo experimental
+y requiere que Android exponga el controlador como MIDI bidireccional.
 
 **v0.2.10 — correcciones de control físico:** la APK reconoce automáticamente
 el protocolo Workbench Remote por USB/BLE mediante CC102=42 en el canal 16,
