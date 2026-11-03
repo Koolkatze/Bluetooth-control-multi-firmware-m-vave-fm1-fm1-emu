@@ -1,7 +1,7 @@
 name: URBAN-1 host synthesis smoke test
 on:
   push:
-    branches: [feature/urban-1, feature/urban-rec-full-instruments, fix/urban-rec-audition-octave]
+    branches: [feature/urban-1, feature/urban-rec-full-instruments, fix/urban-rec-audition-octave, feature/urban-kitsune-splash]
     paths:
       - 'urban-1/**'
       - '.github/workflows/urban-1.yml'
@@ -46,12 +46,35 @@ jobs:
           hyp1/build/host/amb_host urban-1/tests/hyp1_recorder.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_rec_instrument_catalog.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_rec_audition_octave.amb hyp1/build/urban
+          # Normal host smoke tests bypass the boot cover; a second build
+          # runs real LCD and button transitions, as on the Android firmware.
+          cc -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wno-unused-function -Wno-unused-parameter \
+            -DEN_HOST -DURBAN_SPLASH_TEST -D_POSIX_C_SOURCE=200809L \
+            -Ihyp1/firmware/src -Ihyp1/firmware/src/dsp -Ihyp1/build/gen \
+            -o hyp1/build/host/amb_splash_host hyp1/host/amb_host.c hyp1/firmware/src/dsp/amb.c -lm
+          hyp1/build/host/amb_splash_host urban-1/tests/hyp1_kitsune_splash.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_tape_transport.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_style_fx_reset.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_echo_wet.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_filter_knobs.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_polychords.amb hyp1/build/urban
           hyp1/build/host/amb_host urban-1/tests/hyp1_display_stable.amb hyp1/build/urban
+          python3 - <<'PY'
+          from PIL import Image,ImageChops
+          from pathlib import Path
+          d=Path('hyp1/build/urban')
+          a=Image.open(d/'urban-kitsune-cover.png').convert('RGB')
+          b=Image.open(d/'urban-kitsune-cover-still.png').convert('RGB')
+          g=Image.open(d/'urban-kitsune-glitch-exit.png').convert('RGB')
+          h=Image.open(d/'urban-kitsune-home.png').convert('RGB')
+          assert a.size == b.size == g.size == h.size == (240,240)
+          assert ImageChops.difference(a,b).getbbox() is None, 'Splash flickers when idle'
+          assert ImageChops.difference(a,g).getbbox() is not None, 'Exit glitch missing'
+          assert ImageChops.difference(a,h).getbbox() is not None, 'Splash did not exit'
+          orange=sum(1 for r,gg,bb in a.getdata() if r>120 and r>gg*1.25 and gg>25)
+          assert orange>2500, f'Original orange Kitsune pixels missing: {orange}'
+          print('Kitsune image colors, steady-state and two UI transitions pass:',orange)
+          PY
           python3 - <<'PY'
           import wave
           from pathlib import Path

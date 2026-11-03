@@ -44,6 +44,10 @@ def main() -> None:
     dst.mkdir(parents=True, exist_ok=True)
     for source in HERE.glob("urban_*.h"):
         shutil.copyfile(source, dst / source.name)
+    shutil.copyfile(HERE / "integrations/urban_splash_art.h",
+                    root / "firmware/src/app/urban_splash_art.h")
+    shutil.copyfile(HERE / "integrations/urban_splash_engine.h",
+                    root / "firmware/src/app/urban_splash_engine.h")
     shutil.copyfile(HERE / "integrations/urban_editor.h",
                     root / "firmware/src/app/urban_editor.h")
     shutil.copyfile(HERE / "integrations/urban_hyp_port.h",
@@ -285,6 +289,7 @@ def main() -> None:
     # Expose the actual URBAN-1 song transport to host regression scripts.
     replace_once(root / "host/amb_host.c",
         '    else if (!strcmp(what, "sixteenths"))',
+        '    else if (!strcmp(what, "urbansplash")) got = urban_port.splash_phase;\n'
         '    else if (!strcmp(what, "urbanrecscreen")) got = urban_port.rec_screen;\n'
         '    else if (!strcmp(what, "urbanrecstate")) got = urban_port.recorder.state;\n'
         '    else if (!strcmp(what, "urbanrecbars")) got = urban_port.recorder.bars;\n'
