@@ -205,6 +205,10 @@ static void wb_remote_input(void)
         "    bh_key_signature = 0xffffffffu;\n"
         "    ui.master_sent = -1;"
     )
+    swap(
+        "    lcd_fill(0, 0, 240, 240, K_BG);",
+        "    lcd_fill(0, 0, 240, 240, BH_BG);"
+    )
     return text
 
 
