@@ -234,6 +234,18 @@ static void urban_port_sound_profile(void) {
     UrbanInstrumentProgram pp=urban_instrument_program(s,4u,s->current);
     UrbanInstrumentProgram atmosphere=urban_instrument_program(s,5u,s->current);
     UrbanStylePatch bass=bp.patch,lead=lp.patch,pad=pp.patch;
+    /* The recording voice keeps its selected audible DSP program across
+     * song-section changes; all other tracks follow their own style. */
+    if(urban_port.recorder.state!=UR_REC_OFF) {
+        UrbanRecInstrument choice=urban_rec_instrument(urban_port.recorder.program);
+        if(choice.track==2u) {
+            bass.bass=choice.patch;bp.jazz_bass=choice.jazz;
+        } else if(choice.track==3u) {
+            lead.lead=choice.patch;lp.jazz_voice=choice.jazz;
+        } else if(choice.track==4u) {
+            pad.pad=choice.patch;pp.jazz_voice=choice.jazz;
+        }
+    }
     /* Select actual new DSP engine on each independent jazz track. */
     urban_jazz_programs(pp.jazz_voice,lp.jazz_voice,bp.jazz_bass);
     /* HYP only exposes seven diatonic modes. Every selected scale
@@ -526,8 +538,8 @@ static void urban_port_step(void) {
                            p->rt.ui.song.current,
                            urban_phrase_bar(&p->rt.ui.song));
     if((cs.onsets>>cstep)&1u &&
-       !((p->recorder.state==UR_REC_RECORD||p->recorder.state==UR_REC_EDIT)&&
-         p->recorder.track==4u))
+       !((p->recorder.state==UR_REC_ARM||p->recorder.state==UR_REC_RECORD||
+          p->recorder.state==UR_REC_EDIT)&&p->recorder.track==4u))
         urban_port_chord(cs.color,cs.gate);
     for(i=0;i<3;i++) if(p->held[i] && p->left[i]) {
         if(--p->left[i]==0u) {
@@ -550,7 +562,8 @@ static void urban_port_step(void) {
          * polling function. Firing both would sound doubled/late. */
         if(i==3u && p->rt.ui.song.tracks[3].genre%URBAN_GENRES==12u)
             continue;
-        if((p->recorder.state==UR_REC_RECORD||
+        if((p->recorder.state==UR_REC_ARM||
+            p->recorder.state==UR_REC_RECORD||
             p->recorder.state==UR_REC_EDIT)&&p->recorder.track==i)
             continue;
         urban_port_note(i,frame.event[i],frame.glide[i]);
@@ -993,6 +1006,16 @@ static void urban_port_rec_keys(void) {
     }
     p->rec_last_keys=keys;
 }
+/* Release held keys from the old DSP channel before changing programs. */
+static void urban_port_rec_release_keys(void) {
+    UrbanHypPort *p=&urban_port;
+    int voice=urban_hyp_voice(p->recorder.track);
+    if(voice>=0)
+        for(unsigned k=0u;k<27u;k++)
+            if(p->rec_last_keys&(1u<<k))
+                en_note(voice,urban_hyp_key((unsigned)voice,(uint8_t)(53u+k)),0);
+    p->rec_last_keys=0u;
+}
 static void urban_port_rec_input(uint32_t b,uint32_t down) {
     UrbanHypPort *p=&urban_port;
     UrbanRecorder *r=&p->recorder;
@@ -1000,6 +1023,7 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
         if(!p->rec_screen) {
             p->rec_screen=1u;p->editor.view=0u;
             if(r->state==UR_REC_OFF)urban_rec_arm(r);
+            urban_port_sound_profile(); /* audition selected program in ARM */
         } else if(r->state==UR_REC_ARM) {
             urban_rec_start(r);
             p->rec_clock_started=0u;
@@ -1022,7 +1046,11 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
         p->rec_screen=0u; /* keep recorded loop playing in RAM */
     if(r->state==UR_REC_ARM) {
         d=plat_enc(EN_K1);
-        if(d)r->track=(uint8_t)(2u+((int)r->track-2+d%3+3)%3);
+        if(d) {
+            urban_port_rec_release_keys();
+            urban_rec_set_program(r,d);
+            urban_port_sound_profile(); /* immediate audible sound change */
+        }
         d=plat_enc(EN_K2);
         if(d)urban_rec_set_bars(r,d);
         d=plat_enc(EN_K3);
@@ -1254,7 +1282,8 @@ static uint32_t urban_port_screen_signature(const UrbanHypPort *p) {
     UI_ACC(p->rec_screen);UI_ACC(p->recorder.state);
     UI_ACC(p->recorder.mod_page);UI_ACC(p->recorder.count);
     UI_ACC(p->recorder.position);UI_ACC(p->recorder.edit_cursor);
-    UI_ACC(p->recorder.track);UI_ACC(p->recorder.bars);
+    UI_ACC(p->recorder.track);UI_ACC(p->recorder.program);
+    UI_ACC(p->recorder.bars);
     UI_ACC(p->recorder.quant);UI_ACC(p->recorder.overdub);
     UI_ACC(p->recorder.edit_note);UI_ACC(p->tape_enabled);
     if(p->editor.view) {
