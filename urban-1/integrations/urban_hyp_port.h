@@ -59,6 +59,7 @@ typedef struct {
     UrbanRecorder recorder;
     uint32_t play_press_ms,tape_stop_at,rec_step_ms;
     uint32_t rec_last_keys;
+    uint8_t rec_key_pitch[27]; /* pitch latched at key-on for correct off */
     uint8_t play_long_done,tape_enabled,tape_stop_pending;
     uint8_t rec_clock_started,lead_lfo_rate,lead_lfo_depth,rec_screen;
     uint8_t lp_filter,hp_filter;
@@ -371,10 +372,20 @@ static void urban_port_sound_profile(void) {
 static void urban_port_mix_levels(void) {
     const UrbanSong *s=&urban_port.rt.ui.song;
     UrbanMixPlan m=urban_mix_plan(s,s->current,urban_phrase_bar(s));
-    urban_port_set(P_PULSE,m.drums);
-    urban_port_set(P_BASS,m.bass);
-    urban_port_set(P_ACID,m.lead);
-    urban_port_set(P_PAD,m.chords);
+    /* A manually played REC instrument must stay audible even when the
+     * arranger has intentionally muted its part for INTRO/BREAK, or when
+     * auditioning in ARM with transport stopped. An already-recorded loop
+     * stays audible after SAVE/HOME hides the panel; other tracks keep
+     * their usual mix and an unrecorded ARM-only preview restores on exit. */
+    const UrbanRecorder *rec=&urban_port.recorder;
+    unsigned audition=(urban_port.rec_screen ||
+                       rec->state==UR_REC_RECORD || rec->state==UR_REC_EDIT) &&
+                      rec->state!=UR_REC_OFF ?
+                      rec->track:255u;
+    urban_port_set(P_PULSE,audition==0u && m.drums<76?76:m.drums);
+    urban_port_set(P_BASS,audition==2u && m.bass<76?76:m.bass);
+    urban_port_set(P_ACID,audition==3u && m.lead<76?76:m.lead);
+    urban_port_set(P_PAD,audition==4u && m.chords<76?76:m.chords);
     urban_port_set(P_NOISE,m.noise);
 }
 static void urban_port_section_mix(void) {
@@ -634,7 +645,10 @@ static void urban_port_poll(void) {
             p->tape_stop_pending=0u;
             en_fx(p->editor.performance_mask);
         }
-        urban_port_release();
+        /* Manual REC preview is playable with transport STOPPED. Calling
+         * release() each UI frame would erase SFX commands before the DSP
+         * consumes them (and cancel their tails). */
+        if(!p->rec_screen)urban_port_release();
         p->last_sixteenth=now;
         return;
     }
@@ -1029,7 +1043,10 @@ static void urban_port_rec_keys(void) {
     uint32_t changed=(keys^p->rec_last_keys);
     for(unsigned k=0u;k<27u;k++)if(changed&(1u<<k)) {
         unsigned on=(keys>>k)&1u;
-        unsigned note=53u+k;
+        /* Note-off MUST use the pitch from key-down, even if OCT changed
+         * while the physical key remained held. */
+        unsigned note=on?urban_rec_key_note(r,k):p->rec_key_pitch[k];
+        if(on)p->rec_key_pitch[k]=(uint8_t)note;
         urban_port_rec_note(r,note,110u,on);
         if(r->state==UR_REC_RECORD)
             (void)urban_rec_capture(r,on?UR_REC_NOTE_ON:UR_REC_NOTE_OFF,
@@ -1041,10 +1058,14 @@ static void urban_port_rec_keys(void) {
 static void urban_port_rec_release_keys(void) {
     UrbanHypPort *p=&urban_port;
     int voice=urban_hyp_voice(p->recorder.track);
-    if(voice>=0)
-        for(unsigned k=0u;k<27u;k++)
-            if(p->rec_last_keys&(1u<<k))
-                en_note(voice,urban_hyp_key((unsigned)voice,(uint8_t)(53u+k)),0);
+    for(unsigned k=0u;k<27u;k++)if(p->rec_last_keys&(1u<<k)) {
+        unsigned note=p->rec_key_pitch[k];
+        if(voice>=0)
+            en_note(voice,urban_hyp_key((unsigned)voice,(uint8_t)note),0);
+        if(p->recorder.state==UR_REC_RECORD)
+            (void)urban_rec_capture(&p->recorder,UR_REC_NOTE_OFF,
+                                    note,0u,0u,urban_port_rec_stamp());
+    }
     p->rec_last_keys=0u;
 }
 static void urban_port_rec_input(uint32_t b,uint32_t down) {
@@ -1055,6 +1076,7 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
             p->rec_screen=1u;p->editor.view=0u;
             if(r->state==UR_REC_OFF)urban_rec_arm(r);
             urban_port_sound_profile(); /* audition selected program in ARM */
+            urban_port_mix_levels(); /* bypass silent intro/arranger lead */
             urban_port_stage_pattern();
         } else if(r->state==UR_REC_ARM) {
             urban_rec_start(r);
@@ -1068,6 +1090,19 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
         p->ui_drawn=0u;
     }
     if(!p->rec_screen)return;
+    /* The FM-1's dedicated OCT buttons transpose the live REC keyboard,
+     * not the previously captured absolute MIDI events. Release/retrigger
+     * currently held keys in the correct pitch and record both edges. */
+    if(down&((1u<<B_OCTDN)|(1u<<B_OCTUP))) {
+        int delta=(down&(1u<<B_OCTUP)?1:0)-
+                  (down&(1u<<B_OCTDN)?1:0);
+        if(delta && ((delta>0 && r->octave<3) ||
+                     (delta<0 && r->octave> -3))) {
+            urban_port_rec_release_keys();
+            urban_rec_shift_octave(r,delta);
+            p->ui_drawn=0u;
+        }
+    }
     if(down&(1u<<B_SEL))r->mod_page=(uint8_t)((r->mod_page+1u)%4u);
     if(down&(1u<<B_ENV))r->mod_page=1u;
     if(down&(1u<<B_LFO))r->mod_page=2u;
@@ -1075,13 +1110,15 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
     int d=plat_enc(EN_SELECT);
     if(d)r->mod_page=(uint8_t)(((int)r->mod_page+d%4+4)%4);
     if((down&(1u<<B_SAVE))&&r->state==UR_REC_EDIT)
-        p->rec_screen=0u; /* keep recorded loop playing in RAM */
+        { p->rec_screen=0u; /* keep recorded loop playing in RAM */
+          urban_port_mix_levels(); }
     if(r->state==UR_REC_ARM) {
         d=plat_enc(EN_K1);
         if(d) {
             urban_port_rec_release_keys();
             urban_rec_set_program(r,d);
             urban_port_sound_profile(); /* immediate audible sound change */
+            urban_port_mix_levels(); /* keep manually selected lead audible */
             urban_port_stage_pattern();
         }
         d=plat_enc(EN_K2);
@@ -1154,6 +1191,7 @@ static void urban_port_input(void) {
             if(down&(1u<<B_HOME)||down&(1u<<B_SEQ)) {
                 p->rec_screen=0u;
                 urban_port_rec_keys();
+                urban_port_mix_levels();
             } else {
                 urban_port_poll();
                 return;
@@ -1398,8 +1436,10 @@ static void urban_port_editor_value_text(int id,char buf[24]) {
 static void urban_port_editor_value_text(int id,char buf[24]);
 static void urban_port_rec_upper(uint16_t orange,uint16_t dim) {
     const UrbanRecorder *r=&urban_port.recorder;
-    char label[24]="REC MIDI  0/8 BARS";
-    label[10]=(char)('0'+r->bars);
+    char label[24]="BARS 0  OCT +0";
+    label[5]=(char)('0'+r->bars);
+    label[12]=r->octave<0?'-':'+';
+    label[13]=(char)('0'+(r->octave<0?-r->octave:r->octave));
     urban_port_screen_text(2,&FONT_B,"URBAN-1 MIDI",orange);
     urban_port_screen_text(23,&FONT_S,label,dim);
     /* Piano-roll: real recorded note-on events (not a decorative grid).
@@ -1491,20 +1531,20 @@ static void urban_port_rec_lower(uint16_t orange,uint16_t dim) {
         urban_port_screen_text(32,&FONT_S,
                                urban_port_rec_program_name(r),C_WHITE);
         urban_port_screen_text(50,&FONT_S,"K1 SOUND / K2 BARS",dim);
-        urban_port_screen_text(67,&FONT_S,"K3 QUANT / K4 GRID",dim);
+        urban_port_screen_text(67,&FONT_S,"K3 QUANT K4 GRID OCT+/-",dim);
         const char *qname=r->quant==0u?"QUANT OFF":
               r->quant==1u?"QUANT 1/4":r->quant==2u?"QUANT 1/8":
               r->quant==3u?"QUANT 1/16":"QUANT 1/32";
         urban_port_screen_text(84,&FONT_S,qname,orange);
     } else if(r->state==UR_REC_RECORD) {
-        urban_port_screen_text(18,&FONT_S,"PLAY THE 27 KEYS",C_WHITE);
+        urban_port_screen_text(18,&FONT_S,"PLAY KEYS  OCT+/-",C_WHITE);
         urban_port_screen_text(38,&FONT_S,"SEL/ENV/LFO: MOD PAGE",C_WHITE);
         urban_port_screen_text(59,&FONT_S,"K1-K4: REC AUTOMATION",orange);
         urban_port_screen_text(79,&FONT_S,"REC STOP -> MIDI EDIT",dim);
     } else {
         urban_port_screen_text(18,&FONT_S,"K1 STEP  K2 NOTE",C_WHITE);
         urban_port_screen_text(39,&FONT_S,"K3 VELOCITY  K4 TOGGLE",C_WHITE);
-        urban_port_screen_text(60,&FONT_S,"SEL: MOD PAGE / KEYS",orange);
+        urban_port_screen_text(60,&FONT_S,"SEL: MOD  OCT+/-: KEYS",orange);
         urban_port_screen_text(79,&FONT_S,"REC DUB  SAVE KEEP LOOP",dim);
     }
 }

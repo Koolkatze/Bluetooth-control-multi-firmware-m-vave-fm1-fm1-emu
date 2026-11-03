@@ -32,11 +32,10 @@ void urban_sfx_silence(void) {
 }
 static void urban_sfx_render(uint32_t n) {
     UrbanSfxVoice *v=&urban_sfx_voice;
-    if(!en_playing) {
-        v->left=0u;
-        urban_sfx_command=0u;
-        return;
-    }
+    /* REC keys may trigger a one-shot while the song transport is STOPPED.
+     * The mixer still renders audio in that state: do not discard the
+     * command before rendering it. Explicit urban_sfx_silence() on
+     * transport/REC exit remains the cancellation authority. */
     uint32_t cmd=urban_sfx_command;
     if(cmd!=0u) {
         urban_sfx_command=0u;

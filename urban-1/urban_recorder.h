@@ -45,6 +45,7 @@ typedef struct {
     uint16_t count,position,pass,play_cursor,edit_cursor;
     uint8_t state,track,bars,quant,overdub,mod_page;
     uint8_t program; /* catalog selection; keeps synthesis and MIDI routing in sync */
+    int8_t octave; /* physical REC keyboard transpose, -3..+3; saved MIDI is absolute */
     uint8_t held[27];
     uint8_t edit_note,edit_velocity;
 } UrbanRecorder;
@@ -95,6 +96,18 @@ static void urban_rec_set_program(UrbanRecorder *r,int delta) {
     if(index>=(int)UR_REC_PROGRAM_COUNT)index-=(int)UR_REC_PROGRAM_COUNT;
     r->program=(uint8_t)index;
     r->track=urban_rec_instrument(r->program).track;
+}
+/* Key offsets affect ONLY newly played notes; an existing loop keeps
+ * its original absolute MIDI note numbers across OCT+/- changes. */
+static void urban_rec_shift_octave(UrbanRecorder *r,int delta) {
+    int next=(int)r->octave+delta;
+    if(next< -3)next= -3;
+    if(next>3)next=3;
+    r->octave=(int8_t)next;
+}
+static unsigned urban_rec_key_note(const UrbanRecorder *r,unsigned key) {
+    int midi=53+(int)key+12*(int)r->octave;
+    return (unsigned)(midi<0?0:midi>127?127:midi);
 }
 static void urban_rec_set_bars(UrbanRecorder *r,int delta) {
     static const uint8_t lengths[4]={1u,2u,4u,8u};
