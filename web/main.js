@@ -353,8 +353,16 @@ const packages = new Map();
 const updateSelectedBtn = document.getElementById("update-selected-firmware");
 const updateAllBtn = document.getElementById("update-all-firmwares");
 const updateLine = document.getElementById("firmware-update-status");
+const installSelectedPhysicalBtn = document.getElementById("install-selected-physical-firmware");
+const physicalInstallRow = document.getElementById("physical-firmware-install-row");
+const physicalInstallStatus = document.getElementById("physical-firmware-install-status");
+const physicalInstallSupported = DEVICE === "fm1" &&
+  typeof nativeWindow.FM1Android?.preparePhysicalFirmware === "function";
+if (physicalInstallRow) physicalInstallRow.hidden = !physicalInstallSupported;
 const updateDevice = DEVICE === "smk37" ? "smk37" : "fm1";
 let updatingFirmwares = false;
+let preparingPhysicalFirmware = false;
+let physicalFirmwareBusy = false;
 // Native packages persist in Android-private storage and take precedence over
 // the APK's original files AND previously saved IndexedDB package records.
 const installedUpdates = (() => {
@@ -380,8 +388,13 @@ function installedUpdateIsNewer(f) {
   return item.version !== f.version || !!item.url;
 }
 function updateButtonsState() {
-  if (updateSelectedBtn) updateSelectedBtn.disabled = updatingFirmwares || fw.id === "local" || !!fw.byo;
-  if (updateAllBtn) updateAllBtn.disabled = updatingFirmwares;
+  if (updateSelectedBtn) updateSelectedBtn.disabled = updatingFirmwares || physicalFirmwareBusy ||
+    fw.id === "local" || !!fw.byo;
+  if (updateAllBtn) updateAllBtn.disabled = updatingFirmwares || physicalFirmwareBusy;
+  if (installSelectedPhysicalBtn) {
+    installSelectedPhysicalBtn.disabled = !physicalInstallSupported || updatingFirmwares || physicalFirmwareBusy;
+  }
+  if (fwSel) fwSel.disabled = preparingPhysicalFirmware;
 }
 async function loadInstalledUpdate(f) {
   const entry = installedUpdates[f.id];
@@ -637,6 +650,82 @@ async function updateCatalogFirmwares(selectedId = "") {
 }
 updateSelectedBtn?.addEventListener("click", () => updateCatalogFirmwares(fw.id));
 updateAllBtn?.addEventListener("click", () => updateCatalogFirmwares(""));
+
+// PHYSICAL FM-1 FLASHING (USB-MIDI ONLY). This is separate from the previous
+// emulator-only firmware updater, and only appears inside Android Workbench.
+// Any selected available .fwsc can be used: bundled, updated from FW Hub or
+// imported by the user. Native Android validates its identity, probes the
+// actual USB device, and asks the user to consent BEFORE writing to hardware.
+// No firmware upload is automatically triggered on selection or synth boot.
+nativeWindow.fm1PhysicalFirmwareProgress = (event) => {
+  if (!physicalInstallStatus || !event || typeof event !== "object") return;
+  const msg = String(event.message || "").slice(0, 500);
+  physicalInstallStatus.textContent = msg;
+  physicalInstallStatus.dataset.error = String(event.kind === "error");
+  if (event.kind === "done" || event.kind === "error" || event.kind === "cancelled") {
+    preparingPhysicalFirmware = false;
+    physicalFirmwareBusy = false;
+    updateButtonsState();
+  }
+};
+
+async function installSelectedPhysicalFirmware() {
+  if (!physicalInstallSupported || physicalFirmwareBusy || updatingFirmwares) return;
+  physicalFirmwareBusy = true;
+  preparingPhysicalFirmware = true;
+  updateButtonsState();
+  const selectedFirmware = fw;
+  let uploadStarted = false;
+  try {
+    physicalInstallStatus.textContent = "Abriendo archivo .fwsc seleccionado…";
+    const loaded = await packageOf(selectedFirmware);
+    if (!loaded?.bytes) throw new Error("No hay un archivo .fwsc descargado. "
+      + "Utiliza Actualizar seleccionado o importa tu archivo .fwsc.");
+    if (fw !== selectedFirmware) throw new Error("Cambió el firmware seleccionado. Inténtalo de nuevo.");
+    const bytes = loaded.bytes instanceof Uint8Array ? loaded.bytes : new Uint8Array(loaded.bytes);
+    if (bytes.byteLength < 1024 || bytes.byteLength > 15 * 1024 * 1024)
+      throw new Error("El firmware seleccionado tiene un tamaño no admitido (1 KB a 15 MB).");
+    if (appFromPackage(bytes).length < 512)
+      throw new Error("El paquete .fwsc seleccionado no contiene un firmware ejecutable válido.");
+    physicalInstallStatus.textContent = "Calculando SHA-256 antes de instalar…";
+    const sha256 = await packageHash(bytes);
+    const android = nativeWindow.FM1Android;
+    if (!android.preparePhysicalFirmware("fm1",
+          String(selectedFirmware.name || "Firmware FM-1"), bytes.byteLength, sha256)) {
+      throw new Error("El instalador físico está ocupado o no está disponible.");
+    }
+    uploadStarted = true;
+    const chunkSize = 24 * 1024;
+    let part = 0;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize, part++) {
+      const chunk = bytes.subarray(offset, Math.min(bytes.length, offset + chunkSize));
+      const base64 = btoa(String.fromCharCode(...chunk));
+      if (!android.physicalFirmwareChunk(part, base64))
+        throw new Error("Error al transferir el archivo al instalador Android.");
+      if (part % 8 === 0) {
+        physicalInstallStatus.textContent = "Preparando firmware seleccionado: "
+          + Math.round((offset + chunk.length) * 100 / bytes.length) + "%";
+        // Yield periodically so the WebView remains responsive.
+        await new Promise(resolve => requestAnimationFrame(resolve));
+      }
+    }
+    if (!android.confirmPhysicalFirmwareUpload())
+      throw new Error("El instalador rechazó el firmware .fwsc: comprueba el diagnóstico.");
+    uploadStarted = false;
+    preparingPhysicalFirmware = false;
+    physicalInstallStatus.textContent = "Selecciona el FM-1 USB. "
+      + "Se comprobará su identidad y se te preguntará si asumes los riesgos.";
+  } catch (error) {
+    if (uploadStarted) nativeWindow.FM1Android?.abortPhysicalFirmwareUpload?.();
+    physicalInstallStatus.textContent = "Instalación no iniciada: " + (error?.message || String(error));
+    physicalInstallStatus.dataset.error = "true";
+    preparingPhysicalFirmware = false;
+    physicalFirmwareBusy = false;
+  } finally {
+    updateButtonsState();
+  }
+}
+installSelectedPhysicalBtn?.addEventListener("click", installSelectedPhysicalFirmware);
 
 fwSel.addEventListener("change", () => {
   fw = byId.get(fwSel.value) || localFw;
