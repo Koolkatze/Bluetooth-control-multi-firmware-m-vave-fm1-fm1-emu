@@ -551,7 +551,11 @@ final class PhysicalFm1Installer {
                 opened[0].close();
                 throw new IOException("El dispositivo USB no tiene puertos MIDI bidireccionales");
             }
-            return new Link(opened[0], input, output);
+            Link link = new Link(opened[0], input, output);
+            // Some USB-MIDI stacks drop SysEx immediately after a fresh
+            // port opens. fm1_install.py waits 300 ms for exactly this.
+            Thread.sleep(300L);
+            return link;
         }
 
         void send(byte[] message) throws IOException { input.send(message, 0, message.length); }
