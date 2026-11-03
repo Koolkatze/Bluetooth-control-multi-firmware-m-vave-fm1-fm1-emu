@@ -269,6 +269,9 @@ final class PhysicalFm1Installer {
                 + "Un corte de conexión o un firmware defectuoso puede dejarlo inutilizable. "
                 + "El procedimiento será bajo tu propia responsabilidad. "
                 + "Necesitas tener preparado un método de recuperación.\n\n"
+                + "IMPORTANTE: al sustituir Workbench Remote por otro firmware, "
+                + "el FM-1 perderá el control completo de la pantalla y los "
+                + "knobs del móvil hasta reinstalar Workbench Remote.\n\n"
                 + "No desconectes el USB ni apagues el FM-1 hasta la verificación final.";
         new AlertDialog.Builder(activity)
                 .setTitle("CONFIRMAR INSTALACIÓN · BAJO TU RESPONSABILIDAD")
@@ -567,7 +570,8 @@ final class PhysicalFm1Installer {
         void clear() { messages.clear(); }
 
         @Override public void close() {
-            output.disconnect(receiver);
+            try { output.disconnect(receiver); }
+            catch (RuntimeException ignored) { /* USB may have disappeared */ }
             try { output.close(); } catch (IOException ignored) {}
             try { input.close(); } catch (IOException ignored) {}
             try { device.close(); } catch (IOException ignored) {}
