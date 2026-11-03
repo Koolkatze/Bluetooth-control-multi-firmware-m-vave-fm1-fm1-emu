@@ -45,8 +45,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tx,rx) = mpsc::channel::<Cmd>();
     let worker = thread::spawn(move|| run_worker(machine,worker_shared,rx,48000,None));
 
+    /* URBAN-1 v0.4.16 now boots on a persistent Kitsune splash. The
+     * first panel tap is intentionally consumed to close the splash;
+     * it must NOT be mistaken for a lost PLAY/SEQ/HOME press. */
     drive(&shared,1200);
+    let cover = snapshot(&shared);
+    save_ppm(&dir.join("00-kitsune-cover.ppm"), &cover);
+    tap(&tx,8); // HOME dismisses the splash without starting playback
+    drive(&shared,800); // > 180 ms glitch-out; allow LCD DMA + UI frames
     let stopped = snapshot(&shared);
+    assert!(changed(&cover,&stopped)>500,
+        "HOME could not dismiss the Kitsune splash");
     save_ppm(&dir.join("01-stopped.ppm"), &stopped);
 
     tap(&tx,12); // PLAY: FM-1 physical matrix ID 12
