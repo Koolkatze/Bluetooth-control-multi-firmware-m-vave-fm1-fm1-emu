@@ -186,7 +186,7 @@ def main() -> None:
     if args.dry_run:
         print("OK: CTL-1 source accepts Workbench Remote v1 patch; no files changed")
         return
-    backup = file.with_suffix(".workbench-backup.c")
+    backup = file.with_suffix(".workbench-backup.orig")
     if backup.exists():
         parser.error(f"Backup already exists; refusing to overwrite: {backup}")
     backup.write_text(original, encoding="utf-8")
