@@ -10,6 +10,12 @@ firmware del FM-1 real**. El controlador físico no se modifica al pulsar
 «Actualizar seleccionado», «Actualizar todos», elegir o iniciar un
 firmware en el emulador.
 
+No hace falta seleccionar un dispositivo USB manualmente: Workbench
+busca FM-1 USB-MIDI ya conectado y también detecta nuevas conexiones
+mientras está abierta la búsqueda. La identidad del FM-1 se verifica
+con SysEx antes de continuar. Puedes cancelar la búsqueda sin riesgo.
+El sistema debe exponer el FM-1 como MIDI USB bidireccional.
+
 Para evitar instalaciones accidentales, se identifica primero el
 dispositivo FM-1 USB y se solicita expresamente el consentimiento
 **«¿Seguro que quieres instalar firmware personalizado? ... bajo tu
