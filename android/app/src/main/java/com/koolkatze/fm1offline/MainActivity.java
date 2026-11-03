@@ -99,6 +99,26 @@ public final class MainActivity extends Activity {
     private final AtomicLong midiReceivedBytes = new AtomicLong();
     private volatile int midiLastStatus = 0;
     private volatile String midiRouteLabel = "Sin conexión";
+    private static final String MIDI_MODE_PREF = "workbench.midi.mode";
+    private final MidiPanelMapper midiPanelMapper = new MidiPanelMapper();
+    private final AtomicLong mappedPanelEvents = new AtomicLong();
+    private final MidiPanelMapper.Sink midiSink = new MidiPanelMapper.Sink() {
+        @Override public void midi(byte[] bytes) { deliverPerformanceMidi(bytes); }
+        @Override public void panel(int kind, int id, int value) {
+            mappedPanelEvents.incrementAndGet();
+            final boolean directlyNative = nativeActive && NativeSynth.AVAILABLE;
+            // Send controls to Rust immediately, independently of WebView drawing.
+            if (directlyNative) NativeSynth.control(kind, id, value);
+            // Update the touchscreen's button/encoder feedback asynchronously.
+            // In WASM mode this same call also sends the input to AudioWorklet.
+            ui.post(() -> {
+                if (web != null && webReady)
+                    web.evaluateJavascript("window.fm1PhysicalControl&&window.fm1PhysicalControl("
+                            + kind + "," + id + "," + value + ","
+                            + directlyNative + ")", null);
+            });
+        }
+    };
     private BluetoothLeScanner scanner;
     private ScanCallback scannerCallback;
     private final Map<String, BluetoothDevice> nearbyMidi = new LinkedHashMap<>();
@@ -907,6 +927,10 @@ public final class MainActivity extends Activity {
         }
         int scanIndex = labels.size();
         labels.add("Buscar MIDI Bluetooth (BLE)");
+        int mappingIndex = labels.size();
+        labels.add("Modo de mapeo: " + midiPanelMapper.getMode().name());
+        int tableIndex = labels.size();
+        labels.add("Ver botones y knobs mapeados");
         int diagnosticIndex = labels.size();
         labels.add("Diagnóstico: recepción MIDI y conexión");
         int disconnectIndex = labels.size();
@@ -917,6 +941,8 @@ public final class MainActivity extends Activity {
                 .setItems(labels.toArray(new String[0]), (dialog, item) -> {
                     if (item < devices.size()) openMidiDevice(devices.get(item));
                     else if (item == scanIndex) startBleScan();
+                    else if (item == mappingIndex) showMidiModePicker();
+                    else if (item == tableIndex) showMidiMappingTable();
                     else if (item == diagnosticIndex) showMidiDiagnostics();
                     else if (item == disconnectIndex) closeMidi();
                     else show("Empareja el altavoz Bluetooth o conecta un DAC USB-C desde Android.");
@@ -925,11 +951,64 @@ public final class MainActivity extends Activity {
                 .show();
     }
 
+    private void showMidiModePicker() {
+        final String[] names = {
+                "Automático — CTL-1 / FM-1 o MIDI normal",
+                "Solo instrumento MIDI — notas, CC y reloj",
+                "CTL-1 instalado — teclas y knobs del panel (parcial)",
+                "Workbench Remote — panel completo (requiere firmware compatible)"
+        };
+        final String[] ids = { "auto", "midi", "ctl1", "remote" };
+        String selected = getPreferences(MODE_PRIVATE).getString(MIDI_MODE_PREF, "auto");
+        int checked = Arrays.asList(ids).indexOf(selected);
+        new AlertDialog.Builder(this).setTitle("M-VAVE FM-1 → Panel Workbench")
+                .setSingleChoiceItems(names, Math.max(0, checked), (dialog, which) -> {
+                    getPreferences(MODE_PRIVATE).edit().putString(MIDI_MODE_PREF, ids[which]).apply();
+                    midiPanelMapper.releaseKeys(midiSink);
+                    midiPanelMapper.setMode(modeForName(ids[which], midiRouteLabel));
+                    dialog.dismiss();
+                    show("Modo MIDI: " + names[which]);
+                })
+                .setNegativeButton("Cerrar", null).show();
+    }
+
+    private static MidiPanelMapper.Mode modeForName(String chosen, String device) {
+        if ("remote".equals(chosen)) return MidiPanelMapper.Mode.REMOTE;
+        if ("ctl1".equals(chosen)) return MidiPanelMapper.Mode.CTL1;
+        if ("auto".equals(chosen) && device != null) {
+            String lower = device.toLowerCase(java.util.Locale.ROOT);
+            if (lower.contains("fm-1") || lower.contains("ctl-1")
+                    || lower.contains("m-vave")) return MidiPanelMapper.Mode.CTL1;
+        }
+        return MidiPanelMapper.Mode.MIDI_ONLY;
+    }
+
+    private void showMidiMappingTable() {
+        new AlertDialog.Builder(this)
+                .setTitle("Controles físicos → Workbench")
+                .setMessage("CTL-1 instalado (página HOME / Play):\\n"
+                        + "27 teclas F3–G5 → 27 teclas virtuales (octava original)\\n"
+                        + "KNOB 1–4, bancos A–D → KNOB 1–4 del panel\\n"
+                        + "PRESETS (Program Change) → PRESETS\\n"
+                        + "PLAY (Start/Stop) → PLAY\\n"
+                        + "ENV (CC64) → ENV; REC (CC123) → REC\\n"
+                        + "MASTER: en CTL-1 asignar CC11 → MASTER\\n\\n"
+                        + "SELECT, ALGORITHM, OCT±, FX, SCL, LFO, EDIT, GLO, "
+                        + "HOME, SAVE, ARP y SEQ no emiten una pulsación MIDI "
+                        + "individual en CTL-1 original.\\n\\n"
+                        + "Para mapear los 14 botones, 7 encoders, MASTER y 27 teclas "
+                        + "1:1 hace falta el protocolo Workbench Remote "
+                        + "del firmware controlador. Véase docs/midi-mapping.md.")
+                .setPositiveButton("Cerrar", null).show();
+    }
+
     private void showMidiDiagnostics() {
         String text = "Ruta: " + midiRouteLabel
                 + "\nEstado: " + (midiDevice == null ? "sin sesión MIDI" : "sesión abierta")
                 + "\nMensajes MIDI recibidos: " + midiReceived.get()
                 + "\nBytes recibidos: " + midiReceivedBytes.get()
+                + "\nModo de mapeo: " + midiPanelMapper.getMode()
+                + "\nAcciones de panel: " + mappedPanelEvents.get()
                 + "\nÚltimo status: 0x" + Integer.toHexString(midiLastStatus).toUpperCase(java.util.Locale.ROOT)
                 + "\n\nCTL-1: GLO → Setup MIDI muestra USB/Bluetooth in/out."
                 + "\nEn Android utiliza MIDI → Buscar MIDI Bluetooth (BLE), NO el emparejamiento de Ajustes."
@@ -953,7 +1032,9 @@ public final class MainActivity extends Activity {
                 show("No se pudo abrir el dispositivo MIDI");
                 return;
             }
-            connectMidi(device, "USB/MIDI #" + info.getId());
+            String deviceName = info.getProperties().getString(MidiDeviceInfo.PROPERTY_NAME);
+            connectMidi(device, deviceName == null || deviceName.isEmpty()
+                    ? "USB/MIDI #" + info.getId() : deviceName + " • USB");
         }, ui);
     }
 
@@ -962,6 +1043,8 @@ public final class MainActivity extends Activity {
         // an asynchronous BLE open callback which just succeeded.
         midiDevice = device;
         midiRouteLabel = name;
+        midiPanelMapper.setMode(modeForName(
+                getPreferences(MODE_PRIVATE).getString(MIDI_MODE_PREF, "auto"), name));
         final int generation = midiConnectionGeneration;
         int connected = 0;
         for (int i = 0; i < device.getInfo().getOutputPortCount(); i++) {
@@ -999,6 +1082,10 @@ public final class MainActivity extends Activity {
     }
 
     private void deliverMidi(byte[] bytes) {
+        midiPanelMapper.accept(bytes, midiSink);
+    }
+
+    private void deliverPerformanceMidi(byte[] bytes) {
         if (nativeActive && NativeSynth.AVAILABLE) {
             // Pass MIDI directly from Android MidiManager to the Rust worker.
             // No JavaScript/main-thread scheduling is involved in note delivery.
@@ -1027,6 +1114,9 @@ public final class MainActivity extends Activity {
     }
 
     private void closeMidi() {
+        // Prevent stuck notes if a USB cable or BLE link drops mid-keypress.
+        midiPanelMapper.releaseKeys(midiSink);
+        midiPanelMapper.reset();
         // Delayed Android BLE callbacks from the previous connection must
         // not reach the emulated UART after a disconnect/reconnect.
         midiConnectionGeneration++;
@@ -1078,6 +1168,8 @@ public final class MainActivity extends Activity {
                             result.getScanRecord().getServiceUuids().contains(new ParcelUuid(BLE_MIDI_UUID));
                     boolean fm1 = label != null && (
                             label.equalsIgnoreCase("FM-1") ||
+                            label.toLowerCase(java.util.Locale.ROOT).contains("fm-1") ||
+                            label.toLowerCase(java.util.Locale.ROOT).contains("ctl-1") ||
                             label.toLowerCase(java.util.Locale.ROOT).contains("midi"));
                     if (midiService || fm1) ui.post(() -> nearbyMidi.put(key, device));
                 } catch (SecurityException ignored) {}
