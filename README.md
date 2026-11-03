@@ -7,7 +7,28 @@
 
 **Sin instalar nada:** elige un firmware compatible, pulsa **Start** y utiliza la LCD ampliada desde tu navegador. Esta edición online necesita conexión para cargar los archivos y algunos firmwares.
 
-### **[⬇ Descargar la aplicación Android sin Internet — M-VAVE FM1: Firmware bundle](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/v0.2.2)**
+### **[⬇ Descargar FM-1 Workbench para Android — última revisión del controlador](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/v0.2.10)**
+
+**v0.2.10 — correcciones de control físico:** la APK reconoce automáticamente
+el protocolo Workbench Remote por USB/BLE mediante CC102=42 en el canal 16,
+recibe los 7 encoders (SELECT, PRESETS, ALGORITHM, KNOB1–4), MASTER,
+los 14 botones (incluidos FX, SEL/SCL, ENV, LFO, EDIT, GLO, HOME, SAVE,
+ARP, SEQ, PLAY/STOP y REC) y las 27 teclas con pulsación y liberación
+independientes. Corrige las falsas equivalencias anteriores entre CC64/ENV,
+CC123/REC y MIDI Start/Stop/PLAY. Incluye diagnóstico por control.
+
+**Importante:** el CTL-1 estándar en el FM-1 físico no emite todos esos
+eventos; instalar solo la APK no crea SELECT/ALGORITHM ni los botones
+que falten. Para el mapeo completo existe el
+[adaptador de código fuente del firmware CTL-1](tools/patch_ctl1_workbench.py)
+y un [compilador experimental independiente del firmware físico]
+(.github/workflows/ctl1-workbench-remote.yml), que genera paquetes USB y
+BLE. Su instalación en hardware es voluntaria y requiere pruebas y
+un método de recuperación. La APK no flashea el FM-1 físico y el
+firmware del móvil (incluido URBAN-1) sigue seleccionándose sin flasheos.
+
+[Tabla de mapeo y limitaciones](docs/midi-mapping.md).
+
 
 Versión **0.2.6 (motor nativo experimental)**: APK con el nuevo icono FM-1, emulador y paquetes compatibles integrados. Tras instalarlo, los firmwares incluidos funcionan sin conexión. La integración con el FM-1 físico por MIDI sigue en fase de pruebas. Versión **v0.2.6**: corrige la falta de muestras PCM detectada en **AMB-1** y otros firmwares del motor Rust/AAudio: el hilo de síntesis genera 128 muestras por ciclo, mantiene una reserva de 1.024 muestras, prepara audio antes de iniciar AAudio y tiene prioridad sobre el dibujo. El informe ahora distingue **muestras perdidas por segundo**, velocidad de CPU emulada, PCM producido y nivel de la cola. **Experimental:** el banco de pruebas Linux pasó sin pérdidas, pero todavía no hay medición equivalente en un Android real. Utiliza USB-C o cable, no altavoz Bluetooth, para interpretar en directo.
 
