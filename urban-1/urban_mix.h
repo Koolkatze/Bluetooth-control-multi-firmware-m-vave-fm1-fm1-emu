@@ -62,12 +62,28 @@ static UrbanMixPlan urban_mix_plan(const UrbanSong *s,
         {27,48,  0, 81,55}, /* Breakdown */
         {44,57, 22, 72,45}  /* Outro */
     };
+    /* Study-style instrumental loops do not perform an EDM-style
+     * 'drop' that suddenly doubles energy or strips away the harmony.
+     * The same 56-bar song structure gets gentler section transitions. */
+    static const uint8_t lofi_dynamics[URBAN_SEQUENCES][5]={
+        {55,65,  0, 92,93}, /* intro: keys and vinyl atmosphere */
+        {91,92, 75,100,100},
+        {96,97,100,102,100},
+        {90,94, 76,100,100},
+        {65,80,  0,101,100}, /* bridge: quiet keys */
+        {97,99,100,103,100}, /* refrain, NOT an EDM drop */
+        {50,68,  0, 98,100},
+        {60,73,  0, 94,95}
+    };
+    const unsigned lofi=(s->genre%URBAN_GENRES==3u &&
+                         s->subgenre%4u==3u);
+    const uint8_t (*dyn)[5]=lofi?lofi_dynamics:dynamics;
     section%=URBAN_SEQUENCES;
-    m.drums=urban_mix_cap((unsigned)b->drums*dynamics[section][0]/100u,82);
-    m.bass=urban_mix_cap((unsigned)b->bass*dynamics[section][1]/100u,78);
-    m.lead=urban_mix_cap((unsigned)b->lead*dynamics[section][2]/100u,55);
-    m.chords=urban_mix_cap((unsigned)b->chords*dynamics[section][3]/100u,55);
-    m.noise=urban_mix_cap((unsigned)b->noise*dynamics[section][4]/100u,13);
+    m.drums=urban_mix_cap((unsigned)b->drums*dyn[section][0]/100u,82);
+    m.bass=urban_mix_cap((unsigned)b->bass*dyn[section][1]/100u,78);
+    m.lead=urban_mix_cap((unsigned)b->lead*dyn[section][2]/100u,55);
+    m.chords=urban_mix_cap((unsigned)b->chords*dyn[section][3]/100u,55);
+    m.noise=urban_mix_cap((unsigned)b->noise*dyn[section][4]/100u,13);
     if(!urban_lead_active(s,section,bar))m.lead=0u;
     if(s->genre==3u || s->genre==5u) {
         /* G-Funk makes room for the rare held mono analog lead;
@@ -77,6 +93,16 @@ static UrbanMixPlan urban_mix_plan(const UrbanSong *s,
         if(s->subgenre%4u==3u) {
             m.lead=(uint8_t)(m.lead*3u/4u);
             m.noise=urban_mix_cap((unsigned)m.noise+2u,13u);
+            if(lofi) {
+                /* Very low noise floor and warm sampled-like keys, but
+                 * no excessive master volume or distorted hi-hats. */
+                m.drums=(uint8_t)(m.drums*90u/100u);
+                m.bass=(uint8_t)(m.bass*95u/100u);
+                m.chords=urban_mix_cap((unsigned)m.chords+7u,61u);
+                m.noise=urban_mix_cap((unsigned)m.noise+11u,19u);
+                if(urban_lofi_mood(s)==3u)
+                    m.drums=(uint8_t)(m.drums*78u/100u);
+            }
         }
     }
     uint8_t solo=0u;
@@ -124,14 +150,21 @@ static UrbanMixPlan urban_mix_plan(const UrbanSong *s,
      * Boom Bap, Jazz Rap, G-Funk and Underground, irrespective of the
      * global song genre or independently selected drum track.
      *
-     * Lo-fi hip-hop alone may push HYP's KICK-ONLY P_DRIVE to 34:
-     * it saturates the kick oscillator without distorting the snare.
+     * Lo-fi alone adds a little HYP KICK-ONLY drive (22) for warmth,
+     * not heavy saturation that drowns the delicate backbeat.
      * This is a separate engine parameter, not the full FX bus. */
     unsigned dg=s->tracks[0].genre%URBAN_GENRES;
     unsigned ds=s->tracks[0].subgenre%4u;
     if(dg==3u || dg==5u) {
-        m.kick=(uint8_t)(dg==3u && ds==3u?74u:70u);
-        m.drive=(uint8_t)(dg==3u && ds==3u?42u:8u);
+        m.kick=(uint8_t)(dg==3u && ds==3u?69u:70u);
+        m.drive=(uint8_t)(dg==3u && ds==3u?22u:8u);
+        if(dg==3u && ds==3u) {
+            m.snare=55u;
+            m.clap=0u;
+            m.hat=22u;
+            m.open=0u;
+            m.perc=0u;
+        }
         if(dg==3u && ds==0u)
             m.clap=0u; /* Boom Bap: pure snare even in mixed-genre songs. */
     }
