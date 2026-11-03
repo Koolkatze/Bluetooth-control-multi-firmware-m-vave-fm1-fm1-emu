@@ -223,7 +223,7 @@ final class FirmwareUpdater {
             }
             String pkg = h.optString("pkg", "");
             if (!pkg.isEmpty()) {
-                item.put("package", new URL("https://thefirmwarehub.com/", pkg).toExternalForm());
+                item.put("package", new URL(new URL("https://thefirmwarehub.com/"), pkg).toExternalForm());
                 item.remove("byo");
                 item.remove("unavailable");
             } else {
