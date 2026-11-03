@@ -1,5 +1,25 @@
 # M-VAVE FM-1 físico ↔ Workbench: MIDI USB-C y BLE
 
+## Instalar en el FM-1 físico cualquier firmware FM-1 seleccionado
+
+La APK Android incluye una acción separada **«Instalar firmware seleccionado
+en FM-1»**. Toma el .fwsc disponible del firmware elegido en Workbench
+(desde el catálogo, después de actualizarlo o importado por ti), verifica
+SHA-256 y la identidad del paquete y **usa USB-MIDI para reescribir el
+firmware del FM-1 real**. El controlador físico no se modifica al pulsar
+«Actualizar seleccionado», «Actualizar todos», elegir o iniciar un
+firmware en el emulador.
+
+Para evitar instalaciones accidentales, se identifica primero el
+dispositivo FM-1 USB y se solicita expresamente el consentimiento
+**«¿Seguro que quieres instalar firmware personalizado? ... bajo tu
+propia responsabilidad»**. El proceso solo escribe si aceptas, y
+verifica el firmware tras el reinicio. No admite BLE, firmwares SMK-37
+ni cualquier archivo binario sin formato compatible. Es experimental
+y no está probado con un FM-1 real: un corte de alimentación puede
+dejarlo inoperativo. Conserva el método de recuperación y el firmware
+original. Recursos adicionales -res.bin no se transfieren por esta acción.
+
 ## REQUISITO: teléfono como pantalla + FM-1 físico como controlador completo
 
 Para esta configuración **NO basta con instalar la APK en Android**.
@@ -18,10 +38,11 @@ esas pulsaciones por MIDI.
   LCD que está dibujando el FM-1 físico.
 - **Una sola instalación física inicial**: cambiar entre firmwares
   sintetizadores en la APK no implica reflashear el controlador.
-- **No hay flasheo remoto**: la pestaña de actualización de firmwares
-  de Workbench solo gestiona firmwares emulados, no el del hardware.
-  El firmware Workbench Remote físico es experimental y debe flashearse
-  manualmente con precauciones y vía de rescate.
+- **Instalación física opcional por USB:** ahora existe una acción
+  independiente «Instalar firmware seleccionado en FM-1», con comprobación
+  de identidad y confirmación de riesgos. En cambio, las acciones
+  «Actualizar seleccionado» y «Actualizar todos» solo gestionan la biblioteca
+  del emulador. Nunca se flashea el FM-1 automáticamente ni por BLE.
 
 Si se usa exclusivamente el panel táctil y el sonido del móvil,
 Workbench Remote **no es necesario**.
