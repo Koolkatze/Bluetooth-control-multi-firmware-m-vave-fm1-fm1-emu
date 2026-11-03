@@ -49,6 +49,41 @@ typedef struct {
     uint8_t held[27];
     uint8_t edit_note,edit_velocity;
 } UrbanRecorder;
+/* REC notes are a SEPARATE live voice set from the generated song.
+ * A recorded NOTE_ON without an eventual NOTE_OFF (e.g. PAUSE exactly at
+ * a loop boundary) must not sustain forever. Track native DSP pitches per
+ * HYP voice; this is bounded to 3 x 128 bits = 48 bytes, no heap/ISR work.
+ */
+typedef struct {
+    uint32_t active[3][4];
+} UrbanRecVoices;
+static void urban_rec_voices_clear(UrbanRecVoices *v) {
+    for(unsigned voice=0u;voice<3u;voice++)
+        for(unsigned word=0u;word<4u;word++)v->active[voice][word]=0u;
+}
+static int urban_rec_voice_active(const UrbanRecVoices *v,unsigned voice,
+                                  unsigned note) {
+    if(voice>=3u||note>=128u)return 0;
+    return (v->active[voice][note/32u]&(1u<<(note%32u)))!=0u;
+}
+static void urban_rec_voice_set(UrbanRecVoices *v,unsigned voice,
+                                unsigned note,int on) {
+    if(voice>=3u||note>=128u)return;
+    uint32_t mask=1u<<(note%32u);
+    if(on)v->active[voice][note/32u]|=mask;
+    else v->active[voice][note/32u]&=~mask;
+}
+static unsigned urban_rec_voices_count(const UrbanRecVoices *v) {
+    unsigned count=0u;
+    for(unsigned voice=0u;voice<3u;voice++)
+        for(unsigned note=0u;note<128u;note++)
+            if(urban_rec_voice_active(v,voice,note))count++;
+    return count;
+}
+/* New take or style: wipe EVERY recorded event, cursor, overdub flag,
+ * armed/record/edit state, bars, quantization, program, octave and held
+ * notes. PAUSE is deliberately NOT a call site: saved REC survives. */
+static void urban_rec_reset(UrbanRecorder *r);
 static void urban_rec_init(UrbanRecorder *r) {
     for(unsigned i=0;i<sizeof(*r);i++)((uint8_t *)r)[i]=0u;
     r->state=UR_REC_OFF;
@@ -56,6 +91,9 @@ static void urban_rec_init(UrbanRecorder *r) {
     r->track=urban_rec_instrument(r->program).track;
     r->bars=4u;r->quant=3u; /* quant=3 is 1/16 */
     r->edit_note=60u;r->edit_velocity=110u;
+}
+static void urban_rec_reset(UrbanRecorder *r) {
+    urban_rec_init(r);
 }
 static unsigned urban_rec_length(const UrbanRecorder *r) {
     return r->bars*UR_REC_TICKS_BAR;
