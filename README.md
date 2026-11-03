@@ -45,6 +45,28 @@ SMK-37, archivos corruptos o imágenes arbitrarias; BLE no se usa para
 flashear. Algunos paquetes necesitan recursos complementarios -res.bin
 que este botón aún no instala.
 
+### Blackhole Remote HD — transición glitch y pantalla interactiva (siguiente beta)
+
+La nueva versión física sustituye la entrada automática tras 1,6 segundos
+por una **secuencia de glitch de entrada**, seguida de la imagen del
+agujero negro, que **permanece indefinidamente** hasta pulsar de nuevo
+una tecla real del teclado (o un botón físico). La pulsación inicia el
+**glitch de salida** y se accede al controlador. El envío MIDI, la lectura
+de las teclas y sus LED siguen funcionando durante el arranque.
+
+El defecto cromático verdoso se ha corregido: el framebuffer RGB565 del
+FM-1 exige valores con los bytes invertidos; los píxeles directos del
+bitmap ahora pasan por `swap16()` como el resto de primitivas gráficas.
+
+En el modo controlador desaparece el título: el agujero negro de
+**240 × 144 píxeles** ocupa todo el fondo superior. Se superponen batería,
+USB MIDI y Bluetooth MIDI en tarjetas con **40% de transparencia**
+(composición 40% fondo + 60% tarjeta oscura). El **piano de 240 × 96 píxeles
+permanece completamente opaco** y sigue resaltando las teclas reales
+y sus luces físicas. La imagen total sigue siendo **cuadrada 240 × 240**.
+
+Esta implementación es experimental hasta probarse sobre un FM-1 físico.
+
 ## Blackhole Remote: MIDI controller — firmware físico del M-VAVE FM-1
 
 **Release independiente — Blackhole Remote HD v0.1.0 beta 1:** 
