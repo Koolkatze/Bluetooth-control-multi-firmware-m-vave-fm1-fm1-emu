@@ -26,6 +26,27 @@ y no está probado con un FM-1 real: un corte de alimentación puede
 dejarlo inoperativo. Conserva el método de recuperación y el firmware
 original. Recursos adicionales -res.bin no se transfieren por esta acción.
 
+## Pantalla cuadrada HD: imagen de arranque del agujero negro
+
+Se ha sustituido el diseño anterior, que calculaba la imagen usando
+cuadrados de **4 × 4 píxeles**, por una rasterización de alta definición
+de la referencia ilustrada, con **240 × 144 píxeles indexados en RGB565
+(64 colores)**. La zona inferior de 96 filas se dibuja en tiempo real
+para completar los **240 × 240 píxeles del FM-1**. El arranque se mantiene
+visible durante 1,6 s como mínimo; las notas MIDI y los LED físicos
+siguen procesándose mientras se ve la ilustración.
+
+La pantalla normal tiene una miniatura auténtica del mismo agujero
+negro de 64 × 44 píxeles, no el antiguo círculo generado por bloques.
+La batería, el enlace USB/BLE y el piano de 27 teclas continúan
+siendo **dinámicos**, por lo que no aparecen en el arranque lecturas
+falsas de batería o conexiones.
+
+Los datos gráficos están embebidos en el código fuente del
+[generador HD](../tools/generate_blackhole_bitmap.py), que genera
+`app/blackhole_bitmap.h` antes de la compilación física; no se
+necesita Internet en el FM-1 para dibujar el agujero negro.
+
 ## Blackhole Remote: MIDI controller (nuevo nombre del firmware físico)
 
 El antiguo **Workbench Remote** pasa a llamarse **Blackhole Remote:
