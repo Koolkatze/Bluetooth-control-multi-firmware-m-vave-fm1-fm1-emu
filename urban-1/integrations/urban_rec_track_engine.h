@@ -21,8 +21,8 @@ enum {
 };
 typedef struct {
     uint8_t note,program,kind,pressed;
-    float phase,subphase,frequency,velocity,amp,peak;
-    float attack,decay,release,age,pan;
+    float phase,subphase,phase3,phase4,modphase,frequency,velocity,amp,peak;
+    float attack,decay,release,age,pan,lp,lp2,brightness;
     uint32_t noise;
 } UrbanRecTrackVoice;
 static UrbanRecTrackVoice urt_voices[URBAN_REC_TRACK_POLY];
@@ -31,6 +31,7 @@ static uint8_t urt_parameter[URT_PARAMS]={
     12u,45u,72u,35u, 25u,0u,0u,0u,
     80u,55u,50u,10u
 };
+#include "urban_rec_program_renderer.h"
 static float urt_lfo_phase;
 volatile uint32_t urban_rec_track_onsets;
 volatile uint32_t urban_rec_track_rendered_frames;
@@ -97,8 +98,19 @@ static void urban_rec_track_note(int note,int on,int velocity)
     v->pressed=(uint8_t)(v->kind<4u);
     v->phase=0.0f;
     v->subphase=0.0f;
+    v->phase3=0.0f;
+    v->phase4=0.0f;
+    v->modphase=0.0f;
+    v->lp=v->lp2=0.0f;
+    v->brightness=1.0f;
     v->frequency=mtof((float)note);
-    if(v->kind==0u)v->frequency*=0.5f; /* bass family */
+    /* Same octave as the installed HYP bass: its original note_cmd
+     * maps the physical keyboard down two octaves, the lead down one.
+     * Jazz models use their selected instrument's normal octave. */
+    if(v->program<16u||v->program==48u||v->program==49u)
+        v->frequency*=0.25f;
+    else if(v->program>=16u&&v->program<32u)
+        v->frequency*=0.5f;
     if(v->frequency>12500.0f)v->frequency=12500.0f;
     if(v->frequency<20.0f)v->frequency=20.0f;
     v->velocity=(velocity>127?127:velocity<1?1:velocity)*(1.0f/127.0f);
@@ -158,36 +170,13 @@ static void urban_rec_track_render(uint32_t n)
                 v->amp-=v->amp*release;
                 if(v->amp<0.00005f){v->amp=0.0f;continue;}
             }
-            /* Always use a band-limited-enough low fundamental; the
-             * upper harmonics are attenuated by the REC tone knob. */
-            float fm=v->kind==3u?0.013f:0.0f;
             float freq=v->frequency;
-            if(lfo_target==1u)freq*=1.0f+0.012f*lfo_depth*lfo;
-            v->phase+=freq/EN_SR;
-            if(v->phase>=1.0f)v->phase-=1.0f;
-            v->subphase+=freq*0.502f/EN_SR;
-            if(v->subphase>=1.0f)v->subphase-=1.0f;
-            float phase=v->phase;
-            float osc=sine_any(phase+fm*sine(v->subphase));
-            float second=sine(phase*2.0f);
-            float partial=sine(phase*3.0f);
-            unsigned variant=v->program%16u;
-            if(v->kind==0u) /* bass: fundamental, slight sub and growl */
-                osc=osc*0.78f+sine(v->subphase)*0.34f+
-                    second*(0.04f+tone*0.12f);
-            else if(v->kind==1u) /* lead: sharper harmonics */
-                osc=osc*0.65f+second*(0.18f+tone*0.22f)+
-                    partial*(0.03f+(float)(variant%4u)*0.025f);
-            else if(v->kind==2u || v->kind==3u) /* keys / jazzy bells */
-                osc=osc*0.77f+second*(0.06f+tone*0.14f)+
-                    sine(phase*2.79f)*(v->kind==3u?0.16f:0.05f);
-            else if(v->kind==4u || v->kind==5u) {
-                /* Distinct one-shot percussion/SFX, NOT generated drums. */
-                v->noise=v->noise*1664525u+1013904223u;
-                float nz=(float)(int32_t)v->noise*(1.0f/2147483648.0f);
-                osc=osc*(v->kind==4u?0.65f:0.42f)+
-                    nz*(v->kind==4u?0.30f:0.50f);
-            }
+            if(lfo_target==1u)v->frequency=
+                   freq*(1.0f+0.012f*lfo_depth*lfo);
+            /* Each of the 78 REC programs selects the actual HYP-1
+             * oscillator/kit model by its immutable patch index. */
+            float osc=urban_rec_program_sample(v,tone);
+            v->frequency=freq; /* LFO never permanently detunes patch */
             if(lfo_target==2u)osc*=1.0f+0.25f*lfo*lfo_depth;
             if(lfo_target==0u)osc*=1.0f+0.35f*lfo*lfo_depth;
             /* Bounded soft drive; no unbounded clipping in overdubs. */
