@@ -272,7 +272,11 @@ static void bh_remote_header(void)
 
     cv_text(10, 87, &FONT_XS, "BATT EST.", BH_MUTED);
     if (pct < 0) {
-        cv_text(11, 104, &FONT_B, "--%", BH_WHITE);
+        /* Avoid a permanently empty --% panel when the ADC cannot
+         * acquire the battery divider. Never invent a battery level. */
+        cv_text(11, 104, &FONT_B,
+                plat_ms() < 1500u ? "READ.." : "NO ADC",
+                plat_ms() < 1500u ? BH_WHITE : BH_ORANGE);
     } else {
         put_s(put_u(number, (uint32_t)pct), "%");
         cv_text(11, 103, &FONT_B, number, pct <= 15 ? BH_ORANGE : BH_GREEN);
