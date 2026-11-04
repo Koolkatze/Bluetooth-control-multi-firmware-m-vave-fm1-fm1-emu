@@ -4,7 +4,7 @@ expect urbanrecstate 0
 tap REC
 expect urbanrecscreen 1
 expect urbanrecstate 1
-expect urbanrectrack 4
+expect urbanrectrack 8
 spin K2 -2
 expect urbanrecbars 1
 spin K3 1
