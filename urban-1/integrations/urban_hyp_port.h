@@ -547,28 +547,15 @@ static int urban_port_editor_value(int id);
  * SFX are one-shot DSP hits; melodic note OFF remains a real voice release. */
 static void urban_port_rec_note(const UrbanRecorder *r,unsigned note,
                                 unsigned velocity,unsigned on) {
-    UrbanRecInstrument ins=urban_rec_instrument(r->program);
-    int voice=urban_hyp_voice(ins.track);
-    if(voice>=0) {
-        unsigned pitch=(unsigned)urban_hyp_key((unsigned)voice,(uint8_t)note);
-        int active=urban_rec_voice_active(&urban_port.rec_voices,
-                                          (unsigned)voice,pitch);
-        /* Replayed NOTE_ON before a corresponding NOTE_OFF is a
-         * retrigger, never an unbounded accumulation of DSP voices. */
-        if(on && active)en_note(voice,(int)pitch,0);
-        if(on || active) {
-            en_note(voice,(int)pitch,(int)on);
-            urban_rec_voice_set(&urban_port.rec_voices,
-                                (unsigned)voice,pitch,(int)on);
-        }
-    } else if(on && ins.track==0u) {
-        /* 27 keys repeat six real lanes: kick, snare, clap, CH/OH, perc. */
-        unsigned lane=(note+192u-53u)%6u;
-        en_urban_drum((int)lane,(int)(velocity?velocity:110u));
-    } else if(on && ins.track==6u) {
-        unsigned level=(unsigned)urban_port.sfx_level*velocity/110u;
-        if(level>100u)level=100u;
-        urban_sfx_trigger(ins.patch,level,urban_port.sfx_length);
+    if(note>127u)return;
+    /* All 78 REC presets route exclusively to Track 9. Program is
+     * selected per-note before NOTE_ON in the HYP DSP command queue. */
+    if(on)en_urban_rec_program((int)r->program);
+    int was=urban_rec_voice_active(&urban_port.rec_voices,0u,note);
+    if(on && was)en_urban_rec_note((int)note,0,0);
+    if(on || was) {
+        en_urban_rec_note((int)note,(int)velocity,(int)on);
+        urban_rec_voice_set(&urban_port.rec_voices,0u,note,(int)on);
     }
 }
 static void urban_port_rec_timeline(void) {
@@ -585,18 +572,11 @@ static void urban_port_rec_timeline(void) {
         if(e->pos!=pos && !(e->pos==(pos+1u)%len && !(pos&1u)))
             continue;
         if(e->kind==UR_REC_PARAM) {
-            if(e->parameter<P_NPARAMS) {
-                UrbanEditor *ed=&p->editor;
-                ed->changed[e->parameter]=1u;
-                p->rec_automated[e->parameter]=1u;
-                int v=(int)(int8_t)e->value;
-                ed->override[e->parameter]=(int16_t)v;
-                urban_port_set(e->parameter,v);
-            } else if(e->parameter==UC_LEAD_LFO_RATE||
-                      e->parameter==UC_LEAD_LFO_DEPTH) {
-                urban_port_editor_write(e->parameter,
-                    (int)(int8_t)e->value-urban_port_editor_value(e->parameter));
-            }
+            /* Recorder automation belongs to REC Track 9 only. Old
+             * events can never overwrite generated-song FX/EDIT. */
+            if(e->parameter<12u)
+                urban_port_rec_control_value(e->parameter,
+                                              (unsigned)e->value);
         } else if(e->kind==UR_REC_NOTE_ON||e->kind==UR_REC_NOTE_OFF) {
             urban_port_rec_note(r,e->note,e->value,e->kind==UR_REC_NOTE_ON);
         }
@@ -631,9 +611,8 @@ static void urban_port_step(void) {
     UrbanChordScore cs=urban_chord_score(&p->rt.ui.song,
                            p->rt.ui.song.current,
                            urban_phrase_bar(&p->rt.ui.song));
-    if((cs.onsets>>cstep)&1u &&
-       !((p->recorder.state==UR_REC_ARM||p->recorder.state==UR_REC_RECORD||
-          p->recorder.state==UR_REC_EDIT)&&p->recorder.track==4u))
+    /* Generated chords NEVER stop when REC is armed/recording. */
+    if((cs.onsets>>cstep)&1u)
         urban_port_chord(cs.color,cs.gate);
     for(i=0;i<3;i++) if(p->held[i] && p->left[i]) {
         if(--p->left[i]==0u) {
@@ -656,10 +635,6 @@ static void urban_port_step(void) {
          * polling function. Firing both would sound doubled/late. */
         if(i==3u && p->rt.ui.song.tracks[3].genre%URBAN_GENRES==12u)
             continue;
-        if((p->recorder.state==UR_REC_ARM||
-            p->recorder.state==UR_REC_RECORD||
-            p->recorder.state==UR_REC_EDIT)&&p->recorder.track==i)
-            continue;
         urban_port_note(i,frame.event[i],frame.glide[i]);
     }
     urban_port_rec_timeline();
@@ -670,9 +645,7 @@ static void urban_port_step(void) {
     const UrbanTrack *sf=&p->rt.ui.song.tracks[6];
     uint8_t solo=0u;
     for(i=0u;i<URBAN_TRACKS;i++)solo|=p->rt.ui.song.tracks[i].solo;
-    if(!sf->muted && (!solo || sf->solo) && p->sfx_level && p->sfx_density &&
-       !((p->recorder.state==UR_REC_ARM||p->recorder.state==UR_REC_RECORD||
-          p->recorder.state==UR_REC_EDIT)&&p->recorder.track==6u)) {
+    if(!sf->muted && (!solo || sf->solo) && p->sfx_level && p->sfx_density) {
         UrbanSfxEvent cue=urban_sfx_event(&p->rt.ui.song,
                                            sfx_section,sfx_bar,cstep);
         uint32_t choice=urban_mix_seed(sf->seq[sfx_section].seed ^
@@ -817,6 +790,8 @@ static void urban_port_init(uint32_t seed) {
     p->staged_for_bar=UINT32_MAX;
     p->sfx_type_override=-1;
     urban_rec_init(&p->recorder);
+    urban_port_rec_controls_default();
+    en_urban_rec_program((int)p->recorder.program);
     /* Real FM-1 device and Android firmware emulation start with the
      * illustrated cover. The ordinary host simulator bypasses it so
      * existing audio/transport tests remain unchanged; dedicated host
