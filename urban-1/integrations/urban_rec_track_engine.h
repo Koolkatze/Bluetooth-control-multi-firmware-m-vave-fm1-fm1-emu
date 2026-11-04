@@ -102,7 +102,10 @@ static void urban_rec_track_note(int note,int on,int velocity)
     if(v->frequency>12500.0f)v->frequency=12500.0f;
     if(v->frequency<20.0f)v->frequency=20.0f;
     v->velocity=(velocity>127?127:velocity<1?1:velocity)*(1.0f/127.0f);
-    v->amp=0.00001f;
+    /* One-shots are not held keys: they must be primed above the
+     * renderer's silence threshold or drum/SFX triggers would be
+     * discarded before the first audio sample. */
+    v->amp=v->kind>=4u?0.0001f:0.00001f;
     v->peak=0.0f;
     v->age=0.0f;
     v->attack=1.0f/(EN_SR*(0.002f+0.005f*(float)urt_parameter[URT_ATTACK]));
