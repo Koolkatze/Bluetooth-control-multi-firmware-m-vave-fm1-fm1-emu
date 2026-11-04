@@ -24,6 +24,14 @@
  * separate object. Both need the same exported DSP entry points. */
 void urban_sfx_trigger(unsigned type,unsigned level,unsigned length);
 void en_urban_drum(int lane,int velocity); /* HYP audio command queue */
+void en_urban_rec_note(int note,int velocity,int on);
+void en_urban_rec_program(int program);
+void en_urban_rec_control(int id,int value);
+void en_urban_rec_quiet(void);
+extern volatile uint32_t urban_rec_track_onsets;
+extern volatile uint32_t urban_rec_track_rendered_frames;
+extern volatile uint32_t urban_rec_track_active_voices;
+extern volatile uint32_t urban_rec_track_last_program;
 void urban_sfx_silence(void);
 extern volatile uint32_t urban_sfx_rendered_events;
 void urban_piano_roll_arm(const uint8_t *notes,unsigned count,unsigned gap_ms);
@@ -59,7 +67,7 @@ typedef struct {
     uint8_t active_mix_section;
     UrbanRecorder recorder;
     UrbanRecVoices rec_voices; /* Exact native DSP pitches held by REC. */
-    uint8_t rec_automated[P_NPARAMS]; /* Only REC-written editor overrides. */
+    uint8_t rec_controls[12]; /* Independent REC 9 ENV/LFO/FX parameters. */
     uint32_t play_press_ms,tape_stop_at,rec_step_ms;
     uint32_t rec_last_keys;
     uint8_t rec_key_pitch[27]; /* pitch latched at key-on for correct off */
@@ -134,34 +142,45 @@ static int urban_hyp_voice(unsigned track) {
  * A NOTE_ON whose loop NOTE_OFF was never dispatched cannot leave HYP
  * sustaining forever after PAUSE or regeneration. This runs on the UI
  * thread, not in the DSP callback. */
+/* The ninth REC track has a PRIVATE DSP synth bus. Neither NOTE_OFF
+ * nor PANIC touches arrangement pads, lead, bass, drum patterns or SFX. */
 static void urban_port_rec_release_audio(void) {
-    UrbanHypPort *p=&urban_port;
-    for(unsigned voice=0u;voice<3u;voice++)
-        for(unsigned note=0u;note<128u;note++)
-            if(urban_rec_voice_active(&p->rec_voices,voice,note)) {
-                en_note((int)voice,(int)note,0);
-                urban_rec_voice_set(&p->rec_voices,voice,note,0);
-            }
-    urban_rec_voices_clear(&p->rec_voices);
-    urban_sfx_silence();
+    en_urban_rec_quiet();
+    urban_rec_voices_clear(&urban_port.rec_voices);
 }
-/* A NEW song/track or a selected genre/subgenre invalidates REC. PAUSE
- * never calls this: the note/knob take survives ordinary transport stops.
- * Clear only automation overrides applied by REC playback; leave unrelated
- * manual FX/EDIT choices intact when regenerating a single track. */
+/* REC controllers are private: ENV, LFO and FX belong to this extra
+ * track, not to a generated song track or to the master EDIT page. */
+static const char *const urban_rec_control_name[12]={
+    "ATTACK","DECAY","SUSTAIN","RELEASE",
+    "LFO RATE","LFO DEPTH","LFO SHAPE","LFO TARGET",
+    "LEVEL","TONE","WIDTH","DRIVE"
+};
+static void urban_port_rec_controls_default(void) {
+    static const uint8_t defaults[12]={
+        12u,45u,72u,35u,25u,0u,0u,0u,80u,55u,50u,10u
+    };
+    for(unsigned i=0;i<12u;i++) {
+        urban_port.rec_controls[i]=defaults[i];
+        en_urban_rec_control((int)i,(int)defaults[i]);
+    }
+}
+static void urban_port_rec_control_value(unsigned id,unsigned value) {
+    if(id>=12u)return;
+    if(value>100u)value=100u;
+    urban_port.rec_controls[id]=(uint8_t)value;
+    en_urban_rec_control((int)id,(int)value);
+}
+/* New SONG/TRACK or new GENRE/SUBGENRE invalidates REC. Pause does NOT:
+ * notes/events/quantization survive, but active REC DSP voices are quiet. */
 static void urban_port_rec_reset_take(void) {
     UrbanHypPort *p=&urban_port;
     urban_port_rec_release_audio();
-    for(unsigned i=0u;i<P_NPARAMS;i++)if(p->rec_automated[i]) {
-        p->editor.changed[i]=0u;
-        p->editor.valid[i]=0u;
-        p->rec_automated[i]=0u;
-    }
     urban_rec_reset(&p->recorder);
+    urban_port_rec_controls_default();
     p->rec_clock_started=0u;
     p->rec_step_ms=plat_ms();
     p->rec_screen=0u;
-    p->rec_last_keys=plat_keys(); /* don't retrigger already-held buttons */
+    p->rec_last_keys=plat_keys();
     memset(p->rec_key_pitch,0,sizeof(p->rec_key_pitch));
     p->ui_drawn=0u;
     p->ui_signature=0u;
@@ -195,9 +214,9 @@ static void urban_port_release(void) {
 static void urban_port_pattern(uint8_t sequence,unsigned bar,uint8_t bank) {
     UrbanHypPort *p=&urban_port;
     uint16_t lanes[EN_NLANE]={0};
-    /* A drum-kit REC take replaces the generated six-lane pattern. */
-    if(p->recorder.state==UR_REC_OFF||p->recorder.track!=0u)
-        urban_drum_lanes(&p->rt.ui.song,sequence,bar,lanes);
+    /* REC uses its own percussion DSP; authored drum lanes are ALWAYS
+     * present while recording and when the recorder loops. */
+    urban_drum_lanes(&p->rt.ui.song,sequence,bar,lanes);
     for(unsigned i=0;i<EN_NLANE;i++)en_pats[bank][i]=lanes[i];
 }
 static void urban_port_stage_pattern(void) {
@@ -242,12 +261,9 @@ static void urban_port_compile_trance(void) {
     memset(&stage,0,sizeof(stage));
     uint8_t solo=0u;
     for(unsigned i=0;i<URBAN_TRACKS;i++)solo|=s->tracks[i].solo;
+    /* Trance keeps sounding; the REC channel no longer steals lead. */
     stage.enabled=(uint8_t)(lead->genre%URBAN_GENRES==12u &&
-        !lead->muted && (!solo || lead->solo) &&
-        !((urban_port.recorder.state==UR_REC_ARM||
-           urban_port.recorder.state==UR_REC_RECORD||
-           urban_port.recorder.state==UR_REC_EDIT)&&
-          urban_port.recorder.track==3u));
+        !lead->muted && (!solo || lead->solo));
     stage.song_mode=s->song_mode;
     stage.loop_queued=s->queued%URBAN_SEQUENCES;
     stage.length=s->arrangement_len;
@@ -286,18 +302,7 @@ static void urban_port_sound_profile(void) {
     UrbanInstrumentProgram pp=urban_instrument_program(s,4u,s->current);
     UrbanInstrumentProgram atmosphere=urban_instrument_program(s,5u,s->current);
     UrbanStylePatch bass=bp.patch,lead=lp.patch,pad=pp.patch;
-    /* The recording voice keeps its selected audible DSP program across
-     * song-section changes; all other tracks follow their own style. */
-    if(urban_port.recorder.state!=UR_REC_OFF) {
-        UrbanRecInstrument choice=urban_rec_instrument(urban_port.recorder.program);
-        if(choice.track==2u) {
-            bass.bass=choice.patch;bp.jazz_bass=choice.jazz;
-        } else if(choice.track==3u) {
-            lead.lead=choice.patch;lp.jazz_voice=choice.jazz;
-        } else if(choice.track==4u) {
-            pad.pad=choice.patch;pp.jazz_voice=choice.jazz;
-        }
-    }
+    /* Recorder owns its own timbre: do NOT override generated tracks. */
     /* Select actual new DSP engine on each independent jazz track. */
     urban_jazz_programs(pp.jazz_voice,lp.jazz_voice,bp.jazz_bass);
     /* HYP only exposes seven diatonic modes. Every selected scale
@@ -344,14 +349,6 @@ static void urban_port_sound_profile(void) {
     urban_port_set(P_KIT_SNARE,d.drum_kit);
     urban_port_set(P_KIT_HAT,h.hat_kit);
     urban_port_set(P_KIT_PERC,h.drum_kit);
-    if(urban_port.recorder.state!=UR_REC_OFF &&
-       urban_port.recorder.track==0u) {
-        unsigned kit=urban_rec_instrument(urban_port.recorder.program).patch;
-        urban_port_set(P_KIT_KICK,(int)kit);
-        urban_port_set(P_KIT_SNARE,(int)kit);
-        urban_port_set(P_KIT_HAT,(int)kit);
-        urban_port_set(P_KIT_PERC,(int)kit);
-    }
     /* Hip-hop's laid-back feel requires timing, not just a mask.
      * HYP swing delays ONLY off-sixteenth drum triggers by up to 0.5
      * steps; keep the 2/4 snare fixed and pad/bass on the harmonic grid.
@@ -421,20 +418,12 @@ static void urban_port_sound_profile(void) {
 static void urban_port_mix_levels(void) {
     const UrbanSong *s=&urban_port.rt.ui.song;
     UrbanMixPlan m=urban_mix_plan(s,s->current,urban_phrase_bar(s));
-    /* A manually played REC instrument must stay audible even when the
-     * arranger has intentionally muted its part for INTRO/BREAK, or when
-     * auditioning in ARM with transport stopped. An already-recorded loop
-     * stays audible after SAVE/HOME hides the panel; other tracks keep
-     * their usual mix and an unrecorded ARM-only preview restores on exit. */
-    const UrbanRecorder *rec=&urban_port.recorder;
-    unsigned audition=(urban_port.rec_screen ||
-                       rec->state==UR_REC_RECORD || rec->state==UR_REC_EDIT) &&
-                      rec->state!=UR_REC_OFF ?
-                      rec->track:255u;
-    urban_port_set(P_PULSE,audition==0u && m.drums<76?76:m.drums);
-    urban_port_set(P_BASS,audition==2u && m.bass<76?76:m.bass);
-    urban_port_set(P_ACID,audition==3u && m.lead<76?76:m.lead);
-    urban_port_set(P_PAD,audition==4u && m.chords<76?76:m.chords);
+    /* Recorded audio has its own gain/bus even while HYP is STOPPED.
+     * Never boost or replace drums, bass, lead or chord faders for REC. */
+    urban_port_set(P_PULSE,m.drums);
+    urban_port_set(P_BASS,m.bass);
+    urban_port_set(P_ACID,m.lead);
+    urban_port_set(P_PAD,m.chords);
     urban_port_set(P_NOISE,m.noise);
 }
 static void urban_port_section_mix(void) {
