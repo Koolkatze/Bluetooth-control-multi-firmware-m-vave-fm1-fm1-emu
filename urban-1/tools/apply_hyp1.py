@@ -110,32 +110,32 @@ def main() -> None:
         'C_HUSH, C_URBAN_DRUM, C_URBAN_REC_NOTE, C_URBAN_REC_PROGRAM, C_URBAN_REC_CTRL, C_URBAN_REC_QUIET };')
     replace_once(dsp,
         'void en_urban_drum(int lane, int velocity) { if(lane>=0 && lane<EN_NLANE) post(C_URBAN_DRUM, lane, velocity<0?0:velocity>127?127:velocity); }',
-        'void en_urban_drum(int lane, int velocity) { if(lane>=0 && lane<EN_NLANE) post(C_URBAN_DRUM, lane, velocity<0?0:velocity>127?127:velocity); }\\n'
-        'void en_urban_rec_note(int note,int velocity,int on) { if(note>=0&&note<128) post(C_URBAN_REC_NOTE,note,on?(0x100|((velocity&127)<<9)):0); }\\n'
-        'void en_urban_rec_program(int program) { post(C_URBAN_REC_PROGRAM,program,0); }\\n'
-        'void en_urban_rec_control(int id,int value) { if(id>=0&&id<12) post(C_URBAN_REC_CTRL,id,value); }\\n'
+        'void en_urban_drum(int lane, int velocity) { if(lane>=0 && lane<EN_NLANE) post(C_URBAN_DRUM, lane, velocity<0?0:velocity>127?127:velocity); }\n'
+        'void en_urban_rec_note(int note,int velocity,int on) { if(note>=0&&note<128) post(C_URBAN_REC_NOTE,note,on?(0x100|((velocity&127)<<9)):0); }\n'
+        'void en_urban_rec_program(int program) { post(C_URBAN_REC_PROGRAM,program,0); }\n'
+        'void en_urban_rec_control(int id,int value) { if(id>=0&&id<12) post(C_URBAN_REC_CTRL,id,value); }\n'
         'void en_urban_rec_quiet(void) { post(C_URBAN_REC_QUIET,0,0); }')
     replace_once(dsp,
         'static void drain(void)',
-        'static void urban_rec_track_note(int note,int on,int velocity);\\n'
-        'static void urban_rec_track_program(int program);\\n'
-        'static void urban_rec_track_control(int id,int value);\\n'
-        'static void urban_rec_track_quiet(void);\\n'
+        'static void urban_rec_track_note(int note,int on,int velocity);\n'
+        'static void urban_rec_track_program(int program);\n'
+        'static void urban_rec_track_control(int id,int value);\n'
+        'static void urban_rec_track_quiet(void);\n'
         'static void drain(void)')
     replace_once(dsp,
         '        case C_URBAN_DRUM: if (a<EN_NLANE) drum_fire(a, (float)((unsigned)b&127u)/127.0f); break;',
-        '        case C_URBAN_DRUM: if (a<EN_NLANE) drum_fire(a, (float)((unsigned)b&127u)/127.0f); break;\\n'
-        '        case C_URBAN_REC_NOTE: urban_rec_track_note(a,(b&0x100)!=0,(b>>9)&127); break;\\n'
-        '        case C_URBAN_REC_PROGRAM: urban_rec_track_program(a); break;\\n'
-        '        case C_URBAN_REC_CTRL: urban_rec_track_control(a,b); break;\\n'
+        '        case C_URBAN_DRUM: if (a<EN_NLANE) drum_fire(a, (float)((unsigned)b&127u)/127.0f); break;\n'
+        '        case C_URBAN_REC_NOTE: urban_rec_track_note(a,(b&0x100)!=0,(b>>9)&127); break;\n'
+        '        case C_URBAN_REC_PROGRAM: urban_rec_track_program(a); break;\n'
+        '        case C_URBAN_REC_CTRL: urban_rec_track_control(a,b); break;\n'
         '        case C_URBAN_REC_QUIET: urban_rec_track_quiet(); break;')
     replace_once(dsp,
         'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];',
-        'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];\\n'
+        'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];\n'
         '#include "../app/urban_rec_track_engine.h"')
     replace_once(dsp,
-        '    render_acid(n);\\n    urban_jazz_render(n);\\n    render_noise(n);',
-        '    render_acid(n);\\n    urban_jazz_render(n);\\n    render_noise(n);\\n'
+        '    render_acid(n);\n    urban_jazz_render(n);\n    render_noise(n);',
+        '    render_acid(n);\n    urban_jazz_render(n);\n    render_noise(n);\n'
         '    urban_rec_track_render(n); /* new independent ninth audio track */')
     replace_once(dsp,
         '    if (KK->crush > 0.0f) {                      /* breakcore: the drums crushed (what they add, held and stepped) */',
