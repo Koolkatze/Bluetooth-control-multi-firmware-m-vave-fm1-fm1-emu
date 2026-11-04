@@ -26,7 +26,9 @@ expect urbanrecstate 2
 tapkey 7
 wait 1000
 expect urbanrecevents >1
-expect urbansfxrendered >0
+expect urbanrectrackonsets >0
+expect urbanrectrackprogram 68
+expect urbanrectrackframes >0
 tap REC
 expect urbanrecstate 3
 shot urban-rec-sfx-piano-roll.png
