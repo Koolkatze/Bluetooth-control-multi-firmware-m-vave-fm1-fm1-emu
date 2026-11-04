@@ -4,7 +4,7 @@
 # bass/lead/drum synthesizers, jazz voices, Trance or track 7 SFX.
 expect playing 0
 expect urbanrecstate 0
-expect urbanrectrackvoices 0
+expect urbanrectrackactive 0
 tap REC
 expect urbanrecstate 1
 expect urbanrectrack 8
