@@ -1079,16 +1079,6 @@ static unsigned urban_port_rec_stamp(void) {
         subtick=1u;
     return len?(p->recorder.position+subtick)%len:0u;
 }
-static const UrbanEditorBank *urban_port_rec_mod_bank(void) {
-    UrbanHypPort *p=&urban_port;
-    UrbanEditor tmp=p->editor;
-    unsigned count=0u;
-    tmp.view=p->recorder.mod_page==1u?URBAN_EDITOR_ENV:
-             p->recorder.mod_page==2u?URBAN_EDITOR_LFO:URBAN_EDITOR_EDIT;
-    tmp.target=(uint8_t)(p->recorder.track+1u);
-    tmp.bank=p->recorder.mod_page==3u&&p->recorder.track==2u?1u:0u;
-    return urban_editor_bank(&tmp,&count);
-}
 static void urban_port_rec_keys(void) {
     UrbanHypPort *p=&urban_port;
     UrbanRecorder *r=&p->recorder;
@@ -1110,11 +1100,9 @@ static void urban_port_rec_keys(void) {
 /* Release held keys from the old DSP channel before changing programs. */
 static void urban_port_rec_release_keys(void) {
     UrbanHypPort *p=&urban_port;
-    int voice=urban_hyp_voice(p->recorder.track);
     for(unsigned k=0u;k<27u;k++)if(p->rec_last_keys&(1u<<k)) {
         unsigned note=p->rec_key_pitch[k];
-        if(voice>=0)
-            urban_port_rec_note(&p->recorder,note,0u,0u);
+        urban_port_rec_note(&p->recorder,note,0u,0u);
         if(p->recorder.state==UR_REC_RECORD)
             (void)urban_rec_capture(&p->recorder,UR_REC_NOTE_OFF,
                                     note,0u,0u,urban_port_rec_stamp());
@@ -1128,9 +1116,9 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
         if(!p->rec_screen) {
             p->rec_screen=1u;p->editor.view=0u;
             if(r->state==UR_REC_OFF)urban_rec_arm(r);
-            urban_port_sound_profile(); /* audition selected program in ARM */
-            urban_port_mix_levels(); /* bypass silent intro/arranger lead */
-            urban_port_stage_pattern();
+            /* REC 9 has its own DSP channel; never program or mute the
+             * current song's chords, bass, leads or drum patterns. */
+            en_urban_rec_program((int)r->program);
         } else if(r->state==UR_REC_ARM) {
             urban_rec_start(r);
             p->rec_clock_started=0u;
@@ -1170,9 +1158,7 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
         if(d) {
             urban_port_rec_release_keys();
             urban_rec_set_program(r,d);
-            urban_port_sound_profile(); /* immediate audible sound change */
-            urban_port_mix_levels(); /* keep manually selected lead audible */
-            urban_port_stage_pattern();
+            en_urban_rec_program((int)r->program); /* REC 9 only */
         }
         d=plat_enc(EN_K2);
         if(d)urban_rec_set_bars(r,d);
@@ -1203,17 +1189,22 @@ static void urban_port_rec_input(uint32_t b,uint32_t down) {
         if(d)urban_rec_toggle_note(r,r->edit_cursor,r->edit_note);
     } else if(r->mod_page!=0u &&
              (r->state==UR_REC_RECORD||r->state==UR_REC_EDIT)) {
-        const UrbanEditorBank *bank=urban_port_rec_mod_bank();
+        /* ENV(1), LFO(2) and EDIT(3) control only Track 9.
+         * The arranger's synth envelopes, FX and parameter overrides
+         * remain intact while overdubbing the separate REC voice. */
+        unsigned base=(unsigned)(r->mod_page-1u)*4u;
         for(unsigned i=0u;i<4u;i++) {
             d=plat_enc(EN_K1+(int)i);
-            if(!d||!bank||bank->param[i]==URBAN_EDITOR_NO_PARAM)continue;
-            int id=bank->param[i];
-            int before=urban_port_editor_value(id);
-            urban_port_editor_write(id,d);
-            int after=urban_port_editor_value(id);
-            if(after!=before && r->state==UR_REC_RECORD)
+            if(!d)continue;
+            unsigned id=base+i;
+            int value=(int)p->rec_controls[id]+(int)d;
+            if(value<0)value=0;
+            if(value>100)value=100;
+            if(value==(int)p->rec_controls[id])continue;
+            urban_port_rec_control_value(id,(unsigned)value);
+            if(r->state==UR_REC_RECORD)
                 (void)urban_rec_capture(r,UR_REC_PARAM,0u,
-                        (unsigned)after,(unsigned)id,urban_port_rec_stamp());
+                        (unsigned)value,id,urban_port_rec_stamp());
         }
     } else {
         for(unsigned i=0u;i<4u;i++)(void)plat_enc(EN_K1+(int)i);
@@ -1513,7 +1504,7 @@ static void urban_port_rec_upper(uint16_t orange,uint16_t dim) {
     label[5]=(char)('0'+r->bars);
     label[12]=r->octave<0?'-':'+';
     label[13]=(char)('0'+(r->octave<0?-r->octave:r->octave));
-    urban_port_screen_text(2,&FONT_B,"URBAN-1 MIDI",orange);
+    urban_port_screen_text(2,&FONT_B,"REC - TRACK 9",orange);
     urban_port_screen_text(23,&FONT_S,label,dim);
     /* Piano-roll: real recorded note-on events (not a decorative grid).
      * Shows 1 bar at a time on 32nd slots, up to 12 MIDI pitches. */
@@ -1579,24 +1570,27 @@ static void urban_port_rec_lower(uint16_t orange,uint16_t dim) {
     else if(r->state==UR_REC_EDIT)state="MIDI EDIT / LOOP";
     urban_port_screen_text(1,&FONT_S,state,orange);
     if(r->mod_page) {
-        const UrbanEditorBank *bank=urban_port_rec_mod_bank();
-        if(bank) {
-            urban_port_screen_text(17,&FONT_S,bank->title,orange);
-            for(unsigned i=0u;i<4u;i++) {
-                int id=bank->param[i];
-                if(id==URBAN_EDITOR_NO_PARAM)continue;
-                char digits[8]="K1";
-                digits[1]=(char)('1'+i);
-                cv_text(6,33+(int)i*15,&FONT_S,digits,dim);
-                cv_text(34,33+(int)i*15,&FONT_S,
-                        urban_editor_label(id),C_WHITE);
-                char value[24];
-                urban_port_editor_value_text(id,value);
-                int x=239-text_w(&FONT_S,value);
-                cv_text(x<175?175:x,33+(int)i*15,&FONT_S,value,orange);
-            }
-            return;
+        static const char *const page_title[3]={
+            "REC 9 ENV","REC 9 LFO","REC 9 FX / EDIT"
+        };
+        unsigned base=((unsigned)r->mod_page-1u)*4u;
+        urban_port_screen_text(17,&FONT_S,
+                    page_title[r->mod_page-1u],orange);
+        for(unsigned i=0u;i<4u;i++) {
+            unsigned id=base+i;
+            char key[4]="K1";
+            key[1]=(char)('1'+i);
+            cv_text(6,33+(int)i*15,&FONT_S,key,dim);
+            cv_text(34,33+(int)i*15,&FONT_S,
+                    urban_rec_control_name[id],C_WHITE);
+            char value[5]="000";
+            unsigned n=urban_port.rec_controls[id];
+            value[0]=(char)('0'+(n/100u)%10u);
+            value[1]=(char)('0'+(n/10u)%10u);
+            value[2]=(char)('0'+n%10u);
+            cv_text(195,33+(int)i*15,&FONT_S,value,orange);
         }
+        return;
     }
     if(r->state==UR_REC_ARM) {
         urban_port_screen_text(15,&FONT_S,
@@ -1610,7 +1604,7 @@ static void urban_port_rec_lower(uint16_t orange,uint16_t dim) {
               r->quant==3u?"QUANT 1/16":"QUANT 1/32";
         urban_port_screen_text(84,&FONT_S,qname,orange);
     } else if(r->state==UR_REC_RECORD) {
-        urban_port_screen_text(18,&FONT_S,"PLAY KEYS  OCT+/-",C_WHITE);
+        urban_port_screen_text(18,&FONT_S,"REC 9 + SONG  OCT+/-",C_WHITE);
         urban_port_screen_text(38,&FONT_S,"SEL/ENV/LFO: MOD PAGE",C_WHITE);
         urban_port_screen_text(59,&FONT_S,"K1-K4: REC AUTOMATION",orange);
         urban_port_screen_text(79,&FONT_S,"REC STOP -> MIDI EDIT",dim);
@@ -1618,7 +1612,7 @@ static void urban_port_rec_lower(uint16_t orange,uint16_t dim) {
         urban_port_screen_text(18,&FONT_S,"K1 STEP  K2 NOTE",C_WHITE);
         urban_port_screen_text(39,&FONT_S,"K3 VELOCITY  K4 TOGGLE",C_WHITE);
         urban_port_screen_text(60,&FONT_S,"SEL: MOD  OCT+/-: KEYS",orange);
-        urban_port_screen_text(79,&FONT_S,"REC DUB  SAVE KEEP LOOP",dim);
+        urban_port_screen_text(79,&FONT_S,"REC 9 DUB  SAVE KEEP",dim);
     }
 }
 
