@@ -165,7 +165,7 @@ static void urban_rec_track_render(uint32_t n)
             v->subphase+=freq*0.502f/EN_SR;
             if(v->subphase>=1.0f)v->subphase-=1.0f;
             float phase=v->phase;
-            float osc=sine(phase+fm*sine(v->subphase));
+            float osc=sine_any(phase+fm*sine(v->subphase));
             float second=sine(phase*2.0f);
             float partial=sine(phase*3.0f);
             unsigned variant=v->program%16u;
