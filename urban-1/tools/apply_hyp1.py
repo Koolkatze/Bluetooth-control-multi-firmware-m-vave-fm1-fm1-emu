@@ -134,10 +134,6 @@ def main() -> None:
         'static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];\n'
         '#include "../app/urban_rec_track_engine.h"')
     replace_once(dsp,
-        '    render_acid(n);\n    urban_jazz_render(n);\n    render_noise(n);',
-        '    render_acid(n);\n    urban_jazz_render(n);\n    render_noise(n);\n'
-        '    urban_rec_track_render(n); /* new independent ninth audio track */')
-    replace_once(dsp,
         '    if (KK->crush > 0.0f) {                      /* breakcore: the drums crushed (what they add, held and stepped) */',
         '    const float urban_crush = (KK == &KITS[4] && par[P_DRIVE] <= 35) ? 0.0f : KK->crush;\n    if (urban_crush > 0.0f) { /* deliberate lo-fi/breakcore crusher */')
     replace_once(dsp,
@@ -188,6 +184,11 @@ def main() -> None:
     replace_once(dsp,
         '    render_acid(n);\n    render_noise(n);',
         '    render_acid(n);\n    urban_jazz_render(n);\n    render_noise(n);')
+    replace_once(dsp,
+        '    render_acid(n);\n    urban_jazz_render(n);\n    render_noise(n);',
+        '    render_acid(n);\n    urban_jazz_render(n);\n    render_noise(n);\n'
+        '    urban_rec_track_render(n); /* new independent ninth audio track */')
+
     # Shared Echo and Throw use the same actual DRY master mix at distinct
     # gains. Upstream Echo only feeds extremely faint per-voice esend,
     # which made the knob ineffective in actual songs despite the P_ECHO
