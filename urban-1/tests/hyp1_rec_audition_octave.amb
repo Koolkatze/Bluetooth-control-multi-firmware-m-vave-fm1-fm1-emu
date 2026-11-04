@@ -9,7 +9,7 @@ expect urbanrecoctave 0
 # Native synth lead at catalog 16, never silent at song intro.
 spin K1 -16
 expect urbanrecprogram 16
-expect urbanrectrack 3
+expect urbanrectrack 8
 tap OCT+
 expect urbanrecoctave 1
 key 7 down
@@ -20,7 +20,7 @@ key 7 up
 # Modelled lead at 50, same audible keyboard path while STOPPED.
 spin K1 34
 expect urbanrecprogram 50
-expect urbanrectrack 3
+expect urbanrectrack 8
 key 7 down
 wait 220
 expect urbanjazznotes >0
@@ -29,7 +29,7 @@ key 7 up
 # Procedural sound FX at 68: queue must reach actual DSP without PLAY.
 spin K1 18
 expect urbanrecprogram 68
-expect urbanrectrack 6
+expect urbanrectrack 8
 tapkey 7
 wait 300
 expect urbansfxrendered >0
