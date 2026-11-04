@@ -8,7 +8,7 @@
 #include <stdio.h>
 #define EN_SR 48000.0f
 #define BLK 256
-static float mixl[BLK],mixr[BLK],rsend[BLK],esend[BLK];
+static float mixl[BLK],mixr[BLK],rsend[BLK];
 static float sine(float phase) {
     float p=phase-floorf(phase);
     return sinf(6.2831853071795864769f*p);
