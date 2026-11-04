@@ -60,7 +60,8 @@ static float urban_rec_sample_native_bass(UrbanRecTrackVoice *v,float tone) {
     }
     case DO_HOOVER: {
         float a=p+0.3f,b=p2+0.3f;
-        if(a>=1.0f)a-=1.0f;if(b>=1.0f)b-=1.0f;
+        if(a>=1.0f)a-=1.0f;
+        if(b>=1.0f)b-=1.0f;
         q=(blep_saw(p,i0)-blep_saw(a,i0)+
             blep_saw(p2,i2)-blep_saw(b,i2))*d->saw*0.9f+
             0.5f*d->saw*(2.0f*p3-1.0f);break;
@@ -84,7 +85,7 @@ static float urban_rec_sample_native_bass(UrbanRecTrackVoice *v,float tone) {
         v->modphase-=(float)(int)v->modphase;
     /* Local low-pass, matching the actual instrument's tone profile
      * but not borrowing the generated DRONE's filter memory. */
-    float cutoff=0.007f+(0.09f+0.65f*tone)*fm_exp2f(d->cut*0.35f);
+    float cutoff=0.007f+(0.09f+0.65f*tone)*(1.0f+0.25f*d->cut);
     if(cutoff>0.96f)cutoff=0.96f;
     v->lp+=cutoff*(q-v->lp);
     return urban_rec_soft(v->lp,1.2f*d->drive)*d->g;
