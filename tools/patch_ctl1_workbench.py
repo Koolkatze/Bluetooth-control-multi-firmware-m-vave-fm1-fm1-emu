@@ -201,11 +201,11 @@ static void wb_remote_input(void)
         "#endif\n"
         "}\n\n/* the Bluetooth page scans"
     )
-    /* Blackhole is a digital MIDI remote, not CTL-1's optional
-     * pressure/velocity keyboard. A saved CTL-1 Touch/Aftertouch setting
-     * must not monopolise the FM-1 SAR ADC, which also reads PB1 battery
-     * and PB6 MASTER. Disable analogue sensing on the physical remote
-     * only; leave all MIDI note/encoder mappings unchanged. */
+    # Blackhole is a digital MIDI remote, not CTL-1's optional
+    # pressure/velocity keyboard. A saved CTL-1 Touch/Aftertouch setting
+    # must not monopolise the FM-1 SAR ADC, which also reads PB1 battery
+    # and PB6 MASTER. Disable analogue sensing on the physical remote
+    # only; leave all MIDI note/encoder mappings unchanged.
     swap(
         "    touch_on(0);\n    touch_apply();                       /* Touch as saved */",
         "    touch_on(0);\n"
