@@ -6,20 +6,20 @@ expect urbanrecstate 0
 tap REC
 expect urbanrecstate 1
 expect urbanrecprogram 32
-expect urbanrectrack 4
+expect urbanrectrack 8
 # Last native poly patch -> first modelled upright bass.
 spin K1 16
 expect urbanrecprogram 48
-expect urbanrectrack 2
+expect urbanrectrack 8
 # Modelled keys -> drum kit.
 spin K1 12
 expect urbanrecprogram 60
-expect urbanrectrack 0
+expect urbanrectrack 8
 shot urban-rec-drum-kit.png
 # Kit family end -> procedural SFX engine.
 spin K1 8
 expect urbanrecprogram 68
-expect urbanrectrack 6
+expect urbanrectrack 8
 shot urban-rec-sfx.png
 tap REC
 expect urbanrecstate 2
