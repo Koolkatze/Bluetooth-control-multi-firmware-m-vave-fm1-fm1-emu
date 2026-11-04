@@ -201,6 +201,18 @@ static void wb_remote_input(void)
         "#endif\n"
         "}\n\n/* the Bluetooth page scans"
     )
+    /* Blackhole is a digital MIDI remote, not CTL-1's optional
+     * pressure/velocity keyboard. A saved CTL-1 Touch/Aftertouch setting
+     * must not monopolise the FM-1 SAR ADC, which also reads PB1 battery
+     * and PB6 MASTER. Disable analogue sensing on the physical remote
+     * only; leave all MIDI note/encoder mappings unchanged. */
+    swap(
+        "    touch_on(0);\n    touch_apply();                       /* Touch as saved */",
+        "    touch_on(0);\n"
+        "#if !WB_REMOTE_ONLY\n"
+        "    touch_apply();                       /* Touch as saved */\n"
+        "#endif /* The remote does not use CTL-1's analog key sensing. */"
+    )
     swap(
         "    ui.touched = -1;\n    ui.master_sent = -1;",
         "    ui.touched = -1;\n"
@@ -278,13 +290,28 @@ def blackhole_extensions(root: Path) -> dict[Path, str]:
         root / "base" / "device" / "plat_fm1.c": [
             (
                 '/* LEDs: the picture is built off-line',
-                '/* Blackhole Remote battery readout. The stock bar thresholds\n'
-                ' * are 531 / 561 / 591 ADC counts; the wider 516..615 range\n'
-                ' * is a deliberately approximate linear 0..100 scale.\n'
-                ' * Do not mistake it for a calibrated coulomb counter. */\n'
+                '/* Blackhole Remote battery readout (physical FM-1 PB1 ADC ch3).\n'
+                ' * CTL-1 Touch can occupy the single SAR converter indefinitely;\n'
+                ' * remote-only mode disables Touch in ui_init. This bounded\n'
+                ' * startup retry is only for cases where the normal main-loop\n'
+                ' * 100 ms sample has not produced a valid reading yet.\n'
+                ' * Estimates 0..100 from the original 531/561/591 bar\n'
+                ' * thresholds; never fabricate a percent if ADC fails. */\n'
                 'int plat_battery_percent(void)\n'
                 '{\n'
+                '    static uint32_t retry_ms;\n'
                 '    int32_t raw = batt_raw;\n'
+                '    uint32_t now = fm1_ms;\n'
+                '    if (raw <= 0 && !fm1_an.con && !fm1_an.pend &&\n'
+                '        (int32_t)(now - retry_ms) >= 0) {\n'
+                '        int32_t sample;\n'
+                '        retry_ms = now + 350u;\n'
+                '        sample = fm1_adc_read(FM1_ADC_BATT);\n'
+                '        if (sample > 0) {\n'
+                '            batt_raw = sample;\n'
+                '            raw = sample;\n'
+                '        }\n'
+                '    }\n'
                 '    if (raw <= 0) return -1;\n'
                 '    return (int)clamp((raw - 516) * 100 / 99, 0, 100);\n'
                 '}\n'
@@ -338,7 +365,7 @@ def main() -> None:
     changes[file] = modified
     if args.dry_run:
         print("OK: pinned CTL-1 and fm1-base accept Blackhole Remote 240x240 patch")
-        print("OK: battery ADC percentage, USB/BLE, real key LEDs, RGB565 byte order, glitch-only transitions")
+        print("OK: independent ADC battery read, Touch off only in Blackhole; USB/BLE MIDI and original display preserved")
         return
     # Preflight every source and backup before writing any file.
     for source in changes:
