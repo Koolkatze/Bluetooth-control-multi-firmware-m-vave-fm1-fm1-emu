@@ -67,7 +67,13 @@ int main(void) {
     for(unsigned i=0;i<sizeof(programs)/sizeof(programs[0]);i++) {
         urban_rec_track_program(programs[i]);
         urban_rec_track_note(60+(int)i,1,90);
-        assert(render_energy(8)>0.00001f);
+        float family_energy=render_energy(8);
+        if(family_energy<=0.00001f)
+            fprintf(stderr,"REC family program=%d energy=%g active=%u kind=%u amp=%g\\n",
+                    programs[i],(double)family_energy,
+                    (unsigned)urban_rec_track_active_voices,
+                    (unsigned)urt_voices[0].kind,(double)urt_voices[0].amp);
+        assert(family_energy>0.00001f);
         assert(urban_rec_track_last_program==(uint32_t)programs[i]);
         urban_rec_track_quiet();
         assert(urban_rec_track_active_voices==0u);
