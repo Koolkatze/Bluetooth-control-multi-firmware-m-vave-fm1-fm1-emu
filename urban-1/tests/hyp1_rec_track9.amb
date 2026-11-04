@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# URBAN-1 v0.4.19: REC is a ninth INDEPENDENT AUDIO TRACK.
+# Recording and audition MUST NOT commandeer the generated chord PAD,
+# bass/lead/drum synthesizers, jazz voices, Trance or track 7 SFX.
+expect playing 0
+expect urbanrecstate 0
+expect urbanrectrackvoices 0
+tap REC
+expect urbanrecstate 1
+expect urbanrectrack 8
+expect urbanrecprogram 32
+key 7 down
+wait 250
+expect urbanrectrackonsets >0
+expect urbanrectrackactive >0
+expect urbanrectrackframes >0
+expect urbanrectrackprogram 32
+key 7 up
+# Start REC: the original song keeps playing as usual.
+tap REC
+expect urbanrecstate 2
+expect playing 1
+tapkey 7
+wait 1200
+expect urbanrecevents >0
+expect urbanrectrackonsets >1
+tap LFO
+expect urbanrecmod 2
+spin K2 38
+expect urbanrecevents >1
+expect urbanrecfxdepth 38
+tap ENV
+expect urbanrecmod 1
+spin K1 12
+expect urbanrecattack 24
+tap EDIT
+expect urbanrecmod 3
+spin K1 3
+expect urbanreclevel 83
+shot urban-rec-track9-independent.png
+# Hiding REC must not release the recorded notes or stop other voices.
+tap HOME
+expect urbanrecscreen 0
+expect playing 1
+expect urbanrecevents >1
+tap PLAY
+expect playing 0
+expect urbanrecvoices 0
+expect urbanrectrackactive 0
+expect urbanrecevents >1
+# A new song resets ONLY REC state, not the existing generated tracks.
+tap SAVE
+expect urbanrecevents 0
+expect urbanrecstate 0
+expect urbanrecattack 12
+expect urbanrecfxdepth 0
+expect urbanreclevel 80
