@@ -6,11 +6,39 @@
 
 - **📱 [FM-1 Workbench para Android — APK v0.2.14](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/v0.2.14/FM-1-Workbench-v0.2.14.apk)** · Emulador, sintetizador y pantalla principal en el móvil.
 - **🎛️ Blackhole Remote HD — MIDI controller v0.1.0 beta 2 (FM-1 físico):** [⬇ Bluetooth + USB (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.2/Blackhole-Remote-HD-v0.1.0-beta.2-Bluetooth-USB.fwsc) · [⬇ Solo USB (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.2/Blackhole-Remote-HD-v0.1.0-beta.2-USB-Only.fwsc) · [Ver release y notas](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/blackhole-remote-v0.1.0-beta.2). Controlador completo para manejar Workbench con los botones, knobs y teclado del FM-1.
-- **🎵 [URBAN-1 — firmware v0.4.19 (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/urban1-firmware-v0.4.19/URBAN-1-v0.4.19-FX-EDIT-MASTER-TRACKS.fwsc)** · **REC tiene la pista 9 con un sintetizador propio de 8 voces**: no sustituye acordes, bajo, lead, batería ni efectos. Mantiene las correcciones de Pause y regeneración. [Ver release](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/urban1-firmware-v0.4.19).
+- **🎵 [URBAN-1 — firmware v0.4.20 (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/urban1-firmware-v0.4.20/URBAN-1-v0.4.20-FX-EDIT-MASTER-TRACKS.fwsc)** · **REC TRACK 9 permite usar cualquiera de los 78 programas mientras suena la canción, incluso el mismo instrumento que otra pista**. Conserva su sintetizador independiente de 8 voces y los controles ENV/LFO/FX propios. [Ver release](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/urban1-firmware-v0.4.20).
 
 **Aviso de Blackhole Remote:** es una **prerelease experimental**, todavía sin pruebas sobre un FM-1 físico. Flashear puede dejar el dispositivo inutilizable; conserva una copia del firmware funcional y un procedimiento de recuperación. El cable USB se utiliza para instalarlo; Bluetooth es para control MIDI.
 
 
+
+## URBAN-1 v0.4.20 — los 78 instrumentos disponibles en la pista REC
+
+**La pista REC 9 ya no limita los 78 programas a seis sonidos
+genéricos.** Sus 16 presets de bajo, 16 leads, 16 pads y ocho
+kits leen directamente las **tablas de patches y tipos de oscilador
+originales de HYP-1**. Los doce programas acústicos reproducen por
+separado las familias de piano, Rhodes, flauta, vibráfono, campanas
+y bajos acústicos de URBAN. Los diez efectos usan modelos de
+síntesis propios del catálogo SFX.
+
+REC mantiene un conjunto **independiente de ocho voces polifónicas**,
+con sus propias fases, filtros, envolventes, modulación, notas y
+mezcla. Puedes seleccionar, por ejemplo, un Rhodes para REC aunque
+los acordes generados ya estén tocando Rhodes; ambas interpretaciones
+suenan simultáneamente y **ninguna roba notas a la otra**.
+El uso de la misma tabla de patch/oscilador no implica identidad
+muestra por muestra: REC conserva sus propias envolventes, LFO y FX.
+
+La selección del sonido se hace con **K1 en REC ARM**; se conserva
+el piano roll, la cuantización y el overdub. Pause silencia las voces
+REC sin borrar la grabación; la regeneración de una canción o pista
+y los cambios de género/subgénero reinician REC. El motor se ha
+compilado con JieLi para FM-1 y superó las pruebas nativas y HYP-1
+host; la calidad y rendimiento deben validarse aún en hardware real.
+
+[Descargar URBAN-1 v0.4.20 (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/urban1-firmware-v0.4.20/URBAN-1-v0.4.20-FX-EDIT-MASTER-TRACKS.fwsc) ·
+[Ver release](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/urban1-firmware-v0.4.20)
 
 ## URBAN-1 v0.4.19 — REC ocupa la pista 9, sin robar instrumentos
 
