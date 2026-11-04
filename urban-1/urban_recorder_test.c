@@ -5,7 +5,7 @@
 int main(void) {
     UrbanRecorder r;
     urban_rec_init(&r);
-    assert(r.state==UR_REC_OFF&&r.track==4u&&r.bars==4u);
+    assert(r.state==UR_REC_OFF&&r.track==8u&&r.bars==4u);
     urban_rec_arm(&r);
     assert(r.state==UR_REC_ARM);
     urban_rec_set_bars(&r,-2);
@@ -54,13 +54,13 @@ int main(void) {
     /* Exercise the entire real patch catalog and preserve REC routing. */
     UrbanRecorder cat;
     urban_rec_init(&cat);
-    assert(UR_REC_PROGRAM_COUNT==78u && cat.program==32u && cat.track==4u);
+    assert(UR_REC_PROGRAM_COUNT==78u && cat.program==32u && cat.track==8u);
     urban_rec_set_program(&cat,-32);
-    assert(cat.program==0u && cat.track==2u);
+    assert(cat.program==0u && cat.track==8u);
     unsigned family_count[5]={0};
     for(unsigned i=0u;i<UR_REC_PROGRAM_COUNT;i++) {
         UrbanRecInstrument p=urban_rec_instrument(cat.program);
-        assert(cat.program==i && cat.track==p.track);
+        assert(cat.program==i && cat.track==UR_REC_TRACK_INDEX);
         if(i<16u) {assert(p.track==2u&&p.patch==i&&!p.jazz);family_count[0]++;}
         else if(i<32u) {assert(p.track==3u&&p.patch==i-16u&&!p.jazz);family_count[1]++;}
         else if(i<48u) {assert(p.track==4u&&p.patch==i-32u&&!p.jazz);family_count[2]++;}
@@ -71,11 +71,11 @@ int main(void) {
         else {assert(p.track==6u&&p.patch==i-68u);family_count[4]++;}
         urban_rec_set_program(&cat,1);
     }
-    assert(cat.program==0u&&cat.track==2u);
+    assert(cat.program==0u&&cat.track==8u);
     assert(family_count[0]==18u&&family_count[1]==21u&&
            family_count[2]==21u&&family_count[3]==8u&&family_count[4]==10u);
     urban_rec_set_program(&cat,-1);
-    assert(cat.program==77u&&cat.track==6u);
+    assert(cat.program==77u&&cat.track==8u);
     urban_rec_set_program(&cat,78);
     assert(cat.program==77u);
     /* Physical keyboard octave moves in semitones and saturates at +/-3,
@@ -94,7 +94,7 @@ int main(void) {
     assert(urban_rec_capture(&cat,UR_REC_NOTE_ON,60u,110u,0u,4u));
     urban_rec_stop(&cat);
     urban_rec_overdub(&cat);
-    assert(cat.count==1u&&cat.track==6u);
+    assert(cat.count==1u&&cat.track==8u);
     /* PAUSE must be non-destructive: no recorder reset is triggered.
      * SONG/TRACK SAVE or genre/subgenre change explicitly resets the
      * entire saved take, including program, quant, events and cursors. */
@@ -106,7 +106,7 @@ int main(void) {
     urban_rec_reset(&cat);
     assert(cat.state==UR_REC_OFF&&cat.count==0u&&cat.position==0u);
     assert(cat.pass==0u&&!cat.overdub&&!cat.play_cursor&&!cat.edit_cursor);
-    assert(cat.program==32u&&cat.track==4u&&cat.bars==4u&&cat.quant==3u);
+    assert(cat.program==32u&&cat.track==8u&&cat.bars==4u&&cat.quant==3u);
     assert(cat.octave==0&&cat.mod_page==0u);
     uint16_t reset_found[4]={0};
     assert(urban_rec_events_at(&cat,0u,reset_found,4u)==0u);
