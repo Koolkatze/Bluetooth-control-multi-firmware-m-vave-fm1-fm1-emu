@@ -13,6 +13,7 @@ static float sine(float phase) {
     float p=phase-floorf(phase);
     return sinf(6.2831853071795864769f*p);
 }
+static float sine_any(float phase) { return sine(phase); }
 static float mtof(float note) {
     return 440.0f*powf(2.0f,(note-69.0f)/12.0f);
 }
