@@ -15,8 +15,9 @@
  * acoustic models, 8 kit presets (6 playable lanes each), and 10
  * procedural Sound FX. No external firmware/sample bank is implied. */
 #define UR_REC_PROGRAM_COUNT 78u
+#define UR_REC_TRACK_INDEX 8u /* additional ninth track; song has its own eight */
 typedef struct {
-    uint8_t track; /* 0 Drums, 2 Bass, 3 Lead, 4 Chords, 6 Sound FX */
+    uint8_t track; /* patch family only; physical REC audio is always track 9 */
     uint8_t patch; /* HYP patch/kit index, or procedural SFX type */
     uint8_t jazz;  /* 0 native, 1..5 modelled lead/pad, 1..2 bass */
 } UrbanRecInstrument;
@@ -88,7 +89,7 @@ static void urban_rec_init(UrbanRecorder *r) {
     for(unsigned i=0;i<sizeof(*r);i++)((uint8_t *)r)[i]=0u;
     r->state=UR_REC_OFF;
     r->program=32u; /* Rhodes, first polyphonic HYP pad instrument */
-    r->track=urban_rec_instrument(r->program).track;
+    r->track=UR_REC_TRACK_INDEX; /* instrument family is independent of track routing */
     r->bars=4u;r->quant=3u; /* quant=3 is 1/16 */
     r->edit_note=60u;r->edit_velocity=110u;
 }
@@ -133,7 +134,7 @@ static void urban_rec_set_program(UrbanRecorder *r,int delta) {
     if(index<0)index+=(int)UR_REC_PROGRAM_COUNT;
     if(index>=(int)UR_REC_PROGRAM_COUNT)index-=(int)UR_REC_PROGRAM_COUNT;
     r->program=(uint8_t)index;
-    r->track=urban_rec_instrument(r->program).track;
+    r->track=UR_REC_TRACK_INDEX; /* instrument family is independent of track routing */
 }
 /* Key offsets affect ONLY newly played notes; an existing loop keeps
  * its original absolute MIDI note numbers across OCT+/- changes. */
