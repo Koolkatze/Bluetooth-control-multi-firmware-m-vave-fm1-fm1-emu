@@ -73,6 +73,77 @@ jobs:
         ! grep -Fq 'bh_boot_splash_until' build/ctl1-upstream/app/ui.c
         grep -q 'bh_remote_leds' build/ctl1-upstream/app/blackhole_remote_display.inc
         grep -q 'int plat_battery_percent(void)' build/ctl1-upstream/base/device/plat_fm1.c
+        # Regression: Blackhole must NOT restore saved CTL-1 analogue Touch
+        # mode (it monopolises the only ADC and can leave BATT at --%).
+        grep -Fq '#if !WB_REMOTE_ONLY' build/ctl1-upstream/app/ui.c
+        grep -Fq '#endif /* The remote does not use CTL-1' build/ctl1-upstream/app/ui.c
+        grep -Fq 'sample = fm1_adc_read(FM1_ADC_BATT);' build/ctl1-upstream/base/device/plat_fm1.c
+        grep -Fq 'retry_ms = now + 350u;' build/ctl1-upstream/base/device/plat_fm1.c
+        grep -Fq '"NO ADC"' build/ctl1-upstream/app/blackhole_remote_display.inc
+        grep -Fq '(pct < 0 && plat_ms() >= 1500u)' build/ctl1-upstream/app/blackhole_remote_display.inc
         grep -q 'int plat_usb_midi_connected(void)' build/ctl1-upstream/base/device/plat_fm1.c
         grep -q 'BLACKHOLE REMOTE' build/ctl1-upstream/app/app.h
       packages: build/physical-fm1-remote/*.fwsc
+
+  release-battery-beta:
+    name: Release Blackhole Remote battery fix (experimental beta 3)
+    needs: experimental-physical-firmware
+    if: ${{ success() && github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download exactly the firmware binaries that passed CI
+        uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: downloaded
+      - name: Publish versioned experimental FM-1 firmware (never overwrite a release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag=blackhole-remote-v0.1.0-beta.3
+          if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo "Beta 3 release already exists; refusing to overwrite a previously published binary."
+            exit 0
+          fi
+          source=downloaded/build/physical-fm1-remote
+          test -s "$source/Blackhole-Remote-BLE-EXPERIMENTAL.fwsc"
+          test -s "$source/Blackhole-Remote-USB-EXPERIMENTAL.fwsc"
+          mkdir -p dist
+          cp "$source/Blackhole-Remote-BLE-EXPERIMENTAL.fwsc" \
+             dist/Blackhole-Remote-HD-v0.1.0-beta.3-Bluetooth-USB.fwsc
+          cp "$source/Blackhole-Remote-USB-EXPERIMENTAL.fwsc" \
+             dist/Blackhole-Remote-HD-v0.1.0-beta.3-USB-Only.fwsc
+          ( cd dist && sha256sum ./*.fwsc > SHA256SUMS.txt )
+          cat > dist/RELEASE_NOTES.md <<'NOTES'
+          ## Blackhole Remote HD v0.1.0 beta 3 — battery ADC fix
+
+          This FM-1 hardware firmware corrects the stuck `--%` battery
+          readout. Blackhole is a MIDI controller, so it disables the
+          upstream CTL-1 analog key-pressure scan during initialization;
+          the device's shared ADC can then sample the PB1 battery divider.
+          If the normal platform 100-ms sampling does not initialize
+          the reading, the remote retries an ADC conversion only when
+          the converter is free, no more than once every 350 ms.
+          The HUD shows an approximate numeric battery level when the
+          ADC reports data, and displays `NO ADC` if the sensor remains
+          unavailable (never fabricates a percentage).
+
+          All 27 MIDI keys, USB/Bluetooth MIDI controls, splash, LEDs,
+          LCD artwork and protocol with FM-1 Workbench remain unchanged.
+          **Only the physical Blackhole firmware was modified.**
+
+          Both packages were compiled with the JieLi toolchain and passed
+          host and build regressions. The fix has not yet been verified on
+          a physical FM-1; this is an experimental prerelease. Keep your
+          working firmware and recovery procedure.
+          NOTES
+          gh release create "$tag" dist/*.fwsc dist/SHA256SUMS.txt \
+            --repo "$GH_REPO" --target "$GITHUB_SHA" \
+            --title "Blackhole Remote HD v0.1.0 beta 3 — battery readout fix" \
+            --notes-file dist/RELEASE_NOTES.md --prerelease
+          gh release view "$tag" --repo "$GH_REPO" --json assets,url \
+            --jq '.url, (.assets[] | .name + " " + .url)'
