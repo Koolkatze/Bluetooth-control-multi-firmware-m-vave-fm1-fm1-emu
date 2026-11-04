@@ -76,7 +76,9 @@ int main(void) {
     for(int p=0;p<URT_PARAMS;p++)urban_rec_track_control(p,70);
     urban_rec_track_program(32);
     urban_rec_track_note(72,1,115);
-    assert(render_energy(8)>0.00001f);
+    /* The independent Attack=70% setting deliberately rises over
+     * hundreds of milliseconds; allow its envelope to become audible. */
+    assert(render_energy(45)>0.00001f);
     urban_rec_track_quiet();
     assert(render_energy(2)<0.00000001f);
     assert(urban_rec_track_rendered_frames>8000u);
