@@ -5,12 +5,39 @@
 **Tres descargas diferentes** para el ecosistema FM-1; la APK se instala en Android y los archivos `.fwsc` son firmwares para FM-1.
 
 - **📱 [FM-1 Workbench para Android — APK v0.2.14](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/v0.2.14/FM-1-Workbench-v0.2.14.apk)** · Emulador, sintetizador y pantalla principal en el móvil.
-- **🎛️ Blackhole Remote HD — MIDI controller v0.1.0 beta 2 (FM-1 físico):** [⬇ Bluetooth + USB (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.2/Blackhole-Remote-HD-v0.1.0-beta.2-Bluetooth-USB.fwsc) · [⬇ Solo USB (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.2/Blackhole-Remote-HD-v0.1.0-beta.2-USB-Only.fwsc) · [Ver release y notas](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/blackhole-remote-v0.1.0-beta.2). Controlador completo para manejar Workbench con los botones, knobs y teclado del FM-1.
+- **🎛️ Blackhole Remote HD — MIDI controller v0.1.0 beta 3 (FM-1 físico):** [⬇ Bluetooth + USB (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.3/Blackhole-Remote-HD-v0.1.0-beta.3-Bluetooth-USB.fwsc) · [⬇ Solo USB (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.3/Blackhole-Remote-HD-v0.1.0-beta.3-USB-Only.fwsc) · [Ver release y notas](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/blackhole-remote-v0.1.0-beta.3). Controlador completo para manejar Workbench con los botones, knobs y teclado del FM-1.
 - **🎵 [URBAN-1 — firmware v0.4.20 (.fwsc)](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/urban1-firmware-v0.4.20/URBAN-1-v0.4.20-FX-EDIT-MASTER-TRACKS.fwsc)** · **REC TRACK 9 permite usar cualquiera de los 78 programas mientras suena la canción, incluso el mismo instrumento que otra pista**. Conserva su sintetizador independiente de 8 voces y los controles ENV/LFO/FX propios. [Ver release](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/urban1-firmware-v0.4.20).
 
 **Aviso de Blackhole Remote:** es una **prerelease experimental**, todavía sin pruebas sobre un FM-1 físico. Flashear puede dejar el dispositivo inutilizable; conserva una copia del firmware funcional y un procedimiento de recuperación. El cable USB se utiliza para instalarlo; Bluetooth es para control MIDI.
 
 
+
+## Blackhole Remote HD v0.1.0 beta 3 — corregida la lectura de batería
+
+La beta 3 de Blackhole Remote **solo cambia el firmware del FM-1 físico**.
+La APK FM-1 Workbench sigue exactamente en su versión anterior.
+
+El indicador de batería podía quedarse en «--%» cuando el único
+conversor ADC del FM-1 permanecía ocupado por la detección de presión
+analógica de teclas heredada de CTL-1. Blackhole solo envía MIDI
+desde las teclas digitales: ahora deja ese sensor analógico
+desactivado, recuperando las medidas de la batería en el canal PB1.
+Si aún no hay un valor válido, reintenta leerlo de forma limitada
+y únicamente cuando el ADC está libre. Si sigue fallando,
+muestra «NO ADC», sin inventar un porcentaje de carga.
+
+**Los botones, encoders, conexión USB MIDI y Bluetooth MIDI,
+piano de 27 teclas, splash glitch, ilustración y LEDs se conservan.**
+Las dos compilaciones JieLi y pruebas automatizadas finalizaron
+correctamente en
+[GitHub Actions — Blackhole batería beta 3](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/actions/runs/41840392919).
+El porcentaje sigue siendo estimado y debe comprobarse con
+la batería real; la nueva revisión no ha sido validada aún
+auditivamente ni eléctricamente en hardware físico.
+
+[Descargar Blackhole beta 3 USB+Bluetooth](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.3/Blackhole-Remote-HD-v0.1.0-beta.3-Bluetooth-USB.fwsc) ·
+[Descargar beta 3 solo USB](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.3/Blackhole-Remote-HD-v0.1.0-beta.3-USB-Only.fwsc) ·
+[Ver release y SHA-256](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/blackhole-remote-v0.1.0-beta.3)
 
 ## URBAN-1 v0.4.20 — los 78 instrumentos disponibles en la pista REC
 
@@ -144,11 +171,11 @@ Esta implementación es experimental hasta probarse sobre un FM-1 físico.
 
 ## Blackhole Remote: MIDI controller — firmware físico del M-VAVE FM-1
 
-**Release independiente — Blackhole Remote HD v0.1.0 beta 2:** 
-[descargar Bluetooth + USB](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.2/Blackhole-Remote-HD-v0.1.0-beta.2-Bluetooth-USB.fwsc) · 
-[descargar Solo USB](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.2/Blackhole-Remote-HD-v0.1.0-beta.2-USB-Only.fwsc) · 
-[SHA-256 de ambos archivos](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.2/SHA256SUMS.txt) · 
-[notas y descarga en GitHub](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/blackhole-remote-v0.1.0-beta.2). 
+**Release independiente — Blackhole Remote HD v0.1.0 beta 3:** 
+[descargar Bluetooth + USB](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.3/Blackhole-Remote-HD-v0.1.0-beta.3-Bluetooth-USB.fwsc) · 
+[descargar Solo USB](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.3/Blackhole-Remote-HD-v0.1.0-beta.3-USB-Only.fwsc) · 
+[SHA-256 de ambos archivos](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/download/blackhole-remote-v0.1.0-beta.3/SHA256SUMS.txt) · 
+[notas y descarga en GitHub](https://github.com/Koolkatze/Bluetooth-control-multi-firmware-m-vave-fm1-fm1-emu/releases/tag/blackhole-remote-v0.1.0-beta.3). 
 
 
 **Nuevo nombre:** Blackhole Remote: MIDI controller sustituye al antiguo
@@ -172,8 +199,11 @@ y los indicadores de batería, USB y Bluetooth aparecen sobre tarjetas
 **40% transparentes**. El piano inferior sigue **100% opaco**.
 
 - **Batería en porcentaje (EST.)**: estimación de 0 a 100 % a partir
-  del ADC del FM-1; no es un medidor de carga calibrado. Antes de la
-  primera lectura se muestra «--%».
+  del ADC del FM-1; no es un medidor de carga calibrado. En beta 3,
+  Blackhole desactiva el sensor analógico de teclas que bloqueaba el
+  ADC, reintenta la lectura de batería cuando está libre y muestra
+  «READ..» durante el arranque o «NO ADC» si la lectura sigue fallando.
+  Nunca inventa un porcentaje cuando no hay lectura.
 - **USB MIDI**: estado **LINK/OFF** según el enlace USB configurado;
   **Bluetooth MIDI**: **LINK/WAIT/OFF** (o N/A en el firmware sin radio).
 - **Piano de 27 teclas**: 16 blancas y 11 negras, exactamente en la
