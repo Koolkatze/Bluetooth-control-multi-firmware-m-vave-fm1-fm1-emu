@@ -254,7 +254,8 @@ static void bh_remote_header(void)
     uint32_t sig = ((uint32_t)(pct + 2) & 127u)
                  | ((uint32_t)usb << 8)
                  | ((uint32_t)ble << 9)
-                 | ((uint32_t)ble_wait << 10);
+                 | ((uint32_t)ble_wait << 10)
+                 | ((uint32_t)(pct < 0 && plat_ms() >= 1500u) << 11);
     char number[16];
     if (bh_top_signature == sig)
         return;
