@@ -56,6 +56,8 @@ def main() -> None:
                     root / "firmware/src/app/urban_sfx_engine.h")
     shutil.copyfile(HERE / "integrations/urban_rec_track_engine.h",
                     root / "firmware/src/app/urban_rec_track_engine.h")
+    shutil.copyfile(HERE / "integrations/urban_rec_program_renderer.h",
+                    root / "firmware/src/app/urban_rec_program_renderer.h")
     shutil.copyfile(HERE / "integrations/urban_trance_clock.h",
                     root / "firmware/src/app/urban_trance_clock.h")
     shutil.copyfile(HERE / "integrations/urban_trance_engine.h",
