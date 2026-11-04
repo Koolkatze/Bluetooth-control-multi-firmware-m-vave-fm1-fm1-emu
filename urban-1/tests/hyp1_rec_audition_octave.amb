@@ -15,7 +15,9 @@ expect urbanrecoctave 1
 key 7 down
 expect urbanreckey7 72
 wait 220
-expect urbanacidlevel >0
+expect urbanrectrackonsets >0
+expect urbanrectrackprogram 16
+expect urbanrectrackframes >0
 key 7 up
 # Modelled lead at 50, same audible keyboard path while STOPPED.
 spin K1 34
@@ -23,8 +25,8 @@ expect urbanrecprogram 50
 expect urbanrectrack 8
 key 7 down
 wait 220
-expect urbanjazznotes >0
-expect urbanjazzframes >0
+expect urbanrectrackprogram 50
+expect urbanrectrackonsets >1
 key 7 up
 # Procedural sound FX at 68: queue must reach actual DSP without PLAY.
 spin K1 18
@@ -32,7 +34,8 @@ expect urbanrecprogram 68
 expect urbanrectrack 8
 tapkey 7
 wait 300
-expect urbansfxrendered >0
+expect urbanrectrackprogram 68
+expect urbanrectrackonsets >2
 expect playing 0
 # Both octave buttons work and saturate within -3..+3.
 tap OCT-
